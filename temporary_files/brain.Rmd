@@ -1,0 +1,139 @@
+---
+title: "Results on BRAIN data"
+author: "Davide Risso"
+date: '`r Sys.Date()`'
+output:
+  html_document
+---
+
+```{r options, echo=FALSE, results="hide",mesasge=FALSE, error=FALSE,include=FALSE}
+knitr::opts_chunk$set(fig.align="center", cache=TRUE, error=FALSE, message=FALSE, echo=TRUE, warning=FALSE,results="markup")
+```
+
+## L4 only
+
+### Unnormalized
+
+```{r data, echo=FALSE}
+source("../R/standard.R")
+source("../R/reg_smallmatrix.R")
+source("../R/em.R")
+
+## true expression: from BRAIN data
+set.seed(12324)
+library(MASS)
+library(matrixStats)
+library(brainUtils)
+
+data(housekeeping)
+## L4 only
+load("../data/imageAfterFiltering.RData")
+l4 <- sf.sc.eSet[,sf.sc.eSet$MD_cell_type=="SCNN1A+_(LAYER_IV)" & !grepl("BULK", sf.sc.eSet$MD_c1_run_id)]
+
+counts <- na.omit(assayData(l4)$expectedCounts_table)
+
+idx <- sample(seq_len(ncol(counts)), 100)
+counts <- counts[rowSums(counts)>0,idx]
+filtered <- filterCount(counts, nRead=20, nCell=5)
+
+hk <- intersect(housekeeping, rownames(filtered))
+
+print(system.time(res1 <- em(filtered, verbose=TRUE)))
+print(res1$convergence)
+```
+
+All genes.
+
+```{r all_em, dependson="data"}
+plot(log(res1$muhat), sqrt(1/res1$thetahat), ylab="sqrt(phihat)", xlab="log(muhat)", ylim=c(0, 10))
+lines(lowess(sqrt(1/res1$theta)~log(res1$muhat)), col=2, lwd=2)
+
+plot(1 - res1$pihat[order(res1$muhat), 1] ~ sort(log(res1$muhat)), type='l', ylim=c(0, 1), ylab="1 - pihat", xlab="log(muhat)")
+for(i in 2:ncol(filtered)) {
+  lines(1 - res1$pihat[order(res1$muhat), i] ~ sort(log(res1$muhat)))
+}
+```
+
+Housekeeping genes.
+
+```{r hk_em, dependson="data"}
+print(system.time(res2 <- em(filtered[hk,], verbose=TRUE)))
+print(res2$convergence)
+
+plot(log(res2$muhat), sqrt(1/res2$thetahat), ylab="sqrt(phihat)", xlab="log(muhat)")
+
+plot(1 - res2$pihat[order(res2$muhat), 1] ~ sort(log(res2$muhat)), type='l', ylim=c(0, 1), ylab="1 - pihat", xlab="log(muhat)")
+for(i in 2:ncol(filtered)) {
+  lines(1 - res2$pihat[order(res2$muhat), i] ~ sort(log(res2$muhat)))
+}
+
+plot(sqrt(1/res2$theta)~log(res2$muhat))
+lines(lowess(sqrt(1/res2$theta)~log(res2$muhat)), col=2, lwd=2)
+```
+
+## Michael's version
+
+```{r michael, dependson="data"}
+source("~/git/NOVICE/estimateFNR.R")
+system.time(fnr_out <- estimateFNR(filtered, bulk_model = TRUE, is.expressed = rownames(filtered) %in% hk))
+
+plot(fnr_out$P[order(fnr_out$Alpha[1,]), 1] ~ sort(fnr_out$Alpha[1,]), type='l', ylim=c(0, 1), ylab="pihat", xlab="log(muhat)")
+for(i in 2:ncol(filtered)) {
+  lines(fnr_out$P[order(fnr_out$Alpha[1,]), i] ~ sort(fnr_out$Alpha[1,]))
+}
+```
+
+## Comparisons
+
+```{r plots, depenson=c("michael", "all_em", "hk_em")}
+boxplot(res1$pihat, outline=FALSE, ylim=c(0,1), main="Negative binomial")
+boxplot(res2$pihat, outline=FALSE, ylim=c(0,1), main="Negative binomial (hk)")
+boxplot(1-fnr_out$P, outline=FALSE, ylim=c(0, 1), main="Double binomial")
+```
+
+```{r wpca, depenson=c("michael", "all_em", "hk_em")}
+library(limma)
+library(scde)
+
+fq <- normalizeQuantiles(filtered)
+pca <- prcomp(t(log1p(fq)), scale. = TRUE, center = TRUE)
+plot(pca$x[,1:2], main="Regular PCA")
+
+what1 <- (filtered > 0) + 1 - res1$pihat/(res1$pihat+(1-res1$pihat)*(1+res1$muhat/res1$thetahat)^(-res1$thetahat))
+
+wpca1 <- bwpca(t(log1p(fq)), matw=t(res1$pihat))
+plot(wpca1$scores[,1:2], main="wPCA (NB)")
+
+what2 <- (filtered > 0) + (1 - fnr_out$Z)
+wpca2 <- bwpca(t(log1p(fq)), matw=t(what2))
+plot(wpca2$scores[,1:2], main="wPCA (Michael)")
+
+cdr <- colMeans(filtered>0)
+
+plot(pca$x[,1]~cdr)
+plot(wpca1$scores[,1]~cdr)
+plot(wpca2$scores[,1]~cdr)
+
+```
+
+## DESeq normalization
+
+```{r, eval=FALSE}
+set.seed(12124312)
+library(DESeq)
+s <- estimateSizeFactorsForMatrix(filtered)
+print(system.time(res2 <- em_offset(filtered, s)))
+print(res2$convergence)
+```
+
+```{r, eval=FALSE}
+plot(log(res2$muhat), sqrt(1/res2$thetahat), ylab="sqrt(phihat)", xlab="log(muhat)")
+
+plot(1 - res2$pihat[order(res2$muhat), 1] ~ sort(log(res2$muhat)), type='l', ylim=c(0, 1), ylab="1 - pihat", xlab="log(muhat)")
+for(i in 2:ncol(filtered)) {
+  lines(1 - res2$pihat[order(res2$muhat), i] ~ sort(log(res2$muhat)))
+}
+
+plot(sqrt(1/res2$theta)~log(res2$muhat))
+lines(lowess(sqrt(1/res2$theta)~log(res2$muhat)), col=2, lwd=2)
+```

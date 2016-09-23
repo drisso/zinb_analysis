@@ -1,0 +1,83 @@
+---
+title: "Some more simulations"
+author: "Davide Risso"
+date: "June 2, 2016"
+output: html_document
+---
+
+# Using simulated counts from clusterExperiment package
+
+```{r options}
+knitr::opts_chunk$set(fig.align="center", cache=FALSE, error=FALSE, message=FALSE, echo=FALSE, warning=FALSE, results="markup", eval=TRUE)
+```
+
+The data consist of 300 cells with 153 genes, 51 of which are informative to define
+three groups, the others being noise. The expression levels are simulated from a
+Gaussian distribution with added Poisson noise.
+
+There is no need for normalization in these data, so my intuition is that setting the
+parameters `size.fact` and `pi.fact` should have no effect.
+
+## PCA
+
+First, we will see how PCA is able to recover the three groups, with and without centering
+and with and without scaling.
+
+```{r pca}
+library(clusterExperiment)
+library(zinb)
+
+data(simData)
+counts <- t(simCount)
+
+pca <- prcomp(log1p(counts), center=FALSE, scale=FALSE)
+plot(pca$x[,1:2], pch=19, col=bigPalette[trueCluster], main="PCA, no centering or scaling")
+
+pca <- prcomp(log1p(counts), center=TRUE, scale=FALSE)
+plot(pca$x[,1:2], pch=19, col=bigPalette[trueCluster], main="PCA, centered no scaling")
+
+pca <- prcomp(log1p(counts), center=TRUE, scale=TRUE)
+plot(pca$x[,1:2], pch=19, col=bigPalette[trueCluster], main="PCA, centered and scaled")
+```
+
+Centering has a big effect on PCA, scaling not so much.
+
+## ZINB
+
+We now run `zinb.PCA.full` with the default parameters, except that we vary the `center` parameter
+to see if it has a similar effect to that of PCA.
+
+```{r zinb}
+zinb_res <- zinb.PCA.full(counts, center=FALSE, verbose=TRUE)
+plot(zinb_res$U, pch=19, col=bigPalette[trueCluster], main="ZINB, no centering")
+
+zinb_res_centered <- zinb.PCA.full(counts, center=TRUE, verbose=TRUE)
+plot(zinb_res_centered$U, pch=19, col=bigPalette[trueCluster], main="ZINB, centered")
+```
+
+The ZINB PCA is behaving very similarly to PCA, i.e., the centering is essential to recover the 
+three groups.
+
+Now we can check the values of the size factors.
+
+```{r sf}
+boxplot(zinb_res_centered$SF~trueCluster, col=bigPalette, main="Size Factors")
+boxplot(zinb_res_centered$PiF~trueCluster, col=bigPalette, main="Pi Factors")
+```
+
+The size factors are capturing the difference between cluster 2 and the rest.
+However, the model seems robust to this, and U still captures that difference.
+
+What happens if we do not include the size factors in the model?
+
+```{r no_sf}
+res1 <- zinb.PCA.full(counts, center=TRUE, verbose=TRUE, size.fact = FALSE)
+plot(res1$U, pch=19, col=bigPalette[trueCluster], main="size.fact = FALSE")
+
+res2 <- zinb.PCA.full(counts, center=TRUE, verbose=TRUE, size.fact = FALSE, pi.fact = FALSE)
+plot(res2$U, pch=19, col=bigPalette[trueCluster], main="size.fact = FALSE & pi.fact = FALSE")
+```
+
+The `size.fact` parameter doesn't influence the results, as expected.
+Interestingly, the `pi.fact` does: if we exclude this from the model, the first
+column of U is not centered anymore.
