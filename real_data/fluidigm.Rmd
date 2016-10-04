@@ -1,0 +1,506 @@
+---
+title: "Unsupervised: compare PCA to a 2-dimensional projection based on ZINB"
+output: 
+  html_document: 
+    fig_height: 10
+    fig_width: 10
+    toc: yes
+    code_folding: hide
+    toc_float: yes
+---
+
+```{r options, echo=FALSE, results="hide",mesasge=FALSE, error=FALSE, include=FALSE, autodep=TRUE}
+knitr::opts_chunk$set(fig.align="center", cache=TRUE, error=FALSE, message=FALSE, warning=FALSE)
+library(SummarizedExperiment)
+library(scRNAseq)
+library(zinb)
+library(scran)
+library(EDASeq)
+library(ggplot2)
+library(magrittr)
+
+library(RColorBrewer)
+cols <- brewer.pal(8, "Set1")
+cols2 <- brewer.pal(8, "Set2")
+```
+
+# High coverage data
+
+Select high coverage cells, filter out the genes that do not have at least 10 counts in at least 10 cells.
+
+```{r datain}
+data("fluidigm")
+fluidigm_high <- fluidigm[,which(colData(fluidigm)$Coverage_Type=="High")]
+filter <- apply(assay(fluidigm_high)>10, 1, sum)>=10
+```
+
+Number of retained genes:
+```{r}
+print(sum(filter))
+```
+
+## No normalization
+
+Fit a zinb model on the high coverage data (no normalization).
+
+```{r filtering}
+fluidigm_high <- fluidigm_high[filter,]
+high <- assay(fluidigm_high)
+```
+
+```{r zinb}
+set.seed(23424)
+print(system.time(zinb_high <- zinbFit(high, ncores = 3, K = 2)))
+```
+
+Plot the results with cells colored according to their biological condition.
+
+```{r zinb_plot}
+bio <- as.factor(colData(fluidigm_high)$Biological_Condition)
+cl <- as.factor(colData(fluidigm_high)$Cluster2)
+
+plot(zinb_high@W, col=cols[bio], pch=19, xlab="W1", ylab="W2")
+legend("topleft", levels(bio), fill=cols)
+
+plot(zinb_high@W, col=cols2[cl], pch=19, xlab="W1", ylab="W2")
+legend("topleft", levels(cl), fill=cols2)
+```
+
+Compared to PCA (of the log counts)
+
+```{r pca}
+pca <- prcomp(t(log1p(high)))
+plot(pca$x, col=cols[bio], pch=19)
+legend("topleft", levels(bio), fill=cols)
+
+plot(pca$x, col=cols2[cl], pch=19)
+legend("topleft", levels(cl), fill=cols2)
+```
+
+Check the correlations between two zinb factors, the total numbers of reads and the total numbers of detected genes.
+
+```{r corr, echo=TRUE}
+#first factor and total number of detected genes in the cell
+cor(zinb_high@W[,1], colSums(high>0),method="spearman")
+
+#second factor and the total number of detected genes in the cell
+cor(zinb_high@W[,2], colSums(high>0),method="spearman")
+
+
+#first factor and the total number of counts in the cell
+cor(zinb_high@W[,1], colSums(high),method="spearman")
+
+#second factor and the total number of counts in the cell
+cor(zinb_high@W[,2], colSums(high),method="spearman")
+```
+
+Same for PCA
+
+```{r corr2, echo=TRUE}
+#first factor and total number of detected genes in the cell
+cor(pca$x[,1], colSums(high>0), method="spearman")
+
+#second factor and the total number of detected genes in the cell
+cor(pca$x[,2], colSums(high>0), method="spearman")
+
+
+#first factor and the total number of counts in the cell
+cor(pca$x[,1], colSums(high), method="spearman")
+
+#second factor and the total number of counts in the cell
+cor(pca$x[,2], colSums(high), method="spearman")
+```
+
+Correlation between PCA and ZINB
+
+```{r corr3, echo=TRUE}
+cor(pca$x[,1], zinb_high@W[,1], method="spearman")
+cor(pca$x[,2], zinb_high@W[,1], method="spearman")
+cor(pca$x[,1], zinb_high@W[,2], method="spearman")
+cor(pca$x[,2], zinb_high@W[,2], method="spearman")
+```
+
+## Using scran size factors
+
+```{r scran}
+sce <- newSCESet(countData=data.frame(high))
+sce <- computeSumFactors(sce, sizes=c(10, 20, 30))
+
+sf <- sizeFactors(sce)
+
+norm <- exprs(convertTo(sce, type="monocle"))
+fq <- betweenLaneNormalization(high, which="full")
+
+plotRLE(high, outline=FALSE, col=cols[bio], main="Unnormalized counts")
+plotRLE(norm, outline=FALSE, col=cols[bio], main="SCRAN normalization")
+plotRLE(fq, outline=FALSE, col=cols[bio], main="FQ normalization")
+```
+
+I'm not convinced that this is the best normalization, but since it's the only one specifically proposed for scRNA-seq, it's a good place to start.
+
+```{r zinb_scran}
+set.seed(3525)
+offsets <- matrix(rep(sf, NROW(high)), ncol=NROW(high), nrow=NCOL(high))
+print(system.time(zinb_norm <- zinbFit(high, ncores = 3, K = 2, O_mu = offsets)))
+```
+
+Plot the results with cells colored according to their biological condition.
+
+```{r zinb_scran_plot}
+plot(zinb_norm@W, col=cols[bio], pch=19, xlab="W1", ylab="W2")
+legend("topleft", levels(bio), fill=cols)
+
+plot(zinb_norm@W, col=cols2[cl], pch=19, xlab="W1", ylab="W2")
+legend("topleft", levels(cl), fill=cols2)
+
+qc <- as.matrix(colData(fluidigm_high)[,metadata(fluidigm_high)$which_qc])
+qcpca <- prcomp(qc, scale=TRUE)
+
+quality <- qcpca$x[,1]
+detection_rate <- colSums(high>0)
+
+data.frame(W1=zinb_norm@W[,1], W2=zinb_norm@W[,2]) %>% ggplot(aes(W1, W2)) + geom_point(aes(color=detection_rate)) + scale_colour_gradient(low="blue", high="yellow") + theme_classic()
+```
+
+Compared to PCA (of the log counts)
+
+```{r pca_scran}
+pca_norm <- prcomp(t(log1p(norm)))
+plot(pca_norm$x, col=cols[bio], pch=19)
+legend("bottomleft", levels(bio), fill=cols)
+
+plot(pca_norm$x, col=cols2[cl], pch=19)
+legend("topleft", levels(cl), fill=cols2)
+```
+
+Check the correlations between two zinb factors, the total numbers of reads and the total numbers of detected genes.
+
+```{r corr_scran, echo=TRUE}
+#first factor and total number of detected genes in the cell
+cor(zinb_norm@W[,1], colSums(high>0),method="spearman")
+
+#second factor and the total number of detected genes in the cell
+cor(zinb_norm@W[,2], colSums(high>0),method="spearman")
+
+#first factor and the total number of counts in the cell
+cor(zinb_norm@W[,1], colSums(high),method="spearman")
+
+#second factor and the total number of counts in the cell
+cor(zinb_norm@W[,2], colSums(high),method="spearman")
+```
+
+Same for PCA
+
+```{r corr_scran2, echo=TRUE}
+#first factor and total number of detected genes in the cell
+cor(pca_norm$x[,1], colSums(high>0), method="spearman")
+
+#second factor and the total number of detected genes in the cell
+cor(pca_norm$x[,2], colSums(high>0), method="spearman")
+
+
+#first factor and the total number of counts in the cell
+cor(pca_norm$x[,1], colSums(high), method="spearman")
+
+#second factor and the total number of counts in the cell
+cor(pca_norm$x[,2], colSums(high), method="spearman")
+```
+
+Correlation between PCA and ZINB
+
+```{r corr_scran3, echo=TRUE}
+cor(pca_norm$x[,1], zinb_norm@W[,1], method="spearman")
+cor(pca_norm$x[,2], zinb_norm@W[,1], method="spearman")
+cor(pca_norm$x[,1], zinb_norm@W[,2], method="spearman")
+cor(pca_norm$x[,2], zinb_norm@W[,2], method="spearman")
+```
+
+## Using FQ derived offsets
+
+```{r fq}
+se <- newSeqExpressionSet(high)
+se <- betweenLaneNormalization(se, which="full", offset=TRUE)
+offsets <- t(offst(se))
+```
+
+```{r zinb_fq}
+set.seed(35235)
+print(system.time(zinb_fq <- zinbFit(high, ncores = 3, K = 2, O_mu = offsets)))
+```
+
+Plot the results with cells colored according to their biological condition.
+
+```{r zinb_fq_plot}
+plot(zinb_fq@W, col=cols[bio], pch=19, xlab="W1", ylab="W2")
+legend("topleft", levels(bio), fill=cols)
+
+plot(zinb_fq@W, col=cols2[cl], pch=19, xlab="W1", ylab="W2")
+legend("topleft", levels(cl), fill=cols2)
+
+data.frame(W1=zinb_fq@W[,1], W2=zinb_fq@W[,2]) %>% ggplot(aes(W1, W2)) + geom_point(aes(color=detection_rate)) + scale_colour_gradient(low="blue", high="yellow") + theme_classic()
+```
+
+Compared to PCA (of the log counts)
+
+```{r pca_fq}
+pca_fq <- prcomp(t(log1p(fq)))
+plot(pca_fq$x, col=cols[bio], pch=19)
+legend("topright", levels(bio), fill=cols)
+
+plot(pca_fq$x, col=cols2[cl], pch=19)
+legend("topright", levels(cl), fill=cols2)
+```
+
+Check the correlations between two zinb factors, the total numbers of reads and the total numbers of detected genes.
+
+```{r corr_fq, echo=TRUE}
+#first factor and total number of detected genes in the cell
+cor(zinb_fq@W[,1], colSums(high>0),method="spearman")
+
+#second factor and the total number of detected genes in the cell
+cor(zinb_fq@W[,2], colSums(high>0),method="spearman")
+
+#first factor and the total number of counts in the cell
+cor(zinb_fq@W[,1], colSums(high),method="spearman")
+
+#second factor and the total number of counts in the cell
+cor(zinb_fq@W[,2], colSums(high),method="spearman")
+```
+
+Same for PCA
+
+```{r corr_fq2, echo=TRUE}
+#first factor and total number of detected genes in the cell
+cor(pca_fq$x[,1], colSums(high>0), method="spearman")
+
+#second factor and the total number of detected genes in the cell
+cor(pca_fq$x[,2], colSums(high>0), method="spearman")
+
+
+#first factor and the total number of counts in the cell
+cor(pca_fq$x[,1], colSums(high), method="spearman")
+
+#second factor and the total number of counts in the cell
+cor(pca_fq$x[,2], colSums(high), method="spearman")
+```
+
+Correlation between PCA and ZINB
+
+```{r corr_fq3, echo=TRUE}
+cor(pca_fq$x[,1], zinb_fq@W[,1], method="spearman")
+cor(pca_fq$x[,2], zinb_fq@W[,1], method="spearman")
+cor(pca_fq$x[,1], zinb_fq@W[,2], method="spearman")
+cor(pca_fq$x[,2], zinb_fq@W[,2], method="spearman")
+```
+
+# Low coverage data
+
+Select low coverage cells, filter out the genes that do not have at least 10 counts in at least 10 cells.
+
+```{r datain_low}
+fluidigm_low <- fluidigm[,which(colData(fluidigm)$Coverage_Type=="Low")]
+filter <- apply(assay(fluidigm_low)>10, 1, sum)>=10
+```
+
+Number of retained genes:
+```{r}
+print(sum(filter))
+```
+
+## No normalization
+
+Fit a zinb model on the low coverage data (no normalization).
+
+```{r filtering_low}
+fluidigm_low <- fluidigm_low[filter,]
+low <- assay(fluidigm_low)
+```
+
+```{r zinb_low}
+set.seed(654)
+print(system.time(zinb_low <- zinbFit(low, ncores = 3, K = 2)))
+```
+
+Plot the results with cells colored according to their biological condition.
+
+```{r zinb_low_plot}
+bio <- as.factor(colData(fluidigm_low)$Biological_Condition)
+cl <- as.factor(colData(fluidigm_low)$Cluster2)
+
+plot(zinb_low@W, col=cols[bio], pch=19, xlab="W1", ylab="W2")
+legend("topleft", levels(bio), fill=cols)
+
+plot(zinb_low@W, col=cols2[cl], pch=19, xlab="W1", ylab="W2")
+legend("topleft", levels(cl), fill=cols2)
+```
+
+Compared to PCA (of the log counts)
+
+```{r pca_low}
+pca <- prcomp(t(log1p(low)))
+plot(pca$x, col=cols[bio], pch=19)
+legend("topleft", levels(bio), fill=cols)
+
+plot(pca$x, col=cols2[cl], pch=19)
+legend("topleft", levels(cl), fill=cols2)
+```
+
+Check the correlations between two zinb factors, the total numbers of reads and the total numbers of detected genes.
+
+```{r corr_low, echo=TRUE}
+#first factor and total number of detected genes in the cell
+cor(zinb_low@W[,1], colSums(low>0),method="spearman")
+
+#second factor and the total number of detected genes in the cell
+cor(zinb_low@W[,2], colSums(low>0),method="spearman")
+
+
+#first factor and the total number of counts in the cell
+cor(zinb_low@W[,1], colSums(low),method="spearman")
+
+#second factor and the total number of counts in the cell
+cor(zinb_low@W[,2], colSums(low),method="spearman")
+```
+
+Same for PCA
+
+```{r corr2_low, echo=TRUE}
+#first factor and total number of detected genes in the cell
+cor(pca$x[,1], colSums(low>0), method="spearman")
+
+#second factor and the total number of detected genes in the cell
+cor(pca$x[,2], colSums(low>0), method="spearman")
+
+
+#first factor and the total number of counts in the cell
+cor(pca$x[,1], colSums(low), method="spearman")
+
+#second factor and the total number of counts in the cell
+cor(pca$x[,2], colSums(low), method="spearman")
+```
+
+Correlation between PCA and ZINB
+
+```{r corr3_low, echo=TRUE}
+cor(pca$x[,1], zinb_low@W[,1], method="spearman")
+cor(pca$x[,2], zinb_low@W[,1], method="spearman")
+cor(pca$x[,1], zinb_low@W[,2], method="spearman")
+cor(pca$x[,2], zinb_low@W[,2], method="spearman")
+```
+
+## Using scran size factors
+
+```{r scran_low}
+sce <- newSCESet(countData=data.frame(low))
+sce <- computeSumFactors(sce, sizes=c(10, 20, 30))
+
+sf <- sizeFactors(sce)
+
+norm <- exprs(convertTo(sce, type="monocle"))
+
+plotRLE(low, outline=FALSE, col=cols[bio], main="Unnormalized counts")
+plotRLE(norm, outline=FALSE, col=cols[bio], main="SCRAN normalization")
+```
+
+```{r zinb_scran_low}
+set.seed(3525)
+offsets <- matrix(rep(sf, NROW(low)), ncol=NROW(low), nrow=NCOL(low))
+print(system.time(zinb_norm <- zinbFit(low, ncores = 3, K = 2, O_mu = offsets)))
+```
+
+Plot the results with cells colored according to their biological condition.
+
+```{r zinb_scran_low_plot}
+plot(zinb_norm@W, col=cols[bio], pch=19, xlab="W1", ylab="W2")
+legend("topleft", levels(bio), fill=cols)
+
+plot(zinb_norm@W, col=cols2[cl], pch=19, xlab="W1", ylab="W2")
+legend("topleft", levels(cl), fill=cols2)
+
+qc <- as.matrix(colData(fluidigm_low)[,metadata(fluidigm_low)$which_qc])
+qcpca <- prcomp(qc, scale=TRUE)
+
+quality <- qcpca$x[,1]
+detection_rate <- colSums(low>0)
+
+data.frame(W1=zinb_norm@W[,1], W2=zinb_norm@W[,2]) %>% ggplot(aes(W1, W2)) + geom_point(aes(color=detection_rate)) + scale_colour_gradient(low="blue", high="yellow") + theme_classic()
+```
+
+Compared to PCA (of the log counts)
+
+```{r pca_low_scran}
+pca_norm <- prcomp(t(log1p(norm)))
+plot(pca_norm$x, col=cols[bio], pch=19)
+legend("bottomleft", levels(bio), fill=cols)
+
+plot(pca_norm$x, col=cols2[cl], pch=19)
+legend("topleft", levels(cl), fill=cols2)
+```
+
+Check the correlations between two zinb factors, the total numbers of reads and the total numbers of detected genes.
+
+```{r corr_scran_low, echo=TRUE}
+#first factor and total number of detected genes in the cell
+cor(zinb_norm@W[,1], colSums(low>0),method="spearman")
+
+#second factor and the total number of detected genes in the cell
+cor(zinb_norm@W[,2], colSums(low>0),method="spearman")
+
+#first factor and the total number of counts in the cell
+cor(zinb_norm@W[,1], colSums(low),method="spearman")
+
+#second factor and the total number of counts in the cell
+cor(zinb_norm@W[,2], colSums(low),method="spearman")
+```
+
+Same for PCA
+
+```{r corr_scran2_low, echo=TRUE}
+#first factor and total number of detected genes in the cell
+cor(pca_norm$x[,1], colSums(low>0), method="spearman")
+
+#second factor and the total number of detected genes in the cell
+cor(pca_norm$x[,2], colSums(low>0), method="spearman")
+
+
+#first factor and the total number of counts in the cell
+cor(pca_norm$x[,1], colSums(low), method="spearman")
+
+#second factor and the total number of counts in the cell
+cor(pca_norm$x[,2], colSums(low), method="spearman")
+```
+
+Correlation between PCA and ZINB
+
+```{r corr_scran3_low, echo=TRUE}
+cor(pca_norm$x[,1], zinb_norm@W[,1], method="spearman")
+cor(pca_norm$x[,2], zinb_norm@W[,1], method="spearman")
+cor(pca_norm$x[,1], zinb_norm@W[,2], method="spearman")
+cor(pca_norm$x[,2], zinb_norm@W[,2], method="spearman")
+```
+
+## Include detection rate as covariates
+
+```{r zinb_det}
+x <- model.matrix(~scale(detection_rate))
+set.seed(9948)
+print(system.time(zinb_norm <- zinbFit(low, ncores = 3, K = 2, X = x, which_X_mu=1:2, which_X_pi=1L)))
+```
+
+```{r zinb_det_low_plot}
+plot(zinb_norm@W, col=cols[bio], pch=19, xlab="W1", ylab="W2")
+legend("topleft", levels(bio), fill=cols)
+
+plot(zinb_norm@W, col=cols2[cl], pch=19, xlab="W1", ylab="W2")
+legend("topleft", levels(cl), fill=cols2)
+
+data.frame(W1=zinb_norm@W[,1], W2=zinb_norm@W[,2]) %>% ggplot(aes(W1, W2)) + geom_point(aes(color=detection_rate)) + scale_colour_gradient(low="blue", high="yellow") + theme_classic()
+```
+
+
+# Todo list
+
+* Add gc-content and length as gene-level covariates in pi regression
+* If somehow the first column of W identifies outlying samples, we could perhaps see if the second and third components are a better projection. [This doesn't seem to work; for some reason, the last factor W is always OK, but the firts n-1 are always just picking a few cells apart.]
+* What's special with those outliers? [Detection rate?]
+* It seems that there is also a good amount of randomness in W (i.e., running zinbFit multiple times seems to create very different projections).
