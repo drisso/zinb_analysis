@@ -16,8 +16,9 @@ def main():
     del df['Unnamed: 0']
 
     lc = np.array(df)
+    Y = np.transpose(lc)
 
-    Z, model_params  = block_ZIFA.fitModel(lc, 2)
+    Z, model_params  = block_ZIFA.fitModel(Y, 2)
 
     np.savetxt(args.output_file, Z, delimiter=',')
 
