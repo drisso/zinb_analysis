@@ -293,6 +293,12 @@ cor(pca_fq$x[,1], zinb_fq@W[,2], method="spearman")
 cor(pca_fq$x[,2], zinb_fq@W[,2], method="spearman")
 ```
 
+```{r write_high}
+## write matrices to file to feed to ZIFA in python
+write.csv(log1p(high), file="logcounts_high.csv")
+write.csv(log1p(norm), file="logcounts_high_scran.csv")
+```
+
 # Low coverage data
 
 Select low coverage cells, filter out the genes that do not have at least 10 counts in at least 10 cells.
@@ -497,6 +503,12 @@ legend("topleft", levels(cl), fill=cols2)
 data.frame(W1=zinb_norm@W[,1], W2=zinb_norm@W[,2]) %>% ggplot(aes(W1, W2)) + geom_point(aes(color=detection_rate)) + scale_colour_gradient(low="blue", high="yellow") + theme_classic()
 ```
 
+```{r write_low}
+## write matrices to file to feed to ZIFA in python
+write.csv(log1p(low), file="logcounts_low.csv")
+write.csv(log1p(norm), file="logcounts_low_scran.csv")
+write.csv(log1p(low[1:5, 1:3]), file="logcounts_toy.csv")
+```
 
 # Todo list
 
