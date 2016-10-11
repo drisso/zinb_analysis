@@ -24,6 +24,18 @@ cols <- brewer.pal(8, "Set1")
 cols2 <- brewer.pal(8, "Set2")
 ```
 
+# TL;DR
+
+The zinb model doesn't seem to work well in the Fluidigm data. This is independent of normalization, meaning that both unnormalized data and normalized data (both with scran and full-quantile) lead to bad results.
+
+PCA leads to better results, even though, as many people have shown, the first component is highly correlated to detection rate, even after normalization.
+
+ZIFA seems to work well in the Fluidigm datasets, suggesting that we should be able to find a way to make zinb work as well.
+
+One key difference between ZIFA and zinb is that in our model both $\mu$ and $\pi$ depend on $W$, while in the ZIFA model only $\mu$ does. We should consider a model that doesn't have a $W$ in $\pi$.
+
+It seems (preliminary analyses) that removing the intercept in V makes the weird W behavior go away. Still, I think that we should add the ability to remove W from $\pi$ and see what is the difference.
+
 # High coverage data
 
 Select high coverage cells, filter out the genes that do not have at least 10 counts in at least 10 cells.
@@ -510,9 +522,72 @@ write.csv(log1p(norm), file="logcounts_low_scran.csv")
 write.csv(log1p(low[1:5, 1:3]), file="logcounts_toy.csv")
 ```
 
-# Todo list
+# ZIFA (low coverage, unnormalized data)
 
-* Add gc-content and length as gene-level covariates in pi regression
-* If somehow the first column of W identifies outlying samples, we could perhaps see if the second and third components are a better projection. [This doesn't seem to work; for some reason, the last factor W is always OK, but the firts n-1 are always just picking a few cells apart.]
-* What's special with those outliers? [Detection rate?]
-* It seems that there is also a good amount of randomness in W (i.e., running zinbFit multiple times seems to create very different projections).
+```{r zifa}
+zifa_res <- read.csv("zifa_low.csv", header=FALSE)
+
+plot(zifa_res, col=cols[bio], pch=19, xlab="W1", ylab="W2")
+legend("topleft", levels(bio), fill=cols)
+```
+
+# Adding $V_\pi$
+
+```{r gc}
+library(biomaRt)
+mart <- useMart("ensembl")
+mart <- useDataset("hsapiens_gene_ensembl", mart = mart)
+attrs <- c("hgnc_symbol", "entrezgene")
+bm <- getBM(attributes=attrs, mart = mart)
+bm <- bm[match(rownames(low), bm[,1]),]
+bm <- na.omit(bm)
+low <- low[bm[,1],]
+
+gene_info <- getGeneLengthAndGCContent(as.character(bm[,2]), "hsa", mode="org.db")
+rownames(gene_info) <- bm[,1]
+
+gene_info <- na.omit(gene_info)
+low <- low[rownames(gene_info),]
+```
+
+NB: currently, there is no way to have no columns of X or V in either $\mu$ or $\pi$. We should let the user specify NULL?
+
+```{r zinb_gc}
+V <- cbind(rep(0, NROW(low)), gene_info)
+print(system.time(zinb_gc <- zinbFit(low, ncores = 3, K = 2, V = V, which_V_mu=1L, which_V_pi=2:3)))
+```
+
+```{r zinb_gc_plot}
+plot(zinb_gc@W, col=cols[bio], pch=19, xlab="W1", ylab="W2")
+legend("bottomright", levels(bio), fill=cols)
+
+plot(zinb_gc@W, col=cols2[cl], pch=19, xlab="W1", ylab="W2")
+legend("bottomright", levels(cl), fill=cols2)
+```
+
+# Removing V intercept
+
+```{r zinb_noV}
+print(system.time(zinb_nov <- zinbFit(low, ncores = 3, K = 2, V=matrix(0, ncol=1, nrow=NROW(low)))))
+```
+
+```{r zinb_nov_plot}
+plot(zinb_nov@W, col=cols[bio], pch=19, xlab="W1", ylab="W2")
+legend("bottomright", levels(bio), fill=cols)
+
+plot(zinb_nov@W, col=cols2[cl], pch=19, xlab="W1", ylab="W2")
+legend("bottomright", levels(cl), fill=cols2)
+```
+
+## Keeping it for $\pi$
+
+```{r zinb_vx}
+V <- cbind(rep(0, NROW(low)), rep(1, NROW(low)))
+X <- cbind(rep(0, NCOL(low)), rep(1, NCOL(low)))
+print(system.time(zinb_vx <- zinbFit(low, ncores = 3, K = 2, V=V, X=X, which_V_mu=1L, which_V_pi=2L, which_X_mu=2L, which_X_pi=1L)))
+```
+
+```{r zinb_vx_plot}
+plot(zinb_vx@W, col=cols[bio], pch=19, xlab="W1", ylab="W2")
+legend("bottomleft", levels(bio), fill=cols)
+```
