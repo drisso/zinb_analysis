@@ -581,6 +581,28 @@ legend("bottomright", levels(cl), fill=cols2)
 
 ## Keeping it for $\pi$
 
+```{r zinb_v}
+V <- cbind(rep(0, NROW(low)), rep(1, NROW(low)))
+print(system.time(zinb_v <- zinbFit(low, ncores = 3, K = 2, V=V, which_V_mu=1L, which_V_pi=2L)))
+```
+
+```{r zinb_v_plot}
+plot(zinb_v@W, col=cols[bio], pch=19, xlab="W1", ylab="W2")
+legend("bottomleft", levels(bio), fill=cols)
+```
+
+## Keeping it for $\mu$
+
+```{r zinb_v2}
+V <- cbind(rep(0, NROW(low)), rep(1, NROW(low)))
+print(system.time(zinb_v2 <- zinbFit(low, ncores = 3, K = 2, V=V, which_V_mu=2L, which_V_pi=1L)))
+```
+
+```{r zinb_v2_plot}
+plot(zinb_v2@W, col=cols[bio], pch=19, xlab="W1", ylab="W2")
+legend("bottomleft", levels(bio), fill=cols)
+```
+
 ```{r zinb_vx}
 V <- cbind(rep(0, NROW(low)), rep(1, NROW(low)))
 X <- cbind(rep(0, NCOL(low)), rep(1, NCOL(low)))
