@@ -1,0 +1,260 @@
+---
+title: "Role of intercept in Fluidigm data"
+author: "Davide Risso"
+date: "10/11/2016"
+output: 
+  html_document: 
+    fig_height: 10
+    fig_width: 10
+    toc: yes
+    code_folding: hide
+    toc_float: yes
+---
+
+```{r options, echo=FALSE, results="hide",mesasge=FALSE, error=FALSE, include=FALSE, autodep=TRUE}
+knitr::opts_chunk$set(fig.align="center", cache=TRUE, error=FALSE, message=FALSE, warning=TRUE)
+library(SummarizedExperiment)
+library(scRNAseq)
+library(zinb)
+library(scran)
+library(EDASeq)
+library(ggplot2)
+library(magrittr)
+
+library(RColorBrewer)
+cols <- brewer.pal(8, "Set1")
+cols2 <- brewer.pal(8, "Set2")
+
+set.seed(9938)
+```
+
+## TL;DR
+
+Given the results of the analysis in fluidigm.Rmd, here I explore the role of the V intercept in the model.
+
+One hypothesis is that this intercept acts as a size factor. Is it true? And if so, Will the data be explained completely by only the intercept and one factor W?
+
+There are four possible models, if we keep X fixed: V present in both $\mu$ and $\pi$, only in $\mu$, only in $\pi$ and in neither.
+
+$\gamma_pi$ captures the detection rate, while $\gamma_mu$ captures the coverage (sequencing depth). Since the second component of W is also highly correlated with coverage, the model can have either $\gamma_mu$ or two components of W. We need to figure out if this is a general feature or if it's this particular dataset that exhibit confounding between biology and coverage.
+
+
+
+## Data
+
+Since we didn't see much difference between the high and low coverage data, I will focus on the latter. I will not include any normalization / offset.
+
+Select low coverage cells, filter out the genes that do not have at least 10 counts in at least 10 cells.
+
+```{r datain}
+data("fluidigm")
+fluidigm_low <- fluidigm[,which(colData(fluidigm)$Coverage_Type=="Low")]
+filter <- apply(assay(fluidigm_low)>10, 1, sum)>=10
+```
+
+Number of retained genes:
+```{r}
+print(sum(filter))
+```
+
+```{r filtering}
+fluidigm_low <- fluidigm_low[filter,]
+low <- assay(fluidigm_low)
+```
+
+First, let's look at PCA (of the log counts) for reference.
+
+```{r pca}
+bio <- as.factor(colData(fluidigm_low)$Biological_Condition)
+cl <- as.factor(colData(fluidigm_low)$Cluster2)
+
+detection_rate <- colSums(low>0)
+coverage <- colSums(low)
+
+pca <- prcomp(t(log1p(low)))
+plot(pca$x, col=cols[bio], pch=19, main="PCA of log-counts, centered not scaled")
+legend("topleft", levels(bio), fill=cols)
+```
+
+## V intercept in both $\mu$ and $\pi$
+
+```{r zinb}
+print(system.time(zinb_Vall <- zinbFit(low, ncores = 3, K = 2)))
+```
+
+Plot the results with cells colored according to their biological condition.
+
+```{r zinb_plot}
+plot(zinb_Vall@W, col=cols[bio], pch=19, xlab="W1", ylab="W2", main="Both V intercepts")
+legend("topleft", levels(bio), fill=cols)
+```
+
+### Explore $\gamma_mu$ and $\gamma_pi$
+
+One interpretation of the model is that $\gamma_mu$ will act as a "size factor". Here, we check whether it captures sequencing depth and/or detection rate.
+
+```{r gamma}
+#total number of detected genes in the cell
+df <- data.frame(gamma_mu = zinb_Vall@gamma_mu[1,], gamma_pi = zinb_Vall@gamma_pi[1,], detection_rate=detection_rate, coverage=coverage)
+pairs(df, pch=19, col=cols[bio])
+
+print(cor(df, method="spearman"))
+```
+
+$\gamma_pi$ clearly captures the detection rate and $\gamma_mu$ clearly captures the coverage.
+Interestingly, the two estimates are positively correlated.
+
+```{r mu_pi}
+par(mfrow=c(1, 2))
+plot(rowMeans(getPi(zinb_Vall)), detection_rate, xlab="Average estimated Pi", ylab="detection rate", pch=19, col=cols[bio])
+
+plot(rowMeans(log1p(getMu(zinb_Vall))), coverage, xlab="Average estimated log Mu", ylab="coverage", pch=19, col=cols[bio])
+```
+
+It is worth looking at the other estimates as well, namely, $\beta$ and $\alpha$.
+
+```{r other_pars}
+par(mfrow=c(2, 2))
+boxplot(zinb_Vall@beta_mu[1,], main="Beta_Mu")
+boxplot(zinb_Vall@beta_pi[1,], main="Beta_Pi")
+
+plot(t(zinb_Vall@alpha_mu), xlab="Alpha_Mu 1", ylab="Alpha_Mu 2", main="Alpha_Mu")
+plot(t(zinb_Vall@alpha_pi), xlab="Alpha_Pi 1", ylab="Alpha_Pi 2", main="Alpha_Pi")
+```
+
+It seems that only a few genes drive the estimate of W.
+
+One possibility is that, once we remove coverage, the data can be explained by only one factor. If that's the case, plotting $\gamma_mu$ vs. $W_2$ should recover the PCA plot.
+
+```{r gamma_W}
+plot(zinb_Vall@gamma_mu[1,], zinb_Vall@W[,2], col=cols[bio], pch=19, xlab="Gamma_Mu", ylab="W2", main="Both V intercepts")
+legend("bottomright", levels(bio), fill=cols)
+
+plot(zinb_Vall@gamma_pi[1,], zinb_Vall@W[,2], col=cols[bio], pch=19, xlab="Gamma_Pi", ylab="W2", main="Both V intercepts")
+legend("bottomright", levels(bio), fill=cols)
+```
+
+## No V intercept
+
+```{r no_int}
+print(system.time(zinb_Vnone <- zinbFit(low, ncores = 3, K = 2, V=matrix(0, ncol=1, nrow=NROW(low)))))
+```
+
+```{r no_int_plot}
+plot(zinb_Vnone@W, col=cols[bio], pch=19, xlab="W1", ylab="W2")
+legend("bottomright", levels(bio), fill=cols)
+```
+
+```{r no_int_w}
+df <- data.frame(W1 = zinb_Vnone@W[,1], W2 = zinb_Vnone@W[,2], detection_rate=detection_rate, coverage=coverage)
+pairs(df, pch=19, col=cols[bio])
+
+print(cor(df, method="spearman"))
+```
+
+```{r no_int_mu_pi}
+par(mfrow=c(1, 2))
+plot(rowMeans(getPi(zinb_Vnone)), detection_rate, xlab="Average estimated Pi", ylab="detection rate", pch=19, col=cols[bio])
+
+plot(rowMeans(log1p(getMu(zinb_Vnone))), coverage, xlab="Average estimated log Mu", ylab="coverage", pch=19, col=cols[bio])
+```
+
+It is worth looking at the other estimates as well, namely, $\beta$ and $\alpha$.
+
+```{r no_int_pars}
+par(mfrow=c(2, 2))
+boxplot(zinb_Vnone@beta_mu[1,], main="Beta_Mu")
+boxplot(zinb_Vnone@beta_pi[1,], main="Beta_Pi")
+
+plot(t(zinb_Vnone@alpha_mu), xlab="Alpha_Mu 1", ylab="Alpha_Mu 2", main="Alpha_Mu")
+plot(t(zinb_Vnone@alpha_pi), xlab="Alpha_Pi 1", ylab="Alpha_Pi 2", main="Alpha_Pi")
+```
+
+## V intercept only in $\mu$
+
+```{r v_mu}
+V <- cbind(rep(0, NROW(low)), rep(1, NROW(low)))
+
+print(system.time(zinb_Vmu <- zinbFit(low, ncores = 3, K = 2, V=V, which_V_mu=2L, which_V_pi=1L)))
+```
+
+```{r v_mu_plot}
+plot(zinb_Vmu@W, col=cols[bio], pch=19, xlab="W1", ylab="W2")
+legend("topleft", levels(bio), fill=cols)
+```
+
+```{r v_mu_w}
+df <- data.frame(W1 = zinb_Vmu@W[,1], W2 = zinb_Vmu@W[,2], gamma_mu = zinb_Vmu@gamma_mu[1,], detection_rate=detection_rate, coverage=coverage)
+pairs(df, pch=19, col=cols[bio])
+
+print(cor(df, method="spearman"))
+```
+
+```{r v_mu_pi}
+par(mfrow=c(1, 2))
+plot(rowMeans(getPi(zinb_Vmu)), detection_rate, xlab="Average estimated Pi", ylab="detection rate", pch=19, col=cols[bio])
+
+plot(rowMeans(log1p(getMu(zinb_Vmu))), coverage, xlab="Average estimated log Mu", ylab="coverage", pch=19, col=cols[bio])
+```
+
+It is worth looking at the other estimates as well, namely, $\beta$ and $\alpha$.
+
+```{r v_mu_pars}
+par(mfrow=c(2, 2))
+boxplot(zinb_Vmu@beta_mu[1,], main="Beta_Mu")
+boxplot(zinb_Vmu@beta_pi[1,], main="Beta_Pi")
+
+plot(t(zinb_Vmu@alpha_mu), xlab="Alpha_Mu 1", ylab="Alpha_Mu 2", main="Alpha_Mu")
+plot(t(zinb_Vmu@alpha_pi), xlab="Alpha_Pi 1", ylab="Alpha_Pi 2", main="Alpha_Pi")
+```
+
+## V intercept only in $\pi$
+
+```{r v_pi}
+print(system.time(zinb_Vpi <- zinbFit(low, ncores = 3, K = 2, V=V, which_V_mu=1L, which_V_pi=2L)))
+```
+
+```{r v_pi_plot}
+plot(zinb_Vpi@W, col=cols[bio], pch=19, xlab="W1", ylab="W2")
+legend("bottomright", levels(bio), fill=cols)
+```
+
+```{r v_pi_w}
+df <- data.frame(W1 = zinb_Vpi@W[,1], W2 = zinb_Vpi@W[,2], gamma_pi = zinb_Vpi@gamma_pi[1,], detection_rate=detection_rate, coverage=coverage)
+pairs(df, pch=19, col=cols[bio])
+
+print(cor(df, method="spearman"))
+```
+
+```{r v_pi_pi}
+par(mfrow=c(1, 2))
+plot(rowMeans(getPi(zinb_Vpi)), detection_rate, xlab="Average estimated Pi", ylab="detection rate", pch=19, col=cols[bio])
+
+plot(rowMeans(log1p(getMu(zinb_Vpi))), coverage, xlab="Average estimated log Mu", ylab="coverage", pch=19, col=cols[bio])
+```
+
+It is worth looking at the other estimates as well, namely, $\beta$ and $\alpha$.
+
+```{r v_pi_pars}
+par(mfrow=c(2, 2))
+boxplot(zinb_Vpi@beta_mu[1,], main="Beta_Mu")
+boxplot(zinb_Vpi@beta_pi[1,], main="Beta_Pi")
+
+plot(t(zinb_Vpi@alpha_mu), xlab="Alpha_Mu 1", ylab="Alpha_Mu 2", main="Alpha_Mu")
+plot(t(zinb_Vpi@alpha_pi), xlab="Alpha_Pi 1", ylab="Alpha_Pi 2", main="Alpha_Pi")
+```
+
+## Are $\gamma_mu$ and $\gamma_pi$ enough to explain the data?
+
+Here, I try to fit a model without W, to see if detection rate and coverage are enough to completely explain the data.
+
+```{r no_w}
+print(system.time(zinb_noW <- zinbFit(low, ncores = 3)))
+```
+
+```{r no_w_plot}
+plot(zinb_noW@gamma_mu, zinb_noW@gamma_pi, col=cols[bio], pch=19, xlab="Gamma_Mu", ylab="Gamma_Pi")
+legend("bottomright", levels(bio), fill=cols)
+
+print(cor(zinb_noW@gamma_mu[1,], zinb_noW@gamma_pi[1,], method="spearman"))
+```
