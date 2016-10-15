@@ -1,0 +1,281 @@
+---
+title: "Role of intercept in Allen data"
+author: "Davide Risso"
+date: "10/11/2016"
+output: 
+  html_document: 
+    fig_height: 10
+    fig_width: 10
+    toc: yes
+    code_folding: hide
+    toc_float: yes
+---
+
+```{r options, echo=FALSE, results="hide",mesasge=FALSE, error=FALSE, include=FALSE, autodep=TRUE}
+knitr::opts_chunk$set(fig.align="center", cache=TRUE, error=FALSE, message=FALSE, warning=TRUE)
+library(SummarizedExperiment)
+library(scRNAseq)
+library(zinb)
+library(scran)
+library(EDASeq)
+library(ggplot2)
+library(magrittr)
+library(matrixStats)
+
+library(RColorBrewer)
+cols <- brewer.pal(8, "Set1")
+cols2 <- c(brewer.pal(8, "Set2"), brewer.pal(8, "Set3"), brewer.pal(8, "Set1"))
+
+set.seed(9938)
+```
+
+## TL;DR
+
+Given the results of the analysis of the Fluidigm data, here I explore the role of the V intercept in a more complex data (Allen).
+
+We want to check if the intercept acts as a size factor here too and, if true, if W capture some interesting biology.
+
+Interestingly, in this more complex dataset, both intercepts are needed to get a clear picture of the data in two dimensions.
+
+## Data
+
+As a first pass, I will only focus on the cells that passed the QC filters (by the original authors) and that were part of the "core" clusters. I will color-code the cells by either known cell type or by inferred cluster (inferred in the original study).
+
+Select cells, remove ERCC spike-ins, filter out the genes that do not have at least 10 counts in at least 10 cells.
+
+```{r datain}
+data("allen")
+allen_core <- allen[grep("^ERCC-", rownames(allen), invert = TRUE),
+                    which(colData(allen)$Core.Type=="Core")]
+
+filter <- apply(assay(allen_core)>10, 1, sum)>=10
+```
+
+Number of retained genes:
+```{r}
+print(sum(filter))
+```
+
+To speed up the computations, I will focus on the top 1,000 most variable genes.
+
+```{r filtering}
+allen_core <- allen_core[filter,]
+core <- assay(allen_core)
+
+vars <- rowVars(log1p(core))
+names(vars) <- rownames(core)
+vars <- sort(vars, decreasing = TRUE)
+core <- core[names(vars)[1:1000],]
+```
+
+First, let's look at PCA (of the log counts) for reference.
+
+```{r pca}
+par(mfrow=c(1, 2))
+bio <- as.factor(colData(allen_core)$driver_1_s)
+cl <- as.factor(colData(allen_core)$Primary.Type)
+
+detection_rate <- colSums(core>0)
+coverage <- colSums(core)
+
+pca <- prcomp(t(log1p(core)))
+plot(pca$x, col=cols[bio], pch=19, main="PCA of log-counts, centered not scaled")
+legend("bottomleft", levels(bio), fill=cols)
+plot(pca$x, col=cols2[cl], pch=19, main="PCA of log-counts, centered not scaled")
+
+```
+
+```{r pca_cor}
+df <- data.frame(PC1=pca$x[,1], PC2=pca$x[,2], detection_rate=detection_rate, coverage=coverage)
+pairs(df, pch=19, col=cols[bio])
+
+print(cor(df, method="spearman"))
+```
+
+## V intercept in both $\mu$ and $\pi$
+
+```{r zinb}
+print(system.time(zinb_Vall <- zinbFit(core, ncores = 3, K = 2)))
+```
+
+Plot the results with cells colored according to their biological condition.
+
+```{r zinb_plot}
+par(mfrow=c(1, 2))
+plot(zinb_Vall@W, col=cols[bio], pch=19, xlab="W1", ylab="W2", main="Both V intercepts")
+legend("bottomright", levels(bio), fill=cols)
+
+plot(zinb_Vall@W, col=cols2[cl], pch=19, xlab="W1", ylab="W2", main="Both V intercepts")
+legend("topright", levels(cl), fill=cols2)
+```
+
+### Explore $\gamma_mu$ and $\gamma_pi$
+
+One interpretation of the model is that $\gamma_mu$ will act as a "size factor". Here, we check whether it captures sequencing depth and/or detection rate.
+
+```{r gamma}
+#total number of detected genes in the cell
+df <- data.frame(W1=zinb_Vall@W[,1], W2=zinb_Vall@W[,2], gamma_mu = zinb_Vall@gamma_mu[1,], gamma_pi = zinb_Vall@gamma_pi[1,], detection_rate=detection_rate, coverage=coverage)
+pairs(df, pch=19, col=cols[bio])
+
+print(cor(df, method="spearman"))
+```
+
+$\gamma_pi$ clearly captures the detection rate and $\gamma_mu$ clearly captures the coverage.
+Interestingly, the two estimates are positively correlated.
+
+```{r mu_pi}
+par(mfrow=c(1, 2))
+plot(rowMeans(getPi(zinb_Vall)), detection_rate, xlab="Average estimated Pi", ylab="detection rate", pch=19, col=cols[bio])
+
+plot(rowMeans(log1p(getMu(zinb_Vall))), coverage, xlab="Average estimated log Mu", ylab="coverage", pch=19, col=cols[bio])
+```
+
+It is worth looking at the other estimates as well, namely, $\beta$ and $\alpha$.
+
+```{r other_pars}
+par(mfrow=c(2, 2))
+boxplot(zinb_Vall@beta_mu[1,], main="Beta_Mu")
+boxplot(zinb_Vall@beta_pi[1,], main="Beta_Pi")
+
+plot(t(zinb_Vall@alpha_mu), xlab="Alpha_Mu 1", ylab="Alpha_Mu 2", main="Alpha_Mu")
+plot(t(zinb_Vall@alpha_pi), xlab="Alpha_Pi 1", ylab="Alpha_Pi 2", main="Alpha_Pi")
+```
+
+## No V intercept
+
+```{r no_int}
+print(system.time(zinb_Vnone <- zinbFit(core, ncores = 3, K = 2, V=matrix(0, ncol=1, nrow=NROW(core)))))
+```
+
+```{r no_int_plot}
+par(mfrow=c(1, 2))
+plot(zinb_Vnone@W, col=cols[bio], pch=19, xlab="W1", ylab="W2")
+legend("topleft", levels(bio), fill=cols)
+
+plot(zinb_Vnone@W, col=cols2[cl], pch=19, xlab="W1", ylab="W2")
+```
+
+```{r no_int_w}
+df <- data.frame(W1 = zinb_Vnone@W[,1], W2 = zinb_Vnone@W[,2], detection_rate=detection_rate, coverage=coverage)
+pairs(df, pch=19, col=cols[bio])
+
+print(cor(df, method="spearman"))
+```
+
+```{r no_int_mu_pi}
+par(mfrow=c(1, 2))
+plot(rowMeans(getPi(zinb_Vnone)), detection_rate, xlab="Average estimated Pi", ylab="detection rate", pch=19, col=cols[bio])
+
+plot(rowMeans(log1p(getMu(zinb_Vnone))), coverage, xlab="Average estimated log Mu", ylab="coverage", pch=19, col=cols[bio])
+```
+
+It is worth looking at the other estimates as well, namely, $\beta$ and $\alpha$.
+
+```{r no_int_pars}
+par(mfrow=c(2, 2))
+boxplot(zinb_Vnone@beta_mu[1,], main="Beta_Mu")
+boxplot(zinb_Vnone@beta_pi[1,], main="Beta_Pi")
+
+plot(t(zinb_Vnone@alpha_mu), xlab="Alpha_Mu 1", ylab="Alpha_Mu 2", main="Alpha_Mu")
+plot(t(zinb_Vnone@alpha_pi), xlab="Alpha_Pi 1", ylab="Alpha_Pi 2", main="Alpha_Pi")
+```
+
+## V intercept only in $\mu$
+
+```{r v_mu}
+V <- cbind(rep(0, NROW(core)), rep(1, NROW(core)))
+
+print(system.time(zinb_Vmu <- zinbFit(core, ncores = 3, K = 2, V=V, which_V_mu=2L, which_V_pi=1L)))
+```
+
+```{r v_mu_plot}
+par(mfrow=c(1, 2))
+plot(zinb_Vmu@W, col=cols[bio], pch=19, xlab="W1", ylab="W2")
+plot(zinb_Vmu@W, col=cols2[cl], pch=19, xlab="W1", ylab="W2")
+```
+
+```{r v_mu_w}
+df <- data.frame(W1 = zinb_Vmu@W[,1], W2 = zinb_Vmu@W[,2], gamma_mu = zinb_Vmu@gamma_mu[1,], detection_rate=detection_rate, coverage=coverage)
+pairs(df, pch=19, col=cols[bio])
+
+print(cor(df, method="spearman"))
+```
+
+```{r v_mu_pi}
+par(mfrow=c(1, 2))
+plot(rowMeans(getPi(zinb_Vmu)), detection_rate, xlab="Average estimated Pi", ylab="detection rate", pch=19, col=cols[bio])
+
+plot(rowMeans(log1p(getMu(zinb_Vmu))), coverage, xlab="Average estimated log Mu", ylab="coverage", pch=19, col=cols[bio])
+```
+
+It is worth looking at the other estimates as well, namely, $\beta$ and $\alpha$.
+
+```{r v_mu_pars}
+par(mfrow=c(2, 2))
+boxplot(zinb_Vmu@beta_mu[1,], main="Beta_Mu")
+boxplot(zinb_Vmu@beta_pi[1,], main="Beta_Pi")
+
+plot(t(zinb_Vmu@alpha_mu), xlab="Alpha_Mu 1", ylab="Alpha_Mu 2", main="Alpha_Mu")
+plot(t(zinb_Vmu@alpha_pi), xlab="Alpha_Pi 1", ylab="Alpha_Pi 2", main="Alpha_Pi")
+```
+
+## V intercept only in $\pi$
+
+```{r v_pi}
+print(system.time(zinb_Vpi <- zinbFit(core, ncores = 3, K = 2, V=V, which_V_mu=1L, which_V_pi=2L)))
+```
+
+```{r v_pi_plot}
+par(mfrow=c(1, 2))
+plot(zinb_Vpi@W, col=cols[bio], pch=19, xlab="W1", ylab="W2")
+plot(zinb_Vpi@W, col=cols2[cl], pch=19, xlab="W1", ylab="W2")
+```
+
+```{r v_pi_w}
+df <- data.frame(W1 = zinb_Vpi@W[,1], W2 = zinb_Vpi@W[,2], gamma_pi = zinb_Vpi@gamma_pi[1,], detection_rate=detection_rate, coverage=coverage)
+pairs(df, pch=19, col=cols[bio])
+
+print(cor(df, method="spearman"))
+```
+
+```{r v_pi_pi}
+par(mfrow=c(1, 2))
+plot(rowMeans(getPi(zinb_Vpi)), detection_rate, xlab="Average estimated Pi", ylab="detection rate", pch=19, col=cols[bio])
+
+plot(rowMeans(log1p(getMu(zinb_Vpi))), coverage, xlab="Average estimated log Mu", ylab="coverage", pch=19, col=cols[bio])
+```
+
+It is worth looking at the other estimates as well, namely, $\beta$ and $\alpha$.
+
+```{r v_pi_pars}
+par(mfrow=c(2, 2))
+boxplot(zinb_Vpi@beta_mu[1,], main="Beta_Mu")
+boxplot(zinb_Vpi@beta_pi[1,], main="Beta_Pi")
+
+plot(t(zinb_Vpi@alpha_mu), xlab="Alpha_Mu 1", ylab="Alpha_Mu 2", main="Alpha_Mu")
+plot(t(zinb_Vpi@alpha_pi), xlab="Alpha_Pi 1", ylab="Alpha_Pi 2", main="Alpha_Pi")
+```
+
+## Do we need more than two dimensions?
+
+```{r zinb3}
+print(system.time(zinb_3 <- zinbFit(core, ncores = 3, K = 3)))
+
+pairs(zinb_3@W, col=cols[bio], pch=19)
+pairs(zinb_3@W, col=cols2[cl], pch=19)
+```
+
+## Using all genes
+
+```{r zinb_all}
+core <- assay(allen_core)
+dim(core)
+print(system.time(zinb_all <- zinbFit(core, ncores = 3, K = 2)))
+
+par(mfrow=c(1, 2))
+plot(zinb_all@W, col=cols[bio], pch=19, xlab="W1", ylab="W2")
+plot(zinb_all@W, col=cols2[cl], pch=19, xlab="W1", ylab="W2")
+```
+
+Interestingly, when using all the genes, things don't work nicely anymore. I wonder if the difference is the selection of the most variable genes, rather than the complexity of the data.
