@@ -76,7 +76,7 @@ plot(pca$x, col=cols[bio], pch=19, main="PCA of log-counts, centered not scaled"
 legend("topleft", levels(bio), fill=cols)
 ```
 
-## V intercept in both $\mu$ and $\pi$
+## V intercept in both Mu and Pi
 
 ```{r zinb}
 print(system.time(zinb_Vall <- zinbFit(low, ncores = 3, K = 2)))
@@ -89,7 +89,7 @@ plot(zinb_Vall@W, col=cols[bio], pch=19, xlab="W1", ylab="W2", main="Both V inte
 legend("topleft", levels(bio), fill=cols)
 ```
 
-### Explore $\gamma_mu$ and $\gamma_pi$
+### Explore Gamma estimates
 
 One interpretation of the model is that $\gamma_mu$ will act as a "size factor". Here, we check whether it captures sequencing depth and/or detection rate.
 
@@ -170,7 +170,7 @@ plot(t(zinb_Vnone@alpha_mu), xlab="Alpha_Mu 1", ylab="Alpha_Mu 2", main="Alpha_M
 plot(t(zinb_Vnone@alpha_pi), xlab="Alpha_Pi 1", ylab="Alpha_Pi 2", main="Alpha_Pi")
 ```
 
-## V intercept only in $\mu$
+## V intercept only in Mu
 
 ```{r v_mu}
 V <- cbind(rep(0, NROW(low)), rep(1, NROW(low)))
@@ -208,7 +208,7 @@ plot(t(zinb_Vmu@alpha_mu), xlab="Alpha_Mu 1", ylab="Alpha_Mu 2", main="Alpha_Mu"
 plot(t(zinb_Vmu@alpha_pi), xlab="Alpha_Pi 1", ylab="Alpha_Pi 2", main="Alpha_Pi")
 ```
 
-## V intercept only in $\pi$
+## V intercept only in Pi
 
 ```{r v_pi}
 print(system.time(zinb_Vpi <- zinbFit(low, ncores = 3, K = 2, V=V, which_V_mu=1L, which_V_pi=2L)))
@@ -244,7 +244,7 @@ plot(t(zinb_Vpi@alpha_mu), xlab="Alpha_Mu 1", ylab="Alpha_Mu 2", main="Alpha_Mu"
 plot(t(zinb_Vpi@alpha_pi), xlab="Alpha_Pi 1", ylab="Alpha_Pi 2", main="Alpha_Pi")
 ```
 
-## Are $\gamma_mu$ and $\gamma_pi$ enough to explain the data?
+## Are Gamma_mu and Gamma_pi enough to explain the data?
 
 Here, I try to fit a model without W, to see if detection rate and coverage are enough to completely explain the data.
 
