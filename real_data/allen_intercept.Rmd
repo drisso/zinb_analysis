@@ -287,7 +287,19 @@ Interestingly, when using all the genes, things don't work nicely anymore. I won
 
 ## ZIFA (top 1000 most variable genes)
 
+### Full algorithm
+
 ```{r zifa}
+par(mfrow=c(1, 2))
+zifa_res <- read.csv("zifa_allen_full.csv", header=FALSE)
+
+plot(zifa_res, col=cols[bio], pch=19, xlab="Z1", ylab="Z2")
+plot(zifa_res, col=cols2[cl], pch=19, xlab="Z1", ylab="Z2")
+```
+
+### Block algorithm
+
+```{r zifa_block}
 par(mfrow=c(1, 2))
 zifa_res <- read.csv("zifa_allen.csv", header=FALSE)
 
