@@ -243,5 +243,5 @@ print(system.time(zinb_all <- zinbFit(core, ncores = 3, K = 3, X=mod)))
 ```
 
 ```{r all_plot}
-pairs(zinb_all@W, col=colNopink, pch=19, main="ZINB")
+pairs(zinb_all@W, col=colMerged, pch=19, main="ZINB")
 ```
