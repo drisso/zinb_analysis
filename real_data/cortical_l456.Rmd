@@ -1,0 +1,277 @@
+---
+title: "Analysis of the cortical data (all layers)"
+author: "Davide Risso"
+date: "10/19/2016"
+output: 
+  html_document: 
+    fig_height: 7
+    fig_width: 7
+    toc: yes
+    code_folding: hide
+    toc_float: yes
+---
+
+```{r options, echo=FALSE, results="hide",mesasge=FALSE, error=FALSE, include=FALSE, autodep=TRUE}
+knitr::opts_chunk$set(fig.align="center", cache=TRUE, error=FALSE, message=FALSE, warning=TRUE)
+library(SummarizedExperiment)
+library(scRNAseq)
+library(zinb)
+library(ggplot2)
+library(magrittr)
+library(matrixStats)
+library(brainData)
+library(Rtsne)
+library(scone)
+library(RColorBrewer)
+set.seed(20)
+```
+
+## TL;DR
+
+Applying our zero-inflated model to the cortical data (all layets).
+
+## Unnormalized data
+
+We select only the cells that pass QC, color coded by the layer of origin. I will focus on the top 1,000 most variable genes. Note that the data are not public, hence it will work only on Davide's system (for now).
+
+```{r datain}
+data("cortical")
+
+glia0 <-c("DSJN001_N710_S505", "DSJN001_N702_S510", "DSJN003_N724_S521", "DSJN003_N721_S522", "DSJN003_N726_S522", "DSJN003_N728_S518", "DSJN003_N727_S517", "DSJN003_N728_S520", "DSJN003_N728_S515", "DSJN003_N728_S513", "DS07_N703_S506", "DS07_N703_S502", "DS07_N702_S506", "DS07_N701_S505", "DS07_N703_S505", "DS07_N701_S508", "DS07_N702_S505", "DS07_N704_S506", "DS07_N714_S506", "DS07_N715_S505", "DSJN001_N724_S503", "DSJN002_N703_S507", "DSJN002_N702_S502", "DSJN002_N705_S508", "DSJN002_N702_S510", "DSJN002_N711_S502", "DSJN003_N701_S507", "DSJN002_N706_S511", "DSJN002_N715_S502", "DSJN002_N712_S502", "DSJN003_N705_S506", "DSJN003_N704_S507", "DSJN002_N724_S515", "DSJN002_N722_S513", "DSJN002_N720_S521", "DSJN002_N719_S517", "DSJN002_N718_S521", "DSJN002_N728_S513", "DSJN003_N718_S513", "DSJN002_N728_S516", "DS08_N719_S503", "DS08_N723_S507")
+
+# exclude glia and bulk samples
+neurons <- cortical[,which(!(colnames(cortical) %in% glia0 | colData(cortical)$MD_single_bulk_pool == "B"))]
+
+# removing ERCC spike ins 
+neurons <- neurons[grep("^ERCC-", rownames(neurons), invert = TRUE),]
+
+# removing low quality samples
+sf <- metric_sample_filter(assay(neurons), nreads=colData(neurons)$NREADS, ralign=colData(neurons)$RALIGN, zcut=2)
+
+keep <- which(!(sf$filtered_nreads | sf$filtered_ralign))
+# plot(colData(neurons)$NREADS, colData(neurons)$RALIGN)
+# points(colData(neurons)$NREADS[which((sf$filtered_nreads | sf$filtered_ralign))], colData(neurons)$RALIGN[which((sf$filtered_nreads | sf$filtered_ralign))], col=2, pch=20)
+
+filtered <- neurons[, keep]
+
+filter <- apply(assay(filtered)>10, 1, sum)>=10
+```
+
+Number of retained genes:
+```{r}
+print(sum(filter))
+```
+
+To speed up the computations, I will focus on the top 1,000 most variable genes.
+
+```{r filtering}
+filtered <- filtered[filter,]
+core <- assay(filtered)
+
+vars <- rowVars(log1p(core))
+names(vars) <- rownames(core)
+vars <- sort(vars, decreasing = TRUE)
+core <- core[names(vars)[1:1000],]
+```
+
+First, let's look at PCA (of the log counts) for reference.
+
+```{r pca}
+cols <- brewer.pal(9, "Set1")
+colMerged <- cols[colData(filtered)$MD_cell_type]
+
+detection_rate <- colSums(core>0)
+coverage <- colSums(core)
+
+pca <- prcomp(t(log1p(core)))
+plot(pca$x, col=colMerged, pch=19, main="PCA of log-counts, centered not scaled")
+```
+
+```{r pca_cor}
+df <- data.frame(PC1=pca$x[,1], PC2=pca$x[,2], detection_rate=detection_rate, coverage=coverage)
+pairs(df, pch=19, col=colMerged)
+
+print(cor(df, method="spearman"))
+```
+
+Now, let's see how ZINB works.
+
+```{r zinb}
+print(system.time(zinb_Vall <- zinbFit(core, ncores = 3, K = 2)))
+```
+
+```{r zinb_plot}
+plot(zinb_Vall@W, col=colMerged, pch=19, xlab="W1", ylab="W2", main="ZINB")
+```
+
+```{r gamma}
+#total number of detected genes in the cell
+df <- data.frame(W1=zinb_Vall@W[,1], W2=zinb_Vall@W[,2], gamma_mu = zinb_Vall@gamma_mu[1,], gamma_pi = zinb_Vall@gamma_pi[1,], detection_rate=detection_rate, coverage=coverage)
+pairs(df, pch=19, col=colMerged)
+
+print(cor(df, method="spearman"))
+```
+
+## Accounting for batch effects
+
+```{r batch_explore}
+batch <- droplevels(colData(filtered)$MD_c1_run_id)
+bio <- droplevels(colData(filtered)$MD_cell_type)
+
+mod <- model.matrix(~batch)
+
+colBatch <- tapply(colMerged, batch, function(x) x[1])
+
+boxplot(df$W1~batch, col=colBatch)
+boxplot(df$W2~batch, col=colBatch)
+```
+
+```{r zinb_batch}
+print(system.time(zinb_X <- zinbFit(core, ncores = 3, K = 2, X=mod)))
+```
+
+```{r batch_plot}
+plot(zinb_X@W, col=colMerged, pch=19, xlab="W1", ylab="W2", main="ZINB")
+```
+
+Not surprisingly, removing the batch effects also removes the biology, because of confounded design.
+
+```{r batch_gamma}
+#total number of detected genes in the cell
+df <- data.frame(W1=zinb_X@W[,1], W2=zinb_X@W[,2], gamma_mu = zinb_X@gamma_mu[1,], gamma_pi = zinb_X@gamma_pi[1,], detection_rate=detection_rate, coverage=coverage)
+pairs(df, pch=19, col=colMerged)
+
+print(cor(df, method="spearman"))
+
+boxplot(df$W1~batch, col=colBatch)
+boxplot(df$W2~batch, col=colBatch)
+```
+
+## Accounting for quality
+
+```{r qpca}
+qc <- as.matrix(colData(filtered)[,1:14])
+qcpca <- prcomp(qc, center=TRUE, scale.=TRUE)
+mod <- model.matrix(~qcpca$x[,1:5])
+
+plot(df$W1~qcpca$x[,1], pch=19, col=colMerged)
+plot(df$W2~qcpca$x[,1], pch=19, col=colMerged)
+```
+
+```{r zinb_qpca}
+print(system.time(zinb_q <- zinbFit(core, ncores = 3, K = 2, X=mod)))
+```
+
+```{r qpca_plot}
+plot(zinb_q@W, col=colMerged, pch=19, xlab="W1", ylab="W2", main="ZINB")
+```
+
+```{r qpca_gamma}
+#total number of detected genes in the cell
+df <- data.frame(W1=zinb_q@W[,1], W2=zinb_q@W[,2], gamma_mu = zinb_q@gamma_mu[1,], gamma_pi = zinb_q@gamma_pi[1,], detection_rate=detection_rate, coverage=coverage)
+pairs(df, pch=19, col=colMerged)
+
+print(cor(df, method="spearman"))
+
+boxplot(df$W1~batch, col=colBatch)
+boxplot(df$W2~batch, col=colBatch)
+```
+
+Better, but W may still be influenced by batch effects.
+
+## Three dimensions
+
+```{r zinb_three}
+print(system.time(zinb_3 <- zinbFit(core, ncores = 3, K = 3, X=mod)))
+```
+
+```{r three_plot}
+pairs(zinb_3@W, col=colMerged, pch=19, main="ZINB")
+```
+
+```{r three_gamma}
+#total number of detected genes in the cell
+df <- data.frame(W1=zinb_3@W[,1], W2=zinb_3@W[,2], W3=zinb_3@W[,3], gamma_mu = zinb_3@gamma_mu[1,], gamma_pi = zinb_3@gamma_pi[1,], detection_rate=detection_rate, coverage=coverage)
+pairs(df, pch=19, col=colMerged)
+
+print(cor(df, method="spearman"))
+
+boxplot(df$W1~batch, col=colBatch)
+boxplot(df$W2~batch, col=colBatch)
+boxplot(df$W3~batch, col=colBatch)
+```
+
+## Can W capture sample quality?
+
+```{r zinb_bio}
+# mod <- make_design(bio, batch, W=NULL, nested=TRUE)
+mod <- model.matrix(~bio)
+print(system.time(zinb_bio <- zinbFit(core, ncores = 3, K = 2, X=mod)))
+```
+
+```{r bio_plot}
+plot(zinb_bio@W, col=colMerged, pch=19, xlab="W1", ylab="W2", main="ZINB")
+quality <- qcpca$x[,1]
+data.frame(W1=zinb_bio@W[,1], W2=zinb_bio@W[,2]) %>% ggplot(aes(W1, W2)) + geom_point(aes(color=quality), size=3) + scale_colour_gradient(low="blue", high="green") + theme_classic()
+```
+
+## Comparing beta estimates with and without W
+
+```{r zinb_noW}
+print(system.time(zinb_noW <- zinbFit(core, ncores = 3, K = 0, X=mod)))
+```
+
+### With W (sample quality)
+
+```{r beta_estimates}
+par(mfrow=c(1, 2))
+data(cortical_markers)
+L4markers <- cortical_markers[cortical_markers[,2] %in% c("L4", "L2/3,L4") ,1]
+L5markers <- cortical_markers[cortical_markers[,2] %in% c("L5", "L5b"), 1]
+L6markers <- cortical_markers[cortical_markers[,2] %in% c("L6"), 1]
+
+meanL4 <- zinb_bio@beta_mu[1,]
+meanL5 <- zinb_bio@beta_mu[1,] + zinb_bio@beta_mu[2,]
+meanL6 <- zinb_bio@beta_mu[1,] + zinb_bio@beta_mu[3,]
+
+logFC <- zinb_bio@beta_mu[2,]
+mean <- (meanL4+meanL5)/2
+names(mean) <- names(logFC) <- rownames(core)
+plot(mean, logFC, main="Layer 5 vs Layer 4")
+points(mean[L4markers], logFC[L4markers], col=2, pch=20)
+points(mean[L5markers], logFC[L5markers], col=4, pch=20)
+legend("topright", c("L4 markers", "L5 markers"), pch=20, col=c(2, 4))
+
+logFC <- zinb_bio@beta_mu[3,]
+mean <- (meanL4+meanL6)/2
+names(mean) <- names(logFC) <- rownames(core)
+plot(mean, logFC, main="Layer 6 vs Layer 4")
+points(mean[L4markers], logFC[L4markers], col=2, pch=20)
+points(mean[L6markers], logFC[L6markers], col=4, pch=20)
+legend("topright", c("L4 markers", "L6 markers"), pch=20, col=c(2, 4))
+```
+
+### Without W (sample quality)
+
+```{r beta_estimates2}
+par(mfrow=c(1, 2))
+meanL4 <- zinb_noW@beta_mu[1,]
+meanL5 <- zinb_noW@beta_mu[1,] + zinb_noW@beta_mu[2,]
+meanL6 <- zinb_noW@beta_mu[1,] + zinb_noW@beta_mu[3,]
+
+logFC <- zinb_noW@beta_mu[2,]
+mean <- (meanL4+meanL5)/2
+names(mean) <- names(logFC) <- rownames(core)
+plot(mean, logFC, main="Layer 5 vs Layer 4")
+points(mean[L4markers], logFC[L4markers], col=2, pch=20)
+points(mean[L5markers], logFC[L5markers], col=4, pch=20)
+legend("topright", c("L4 markers", "L5 markers"), pch=20, col=c(2, 4))
+
+logFC <- zinb_noW@beta_mu[3,]
+mean <- (meanL4+meanL6)/2
+names(mean) <- names(logFC) <- rownames(core)
+plot(mean, logFC, main="Layer 6 vs Layer 4")
+points(mean[L4markers], logFC[L4markers], col=2, pch=20)
+points(mean[L6markers], logFC[L6markers], col=4, pch=20)
+legend("topright", c("L4 markers", "L6 markers"), pch=20, col=c(2, 4))
+```
