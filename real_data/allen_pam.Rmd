@@ -1,0 +1,120 @@
+---
+title: "PAM Allen data"
+author: "Fanny Perraudeau"
+date: "10/23/2016"
+output: 
+  html_document: 
+    fig_height: 10
+    fig_width: 10
+    toc: yes
+    code_folding: hide
+    toc_float: yes
+---
+
+```{r options, echo=FALSE, results="hide",mesasge=FALSE, error=FALSE, include=FALSE, autodep=TRUE}
+knitr::opts_chunk$set(fig.align="center", cache=TRUE, error=FALSE, message=FALSE, warning=TRUE)
+library(SummarizedExperiment)
+library(scRNAseq)
+library(zinb)
+library(scran)
+library(EDASeq)
+library(ggplot2)
+library(magrittr)
+library(matrixStats)
+if (!require(digest)) install.packages('digest')
+require(cluster)
+
+library(RColorBrewer)
+cols <- brewer.pal(8, "Set1")
+cols2 <- c(brewer.pal(8, "Set2"), brewer.pal(8, "Set3"), brewer.pal(8, "Set1"))
+
+set.seed(9938)
+```
+
+## TL;DR
+
+We compare the power of PCA versus zinb. We perform PAM on PC[, 1:2] -> PC[, 1:50] and PAM on zinb W[, 1:2] -> W[, 1:10]. zinbFit is run with intercept for both Vmu and Vpi and only intercept for X.)
+
+## Data
+
+As a first pass, I will only focus on the cells that passed the QC filters (by the original authors) and that were part of the "core" clusters. I will color-code the cells by either known cell type or by inferred cluster (inferred in the original study).
+
+Select cells, remove ERCC spike-ins, filter out the genes that do not have at least 10 counts in at least 10 cells.
+
+```{r datain}
+data("allen")
+allen_core <- allen[grep("^ERCC-", rownames(allen), invert = TRUE),
+                    which(colData(allen)$Core.Type=="Core")]
+
+filter <- apply(assay(allen_core)>10, 1, sum)>=10
+```
+
+Number of retained genes:
+```{r}
+print(sum(filter))
+```
+
+To speed up the computations, I will focus on the top 1,000 most variable genes.
+
+```{r filtering}
+allen_core <- allen_core[filter,]
+core <- assay(allen_core)
+
+vars <- rowVars(log1p(core))
+names(vars) <- rownames(core)
+vars <- sort(vars, decreasing = TRUE)
+core <- core[names(vars)[1:1000],]
+```
+
+## PCA
+First, let's look at PCA (of the log counts).
+
+```{r pca}
+par(mfrow=c(1, 2))
+bio <- as.factor(colData(allen_core)$driver_1_s)
+cl <- as.factor(colData(allen_core)$Primary.Type)
+
+detection_rate <- colSums(core>0)
+coverage <- colSums(core)
+
+pca <- prcomp(t(log1p(core)))
+plot(pca$x, col=cols[bio], pch=19, main="PCA of log-counts, centered not scaled")
+legend("bottomleft", levels(bio), fill=cols)
+plot(pca$x, col=cols2[cl], pch=19, main="PCA of log-counts, centered not scaled")
+
+```
+
+```{r pca_cor}
+df <- data.frame(PC1=pca$x[,1], PC2=pca$x[,2], detection_rate=detection_rate,
+                 coverage=coverage)
+pairs(df, pch=19, col=cols[bio])
+
+print(cor(df, method="spearman"))
+```
+
+```{r pca_pam}
+par(mfrow=c(1, 1))
+pam_res = lapply(2:50, function(i) pam(pca$x[,1:i], k=3))
+silhouette = sapply(pam_res, function(x) x$silinfo$avg.width)
+plot(silhouette, xlab = 'Number of PC', ylab = 'Average Silhouette width',
+     main = 'PCA')
+plot(pam_res[[1]])
+```
+
+## zinb
+zinbFit is run with intercept for both Vmu and Vpi and only intercept for X.
+```{r zinb_pam}
+zinb_res = lapply(2:10, function(k){
+  print(k)
+  zinbFit(core, ncores = 3, K = k)
+})
+
+pam_res = lapply(2:10, function(i) pam(zinb_res[[i-1]]@W[,1:i], k=3))
+silhouette = sapply(pam_res, function(x) x$silinfo$avg.width)
+plot(silhouette, xlab = 'Number of PC', ylab = 'Average Silhouette width',
+     main = 'zinb')
+```
+
+```{r zinb_pam_plot}
+plot(pam_res[[1]])
+```
