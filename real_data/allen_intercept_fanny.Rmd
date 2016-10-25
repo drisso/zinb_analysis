@@ -29,6 +29,7 @@ cols <- brewer.pal(8, "Set1")
 cols2 <- c(brewer.pal(8, "Set2"), brewer.pal(8, "Set3"), brewer.pal(8, "Set1"))
 
 set.seed(9938)
+options(getClass.msg=FALSE)
 ```
 
 ## TL;DR
@@ -276,9 +277,9 @@ write.csv(log1p(core), file="allen.csv")
 ## Using all genes
 
 ```{r zinb_all}
-core <- assay(allen_core)
-dim(core)
-print(system.time(zinb_all <- zinbFit(core, ncores = 3, K = 2)))
+coreAll <- assay(allen_core)
+dim(coreAll)
+print(system.time(zinb_all <- zinbFit(coreAll, ncores = 3, K = 2)))
 
 par(mfrow=c(1, 2))
 plot(zinb_all@W, col=cols[bio], pch=19, xlab="W1", ylab="W2")
@@ -289,10 +290,11 @@ Interestingly, when using all the genes, things don't work nicely anymore. I won
 
 ## ZIFA (top 1000 most variable genes)
 
-### Full algorithm
+Full algorithm was used. We got very similar results using block algorithm.
 
 ```{python zifa_python}
 import sys
+# modify python path to your python packages directory
 sys.path.insert(1, '/usr/local/lib/python2.7/site-packages/')
 
 from pandas import read_csv
@@ -319,6 +321,9 @@ plot(zifa_res, col=cols2[cl], pch=19, xlab="Z1", ylab="Z2")
 
 ```{r wrapRzifa,eval=F}
 wrapRzifa <- function(Y, block = F){
+  # wrapper R function for ZIFA.
+  # md5 hashing and temporary files are used not to re-run zifa 
+  # if it has already be run on this computer.
   d = digest(Y, "md5")
   tmp = paste0(tempdir(), '/', d)
   write.csv(Y, paste0(tmp, '.csv'))
@@ -387,3 +392,127 @@ pairs(df, pch=19, col=cols[bio], main = 'Intercept in Pi')
 
 print(cor(df, method="spearman"))
 ```
+
+
+## GC and length
+```{r gc_length}
+library(biomaRt)
+mart = useMart("ensembl")
+mart = useDataset("hsapiens_gene_ensembl", mart = mart)
+attrs = c("hgnc_symbol", "entrezgene")
+bm = getBM(attributes=attrs, mart = mart)
+coreGC = core
+rownames(coreGC) = toupper(rownames(core))
+bm = bm[match(rownames(coreGC), bm[,1]),]
+bm = na.omit(bm)
+gene_info = getGeneLengthAndGCContent(as.character(bm[,2]), "hg38", mode="org.db")
+rownames(gene_info) = bm[,1]
+gene_info = na.omit(gene_info)
+coreGC = coreGC[rownames(gene_info),]
+dim(core)
+dim(coreGC)
+
+par(mfrow=c(1,2))
+gene_detection_rate = rowSums(coreGC>0)/ncol(coreGC)
+plot(gene_info[,'length'], gene_detection_rate, xlab = 'Gene Length',
+     ylab = 'Gene detection rate')
+plot(gene_info[,'gc'], gene_detection_rate, xlab = 'GC',
+     ylab = 'Gene detection rate')
+```
+
+### GC and length in both Vmu and Vpi
+We keep intercept in both Vmu and Vpi and add GC and length to both Vmu and Vpi.  
+```{r gc_length_both}
+V = cbind(rep(1, NROW(coreGC)), gene_info)
+print(system.time(zinb_gc <- zinbFit(coreGC, ncores = 3, K = 2, V = V)))
+
+plot(zinb_gc@W, col=cols[bio], pch=19, xlab="W1", ylab="W2")
+legend("topleft", levels(bio), fill=cols)
+
+plot(zinb_gc@W, col=cols2[cl], pch=19, xlab="W1", ylab="W2")
+legend("topleft", levels(cl), fill=cols2)
+
+df <- data.frame(W1=zinb_gc@W[,1],
+                 W2=zinb_gc@W[,2],
+                 gamma_mu = zinb_gc@gamma_mu[1,],
+                 gamma_pi = zinb_gc@gamma_pi[1,],
+                 detection_rate=detection_rate,
+                 coverage=coverage)
+pairs(df, pch=19, col=cols[bio])
+print(cor(df, method="spearman"))
+
+df <- data.frame(alphaMu1=zinb_gc@alpha_mu[1,],
+                 alphaMu2=zinb_gc@alpha_mu[2,],
+                 alphaPi1=zinb_gc@alpha_pi[1,],
+                 alphaPi2=zinb_gc@alpha_pi[2,],
+                 gene_detection_rate=gene_detection_rate)
+pairs(df, pch=19, col=cols[bio])
+print(cor(df, method="spearman"))
+```
+
+
+### GC and length in Vmu only
+We keep intercept in both Vmu and Vpi and add GC and length only in Vmu.  
+```{r gc_length_muOnly}
+V = cbind(rep(1, NROW(coreGC)), gene_info)
+print(system.time(zinb_gc <- zinbFit(coreGC, ncores = 3, K = 2, V = V,
+                                     which_V_mu=1:3, which_V_pi=1L)))
+
+plot(zinb_gc@W, col=cols[bio], pch=19, xlab="W1", ylab="W2")
+legend("topleft", levels(bio), fill=cols)
+
+plot(zinb_gc@W, col=cols2[cl], pch=19, xlab="W1", ylab="W2")
+legend("topleft", levels(cl), fill=cols2)
+
+df <- data.frame(W1=zinb_gc@W[,1],
+                 W2=zinb_gc@W[,2],
+                 gamma_mu = zinb_gc@gamma_mu[1,],
+                 gamma_pi = zinb_gc@gamma_pi[1,],
+                 detection_rate=detection_rate,
+                 coverage=coverage)
+pairs(df, pch=19, col=cols[bio])
+print(cor(df, method="spearman"))
+
+df <- data.frame(alphaMu1=zinb_gc@alpha_mu[1,],
+                 alphaMu2=zinb_gc@alpha_mu[2,],
+                 alphaPi1=zinb_gc@alpha_pi[1,],
+                 alphaPi2=zinb_gc@alpha_pi[2,],
+                 gene_detection_rate=gene_detection_rate)
+pairs(df, pch=19, col=cols[bio])
+print(cor(df, method="spearman"))
+```
+
+### GC and length in Vpi only
+We keep intercept in both Vmu and Vpi and add GC and length only in Vpi.  
+```{r gc_length_piOnly}
+V = cbind(rep(1, NROW(coreGC)), gene_info)
+print(system.time(zinb_gc <- zinbFit(coreGC, ncores = 3, K = 2, V = V,
+                                     which_V_mu=1L, which_V_pi=1:3)))
+
+plot(zinb_gc@W, col=cols[bio], pch=19, xlab="W1", ylab="W2")
+legend("topleft", levels(bio), fill=cols)
+
+plot(zinb_gc@W, col=cols2[cl], pch=19, xlab="W1", ylab="W2")
+legend("topleft", levels(cl), fill=cols2)
+
+df <- data.frame(W1=zinb_gc@W[,1],
+                 W2=zinb_gc@W[,2],
+                 gamma_mu = zinb_gc@gamma_mu[1,],
+                 gamma_pi = zinb_gc@gamma_pi[1,],
+                 detection_rate=detection_rate,
+                 coverage=coverage)
+pairs(df, pch=19, col=cols[bio])
+print(cor(df, method="spearman"))
+
+df <- data.frame(alphaMu1=zinb_gc@alpha_mu[1,],
+                 alphaMu2=zinb_gc@alpha_mu[2,],
+                 alphaPi1=zinb_gc@alpha_pi[1,],
+                 alphaPi2=zinb_gc@alpha_pi[2,],
+                 gene_detection_rate=gene_detection_rate)
+pairs(df, pch=19, col=cols[bio])
+print(cor(df, method="spearman"))
+```
+
+
+
+
