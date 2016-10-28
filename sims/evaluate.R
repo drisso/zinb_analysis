@@ -68,8 +68,8 @@ dev.off()
 
 ## comments: there is no guarantee on the order of the W's
 eval_data <- function(x) {
-  fit2 <- zinbFit(t(x$counts), ncores=1, K=2)
   fit1 <- zinbFit(t(x$counts), ncores=1, K=1)
+  fit2 <- zinbFit(t(x$counts), ncores=1, K=2)
   fit3 <- zinbFit(t(x$counts), ncores=1, K=3)
   fit4 <- zinbFit(t(x$counts), ncores=1, K=4)
 
