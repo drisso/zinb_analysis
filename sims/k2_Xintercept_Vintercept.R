@@ -34,7 +34,8 @@ plot(true_W, pch=19, col=bio)
 
 mod <- model.matrix(~true_W)
 
-zinb_pars <- zinbFit(core, ncores = 3, X=mod, which_X_mu=1:3, which_X_pi=1:3, commondispersion=TRUE)
+zinb_pars <- zinbFit(core, ncores = 3, X=mod, which_X_mu=1:3, which_X_pi=1:3,
+                     commondispersion=TRUE)
 
 true_alpha_mu <- zinb_pars@beta_mu[-1,]
 true_alpha_pi <- zinb_pars@beta_pi[-1,]
@@ -43,7 +44,10 @@ true_beta_pi <- zinb_pars@beta_pi[1,,drop=FALSE]
 true_gamma_mu <- zinb_pars@gamma_mu
 true_gamma_pi <- zinb_pars@gamma_pi
 
-sim_obj <- zinbModel(W=true_W, alpha_mu=true_alpha_mu, alpha_pi=true_alpha_pi, beta_mu=true_beta_mu, beta_pi=true_beta_pi, zeta = zinb_pars@zeta, gamma_mu=true_gamma_mu, gamma_pi=true_gamma_pi)
+sim_obj <- zinbModel(W=true_W, alpha_mu=true_alpha_mu, alpha_pi=true_alpha_pi, 
+                     beta_mu=true_beta_mu, beta_pi=true_beta_pi,
+                     zeta = zinb_pars@zeta, gamma_mu=true_gamma_mu,
+                     gamma_pi=true_gamma_pi)
 
 B <- 50
 sim_data <- lapply(seq_len(B), function(i) zinbSim(sim_obj, seed=i))
