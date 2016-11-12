@@ -59,7 +59,7 @@ detection_rate <- colSums(core>0)
 coverage <- colSums(core)
 ```
 
-We only focus on the cells that passed the QC filters (by the original authors) and that were part of the "core" clusters. We will color-code the cells by either known cell type or by inferred cluster (inferred in the original study). Select cells, remove ERCC spike-ins, filter out the genes that do not have at least 10 counts in at least 10 cells. Number of retained genes:
+We only focus on the cells that passed the QC filters (by the original authors) and that were part of the "core" clusters. We account for batch. We will color-code the cells by inferred cluster. Select cells, remove ERCC spike-ins, filter out the genes that do not have at least 10 counts in at least 10 cells. Number of retained genes:
 ```{r}
 print(sum(filter))
 ```
@@ -134,14 +134,14 @@ ggplot(gamma, aes(value, fill = celltype)) + geom_density(alpha = 0.2) +
 ```
 
 ### Beta
-Because we accounting for batch and qc in X, beta has M = 25 rows.
+Note that we accounting for batch and qc in X, so beta has more than one row (M = 25 rows). Here, we look only at the first row of beta.
 ```{r beta}
 beta_mu = zinb@beta_mu[1,]
 beta_pi = zinb@beta_pi[1,]
 
 df <- data.frame(beta_mu_intercept = beta_mu,
                  beta_pi_intercept = beta_pi)
-pairs(df, pch=19, col=cols[bio])
+pairs(df, pch=19)
 print(cor(df, method="spearman"))
 
 beta = data.frame(beta_mu_intercept = beta_mu, beta_pi_intercept = beta_pi)
@@ -168,8 +168,8 @@ ggplot(beta, aes(x = variable, y = value)) + theme_bw() + xlab('') +
 
 ### Alpha
 ```{r alpha}
-pairs(t(zinb@alpha_mu))
-pairs(t(zinb@alpha_pi))
+pairs(t(zinb@alpha_mu), main = 'alpha_mu')
+pairs(t(zinb@alpha_pi), main = 'alpha_pi')
 
 df <- data.frame(alpha_mu_1 = zinb@alpha_mu[1, ],
                  alpha_mu_2 = zinb@alpha_mu[2, ],
@@ -182,19 +182,24 @@ print(cor(df, method="spearman"))
 ```
 
 ### Dispersion
-Dispersion was estimated on FQ norm counts using function estimateDisp from edgeR. Dispersions estimated using edgeR and ZINB does not seem to be on the same scale. I think it is because I estimate dispersion on (normalized) counts with edgeR, but (if I understood well) zinb estimate the dispersion on log1p(counts). We should rely on values of dispersion from edgeR as we are going to simulates the counts with
-$$Y_{i,j} \sim NB(\mu_{i,j}, \phi_j)$$
-
 ```{r disp}
 par(mfrow=c(1,1))
 set = newSeqExpressionSet(core)
 fq = betweenLaneNormalization(set, which = "full", offset = T)
 disp = estimateDisp(counts(fq), offset = -offst(fq))
-plot(disp$tagwise.dispersion, zinb@zeta, ylab = 'zinb dispersion',
-     xlab = 'edgeR tagwise dispersion', main = 'Dispersion')
-print(cor(disp$tagwise.dispersion, zinb@zeta, method="spearman"))
 
-plot(density(disp$tagwise.dispersion), main = 'edgeR tagwise dispersion')
+plot(disp$tagwise.dispersion, 1/exp(zinb@zeta), ylab = 'zinb dispersion',
+     xlab = 'edgeR tagwise dispersion', main = 'Dispersion')
+print(cor(disp$tagwise.dispersion, 1/exp(zinb@zeta), method="spearman"))
+
+par(mfrow = c(1, 2))
+plot(density(1/exp(zinb@zeta)), main = 'zinb dispersion')
+plot(density(disp$tagwise.dispersion), main = 'edgeR dispersion')
+
+par(mfrow = c(1, 2))
+mean = apply(log1p(core), 1, function(x) mean(x[x!=0]))
+plot(mean, 1/exp(zinb@zeta), main = 'zinb', xlab = 'mean expression', ylab = 'dispersion', ylim = c(0, 9))
+plot(mean, disp$tagwise.dispersion, main = 'edgeR',xlab = 'mean expression', ylab = 'dispersion', ylim = c(0, 9))
 ```
 
 ### Estimated mu and pi
@@ -206,20 +211,19 @@ plot(rowMeans(getPi(zinb)), detection_rate, xlab="Average estimated Pi", ylab="D
 plot(rowMeans(log1p(getMu(zinb))), coverage, xlab="Average estimated log Mu", ylab="Coverage", pch=19, col=cols[bio])
 
 par(mfrow=c(1, 3))
-mean = apply(log1p(core), 1, function(x) mean(x[x!=0]))
 smoothScatter(mean, rowMeans(core == 0),xlim = c(2,8),
               nrpoints=Inf, pch = "", cex = .7, ylim = c(0,1),
               xlab = "Mean Expression", ylab = "Dropout Rate", 
               colramp = pal, main = 'True')
-plot(colMeans(log1p(getMu(zinb))), colMeans(getPi(zinb)),
-     xlab = "Estimated Mean Expression", xlim = c(2,8),
-     ylab = "Estimated Dropout Rate", pch=19, col=cols[bio],
-     ylim = c(0, 1), main = 'Estimated')
 smoothScatter(colMeans(log1p(getMu(zinb))), colMeans(getPi(zinb)), nbin = 256,
               nrpoints=Inf, pch="", cex=.7, xlim = c(2,8),
               xlab = "Estimated Mean Expression", main = 'Estimated',
               ylab = "Estimated Dropout Rate",ylim = c(0,1),
               colramp = pal)
+plot(colMeans(log1p(getMu(zinb))), colMeans(getPi(zinb)),
+     xlab = "Estimated Mean Expression", xlim = c(2,8),
+     ylab = "Estimated Dropout Rate", pch=19,
+     ylim = c(0, 1), main = 'Estimated')
 ```
 
 
