@@ -60,6 +60,10 @@ coverage <- colSums(core)
 colMerged <- cc_rev[clus.labels]
 ```
 
+```{r dim}
+dim(core)
+```
+
 We select only the cells that pass QC, color coded by the experimental time point. I will focus on the top 1,000 most variable genes. Note that the data are not public, hence it should not work other than on Davide and Fanny computers.
 
 ```{r filtering}

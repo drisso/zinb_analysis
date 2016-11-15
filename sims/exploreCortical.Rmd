@@ -62,6 +62,7 @@ coverage <- colSums(core)
 We only focus on the cells that passed the QC filters (by the original authors) and that were part of the "core" clusters. We account for batch. We will color-code the cells by inferred cluster. Select cells, remove ERCC spike-ins, filter out the genes that do not have at least 10 counts in at least 10 cells. Number of retained genes:
 ```{r}
 print(sum(filter))
+dim(core)
 ```
 
 To speed up the computations, I will focus on the top 1,000 most variable genes. IS IT A GOOD IDEA?

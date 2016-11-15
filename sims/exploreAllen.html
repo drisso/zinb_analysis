@@ -260,6 +260,8 @@ coverage &lt;- colSums(core)</code></pre>
 <p>We will color-code the cells by either known cell type or by inferred cluster (inferred in the original study). Select cells, remove ERCC spike-ins, filter out the genes that do not have at least 10 counts in at least 10 cells. Number of retained genes:</p>
 <pre class="r"><code>print(sum(filter))</code></pre>
 <pre><code>## [1] 11545</code></pre>
+<pre class="r"><code>dim(core)</code></pre>
+<pre><code>## [1] 1000  285</code></pre>
 <p>To speed up the computations, I will focus on the top 1,000 most variable genes. IS IT A GOOD IDEA?</p>
 <pre class="r"><code>mean = apply(log1p(assay(prefilter)), 1, function(x) mean(x[x!=0]))
 plot(mean, rowMeans(assay(prefilter) == 0), xlim = c(1,11), ylim = c(0,1),

@@ -1,5 +1,5 @@
 ---
-title: "Explore cortical"
+title: "Explore Zeisel"
 author: "Fanny, Davide, Sandrine"
 date: "11/10/2016"
 output: 
@@ -81,6 +81,10 @@ colTissue <- col1[tissue]
 colMerged <- col2[level1]
 ```
 
+```{r dim}
+dim(core)
+```
+
 To speed up the computations, we will focus on the top 1,000 most variable genes.
 ```{r filtering}
 par(mfrow = c(1,2))
@@ -88,7 +92,7 @@ pal =colorRampPalette(c("black","black", "red","yellow"), space="rgb")
 mean = apply(log1p(core), 1, function(x) mean(x[x!=0]))
 plot(mean, rowMeans(core == 0), xlim = c(0,4), ylim = c(0,1),
               xlab = "Mean Expression", ylab = "Dropout Rate", 
-              main = 'no filtering')
+              main = '1,000 most variable genes')
 smoothScatter(mean, rowMeans(core == 0), xlim = c(0,4),
               nrpoints=Inf, pch = "", cex = .7, ylim = c(0,1),
               xlab = "Mean Expression", ylab = "Dropout Rate", 

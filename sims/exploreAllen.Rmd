@@ -57,6 +57,7 @@ coverage <- colSums(core)
 We will color-code the cells by either known cell type or by inferred cluster (inferred in the original study). Select cells, remove ERCC spike-ins, filter out the genes that do not have at least 10 counts in at least 10 cells. Number of retained genes:
 ```{r}
 print(sum(filter))
+dim(core)
 ```
 
 To speed up the computations, I will focus on the top 1,000 most variable genes. IS IT A GOOD IDEA?
