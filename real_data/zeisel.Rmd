@@ -23,6 +23,7 @@ library(Rtsne)
 library(scone)
 library(RColorBrewer)
 set.seed(20)
+ncores <- 3
 ```
 
 ## TL;DR
@@ -48,9 +49,9 @@ level2 <- as.factor(as.matrix(data)[10,-(1:2)])
 table(level1)
 table(level1, level2)
 
-counts <- as.matrix(data[12:NCOL(data),-(1:2)])
+counts <- as.matrix(data[12:NROW(data),-(1:2)])
 counts <- matrix(as.numeric(counts), ncol=ncol(counts), nrow=nrow(counts))
-rownames(counts) <- data[12:NCOL(data),1]
+rownames(counts) <- data[12:NROW(data),1]
 colnames(counts) <- data[8, -(1:2)]
 ```
 
@@ -110,7 +111,7 @@ Even after full-quantile normalization, there is some residual correlation betwe
 ## ZINB
 
 ```{r zinb}
-print(system.time(zinb_Vall <- zinbFit(core, ncores = 3, K = 3)))
+print(system.time(zinb_Vall <- zinbFit(core, ncores = ncores, K = 3)))
 ```
 
 ```{r zinb_plot}
@@ -128,7 +129,7 @@ print(cor(df, method="spearman"))
 ## Four dimensions
 
 ```{r zinb_four}
-print(system.time(zinb_4 <- zinbFit(core, ncores = 3, K = 4)))
+print(system.time(zinb_4 <- zinbFit(core, ncores = ncores, K = 4)))
 ```
 
 ```{r four_plot}
@@ -148,7 +149,7 @@ plot(pcafq$x, col=col3[level2], pch=20, main="PCA (FQ)")
 ```{r zinb_sub}
 i <- 7
 idx <- which(level1==levels(level1)[i])
-print(system.time(zinb_sub <- zinbFit(core[,idx], ncores = 3, K = 2)))
+print(system.time(zinb_sub <- zinbFit(core[,idx], ncores = ncores, K = 2)))
 ```
 
 ```{r plot_sub}
@@ -159,7 +160,7 @@ legend("bottomright", levels(droplevels(level2[idx])), fill=unique(col3[level2[i
 ```{r zinb_sub2}
 i <- 6
 idx <- which(level1==levels(level1)[i])
-print(system.time(zinb_sub <- zinbFit(core[,idx], ncores = 3, K = 2)))
+print(system.time(zinb_sub <- zinbFit(core[,idx], ncores = ncores, K = 2)))
 ```
 
 ```{r plot_sub2}
