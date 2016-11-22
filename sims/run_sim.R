@@ -19,30 +19,27 @@ makeZinbFit <- function(Xintercept = T, Vintercept = T, K = 2,
 }
 
 # load simulated datasets
-load("k2_Xintercept_Vintercept.rda")
+load("sim_allen_k2_noCorr.rda")
 
 # 32 different sets of parameters 
 K = 1:4
 Vintercept = c(TRUE, FALSE)
-Xintercept = c(TRUE, FALSE)
 commondispersion = c(TRUE, FALSE)
 ncores = max(1, detectCores() - 2)
 
 fittedSim = lapply(K, function(k){
-  lapply(Xintercept, function(Xint){
-    lapply(Vintercept, function(Vint){
-      lapply(commondispersion, function(commondisp){
-        myZinbFit = makeZinbFit(Xintercept = Xint,
-                                Vintercept = Vint,
-                                K = k,
-                                commondispersion = commondisp)
-        mclapply(1:length(sim_data), function(i){
-          myZinbFit(t(sim_data[[i]]$counts))
-        },mc.cores = ncores)
-      })
+  lapply(Vintercept, function(Vint){
+    lapply(commondispersion, function(commondisp){
+      myZinbFit = makeZinbFit(Xintercept = TRUE,
+                              Vintercept = Vint,
+                              K = k,
+                              commondispersion = commondisp)
+      mclapply(1:length(sim_data), function(i){
+        myZinbFit(t(sim_data[[i]]$counts))
+      },mc.cores = ncores)
     })
   })
 })
-save(fittedSim, file = 'k2_Xintercept_Vintercept_fitted.rda')
+save(fittedSim, file = 'sim_allen_k2_noCorr_fitted.rda')
 
 

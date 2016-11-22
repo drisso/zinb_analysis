@@ -1,0 +1,459 @@
+---
+title: "Simulate from Allen dataset"
+author: "Fanny, Davide, Sandrine"
+date: "11/21/2016"
+output: 
+  html_document: 
+    fig_height: 10
+    fig_width: 10
+    toc: yes
+    code_folding: hide
+    toc_float: yes
+---
+
+```{r options, echo=FALSE, results="hide",mesasge=FALSE, error=FALSE, include=FALSE, autodep=TRUE}
+knitr::opts_chunk$set(fig.align="center", cache=TRUE, error=FALSE,
+                      message=FALSE, warning=TRUE, fig.width=6, fig.height=6)
+library(SummarizedExperiment)
+library(scRNAseq)
+library(zinb)
+library(scran)
+library(EDASeq)
+library(ggplot2)
+library(magrittr)
+library(matrixStats)
+library(reshape)
+library(ggplot2)
+library(edgeR)
+library(RColorBrewer)
+
+cols <- brewer.pal(8, "Set1")
+cols2 <- c(brewer.pal(8, "Set2"), brewer.pal(8, "Set3"), brewer.pal(8, "Set1"))
+set.seed(975)
+```
+
+We want to look at real datasets to simulate realistic datasets.
+
+```{r datain}
+data("allen")
+
+prefilter <- allen[grep("^ERCC-", rownames(allen), invert = TRUE),
+                    which(colData(allen)$Core.Type=="Core")]
+filterGenes <- apply(assay(prefilter) > 10, 1, sum) >= 10
+sampleCells <- sample(ncol(prefilter), 100)
+
+postfilter <- prefilter[filterGenes, sampleCells]
+bio <- as.factor(colData(postfilter)$driver_1_s)
+cl <- as.factor(colData(postfilter)$Primary.Type)
+postfilter <- assay(postfilter)
+
+vars <- rowVars(log1p(postfilter))
+names(vars) <- rownames(postfilter)
+vars <- sort(vars, decreasing = TRUE)
+core <- postfilter[names(vars)[1:1000],]
+detection_rate <- colSums(core>0)
+coverage <- colSums(core)
+```
+
+We will color-code the cells by either known cell type or by inferred cluster (inferred in the original study). Remove ERCC spike-ins, filter out the genes that do not have at least 10 counts in at least 10 cells, sample at random 100 cells, select 1,000 most variable genes. Then, dimensions are
+```{r}
+dim(core)
+```
+
+```{r filtering}
+par(mfrow = c(1,2))
+pal =colorRampPalette(c("black","black", "red","yellow"), space="rgb")
+mean = apply(log1p(core), 1, function(x) mean(x[x!=0]))
+plot(mean, rowMeans(core == 0), xlim = c(3,8), ylim = c(0,1),
+              xlab = "Mean Expression", ylab = "Dropout Rate", 
+              main = '1,000 most variable genes')
+smoothScatter(mean, rowMeans(core == 0), xlim = c(3,8),
+              nrpoints=Inf, pch = "", cex = .7, ylim = c(0,1),
+              xlab = "Mean Expression", ylab = "Dropout Rate", 
+              colramp = pal, main = '1,000 most variable genes')
+```
+
+```{r pca}
+fq <- betweenLaneNormalization(core, which="full")
+pca <- prcomp(t(log1p(fq)))
+plot(pca$x, col=cols[bio], pch=19, main="PCA of log-counts")
+#legend("bottomleft", levels(bio), fill=cols)
+plot(pca$x, col=cols2[cl], pch=19, main="PCA of log-counts")
+```
+
+Fit data with K = 2, V and X intercepts in both Mu and Pi, commondispersion = FALSE, and no covariate.
+```{r zinb}
+print(system.time(zinb <- zinbFit(core, ncores = 3, K = 2,
+                                  commondispersion = FALSE)))
+```
+
+### True W
+Our true W is
+```{r zinb_plot}
+par(mfrow=c(1, 2))
+plot(zinb@W, col=cols[bio], pch=19, xlab="W1", ylab="W2",
+     main="color = known cell-type")
+#legend("bottomright", levels(bio), fill=cols)
+
+plot(zinb@W, col=cols2[cl], pch=19, xlab="W1", ylab="W2",
+     main="color = inferred clusters")
+#legend("topright", levels(cl), fill=cols2)
+```
+
+```{r trueW}
+true_W <- zinb@W
+```
+
+### Gamma
+
+Gamma_mu and gamma_pi are not correlated in this dataset. Let's simulate
+$$\gamma_{\mu} \sim \mathcal{N}(5, .5)$$
+$$\gamma_{\pi} \sim \mathcal{N}(-1, 2.5)$$
+
+```{r gammaCor}
+gamma_mu = zinb@gamma_mu[1,]
+gamma_pi = zinb@gamma_pi[1,]
+
+c(mean = mean(gamma_mu), sd = sd(gamma_mu))
+c(mean = mean(gamma_pi), sd = sd(gamma_pi))
+
+true_gamma_mu = rnorm(100, 5, 0.4)
+true_gamma_pi = rnorm(100, -.8, .8)
+
+true_gamma = data.frame(true_gamma_mu = true_gamma_mu,
+                        true_gamma_pi = true_gamma_pi, 
+                        celltype = bio)
+true_gamma = melt(true_gamma)
+
+df <- data.frame(gamma_mu = gamma_mu,
+                 gamma_pi = gamma_pi,
+                 detection_rate = detection_rate,
+                 coverage = coverage)
+pairs(df, pch=19, col=cols[bio])
+print(cor(df, method="spearman"))
+```
+
+```{r gamma}
+gamma = data.frame(gamma_mu = gamma_mu, gamma_pi = gamma_pi,
+                   true_gamma_mu = true_gamma_mu, true_gamma_pi = true_gamma_pi,
+                   celltype = bio)
+gamma = melt(gamma)
+gamma$status = sapply(gamma$variable, function(x) ifelse(grepl('true', x), 'simulated', 'fitted'))
+gamma$variable = gsub('true_', '', gamma$variable)
+
+ggplot(gamma, aes(x = value)) + 
+  geom_histogram(aes(y = ..density..), bins = 20, col = 'gray') +
+  geom_density(col= 'blue', size = .5) + 
+  facet_grid(status ~ variable, scale = 'free_x') + xlab('gamma')
+
+par(mfrow=c(1,2))
+qqplot(gamma_mu, true_gamma_mu, main = 'QQplot - gamma_mu')
+abline(a=0,b=1)
+qqplot(gamma_pi, true_gamma_pi, main = 'QQplot - gamma_pi')
+abline(a=0,b=1)
+
+ggplot(gamma, aes(x = variable, y = value)) + xlab('') + theme_bw() +
+  geom_boxplot() + coord_flip() +
+  facet_grid(status~ variable, scales = 'free_x') +
+  theme_bw() + ylab('gamma') + scale_x_discrete(breaks = c('', ''), drop=FALSE)
+  
+ggplot(gamma, aes(value, fill = celltype)) + geom_density(alpha = 0.2) +
+  facet_grid(status ~ variable) + xlab('gamma') + theme_bw()
+```
+
+
+
+### Beta
+```{r mixtureGaussianBeta}
+rmixtNorm = function(n, m1, sd1, m2, sd2, p = .95, seed = NULL){
+  if (!is.null(seed)) set.seed(seed)
+  temp = cbind(rnorm(n, m1, sd1), rnorm(n, m2, sd2))
+  id = sample(1:2, n, rep = T, prob = c(p,1-p))
+  id = cbind(1:n,id)
+  temp[id]
+}
+```
+
+beta_mu and beta_pi are not correlated in the dataset. To simulate the long tail of the distributions of beta, let's simulate beta_mu and beta_pi as a mixture of gaussians
+$$\beta_{\mu} \sim .9 \mathcal{N}(.8, .2) + .1 \mathcal{N}(0, 1)$$
+$$\beta_{\pi} \sim .9 \mathcal{N}(-1, 5) + .1 \mathcal{N}(-25, 10)$$
+```{r beta}
+beta_mu = zinb@beta_mu[1,]
+beta_pi = zinb@beta_pi[1,]
+
+c(mean = mean(beta_mu), sd = sd(beta_mu))
+c(mean = mean(beta_pi), sd = sd(beta_pi))
+
+true_beta_mu = rmixtNorm(1000, .8, .4, 0, 1, seed = 123)
+true_beta_pi = rmixtNorm(1000, -.4, .8, -25, 20, seed = 456)
+
+df <- data.frame(beta_mu = beta_mu,
+                 beta_pi = beta_pi)
+pairs(df, pch=19)
+print(cor(df, method="spearman"))
+
+true_beta = data.frame(true_beta_mu = true_beta_mu, true_beta_pi = true_beta_pi)
+pairs(true_beta, pch=19)
+print(cor(df, method="spearman"))
+```
+
+```{r betaPlot}
+beta = data.frame(beta_mu = beta_mu, beta_pi = beta_pi, 
+                  true_beta_mu = true_beta_mu, 
+                  true_beta_pi = true_beta_pi)
+beta = melt(beta)
+beta$status = sapply(beta$variable, function(x) ifelse(grepl('true', x), 'simulated', 'fitted'))
+beta$variable = gsub('true_', '', beta$variable)
+
+ggplot(beta, aes(x = value)) + 
+  geom_histogram(aes(y = ..density..), bins = 50, col = 'gray') +
+  geom_density(col= 'blue', size = .5) + 
+  facet_grid(status ~ variable, scales = 'free') + xlab('beta')
+
+par(mfrow=c(1,2))
+qqplot(beta_mu, true_beta_mu, main = 'QQplot - beta_mu')
+abline(a=0,b=1)
+qqplot(beta_pi, true_beta_pi, main = 'QQplot - beta_pi')
+abline(a=0,b=1)
+
+ggplot(beta, aes(x = variable, y = value)) + theme_bw() + xlab('') +
+  geom_boxplot() + facet_grid(status ~ variable) +
+  coord_flip() +
+  theme_bw() + ylab('beta') + scale_x_discrete(breaks = c('', ''), drop=FALSE)
+
+# remove outliers
+max = max(quantile(beta_pi, 0.1), quantile(beta_mu, 0.1))
+min = min(quantile(beta_pi, 0.1), quantile(beta_mu, 0.1))
+ggplot(beta, aes(x = variable, y = value)) + theme_bw() + xlab('') +
+  geom_boxplot(outlier.shape = NA) +
+  facet_grid(status ~ variable, scales = 'free') + coord_flip() +
+  theme_bw() + ylab('beta removing outliers') +
+  scale_x_discrete(breaks = c('', ''), drop=FALSE) +
+  scale_y_continuous(limits = c(min, max))
+```
+
+
+### Alpha
+alpha_mu and alpha_pi are not correlated. 
+```{r alpha}
+par(mfrow=c(1,2))
+plot(t(zinb@alpha_mu), xlab="Alpha_Mu 1", ylab="Alpha_Mu 2", main="Alpha_Mu")
+plot(t(zinb@alpha_pi), xlab="Alpha_Pi 1", ylab="Alpha_Pi 2", main="Alpha_Pi")
+
+alpha_mu_1 = zinb@alpha_mu[1, ]
+alpha_mu_2 = zinb@alpha_mu[2, ]
+alpha_pi_1 = zinb@alpha_pi[1, ]
+alpha_pi_2 = zinb@alpha_pi[2, ]
+
+df <- data.frame(alpha_mu_1 = alpha_mu_1,
+                 alpha_mu_2 = alpha_mu_2,
+                 alpha_pi_1 = alpha_pi_1,
+                 alpha_pi_2 = alpha_pi_2)
+pairs(df, pch=19, main = 'fitted alpha')
+print(cor(df, method="spearman"))
+```
+
+alpha_mu and alpha_pi are not correlated in this dataset. Let's simulate
+$$\alpha_{\mu1} \sim .97 \mathcal{N}(0, 0.05) + .03 \mathcal{N}(0, 1)$$
+$$\alpha_{\mu2} \sim .97 \mathcal{N}(0, 0.1) + .03 \mathcal{N}(0, 1)$$
+$$\alpha_{\pi1} \sim .97 \mathcal{N}(0, 0.5) + .03 \mathcal{N}(0, 10)$$
+$$\alpha_{\pi2} \sim .97 \mathcal{N}(0, 0.5) + .03 \mathcal{N}(0, 10)$$
+```{r alphaSimMean}
+c(mean = mean(alpha_mu_1), sd = sd(alpha_mu_1))
+c(mean = mean(alpha_mu_2), sd = sd(alpha_mu_2))
+c(mean = mean(alpha_pi_1), sd = sd(alpha_pi_1))
+c(mean = mean(alpha_pi_2), sd = sd(alpha_pi_2))
+```
+
+```{r alphaSim}
+true_alpha_mu_1 = rmixtNorm(1000, 0, 0.05, 0, 1, p =.97)
+true_alpha_mu_2 = rmixtNorm(1000, 0, 0.1, 0, 1, p =.97)
+true_alpha_pi_1 = rmixtNorm(1000, 0, .5, 0, 10, p =.97)
+true_alpha_pi_2 = rmixtNorm(1000, 0, .5, 0, 10, p =.97)
+
+df <- data.frame(true_alpha_mu_1 = true_alpha_mu_1,
+                 true_alpha_mu_2 = true_alpha_mu_2,
+                 true_alpha_pi_1 = true_alpha_pi_1,
+                 true_alpha_pi_2 = true_alpha_pi_2)
+pairs(df, pch=19, main = 'simulated alpha')
+print(cor(df, method="spearman"))
+
+alpha = data.frame(true_alpha_mu_1 = true_alpha_mu_1,
+                   true_alpha_mu_2 = true_alpha_mu_2,
+                   true_alpha_pi_1 = true_alpha_pi_1,
+                   true_alpha_pi_2 = true_alpha_pi_2,
+                   alpha_mu_1 = alpha_mu_1,
+                   alpha_mu_2 = alpha_mu_2,
+                   alpha_pi_1 = alpha_pi_1,
+                   alpha_pi_2 = alpha_pi_2)
+alpha = melt(alpha)
+alpha$status = sapply(alpha$variable, function(x) ifelse(grepl('true', x), 'simulated', 'fitted'))
+alpha$variable = gsub('true_', '', alpha$variable)
+ggplot(alpha, aes(x = value)) + 
+  geom_histogram(aes(y = ..density..), bins = 50, col = 'gray') +
+  geom_density(col= 'blue', size = .5) + 
+  facet_grid(status ~ variable, scales = 'free_x') + xlab('true_beta')
+```
+
+### Dispersion
+```{r disp}
+par(mfrow=c(1,1))
+set = newSeqExpressionSet(core)
+fq = betweenLaneNormalization(set, which = "full", offset = T)
+disp = estimateDisp(counts(fq), offset = -offst(fq))
+
+plot(disp$tagwise.dispersion, 1/exp(zinb@zeta), ylab = 'zinb dispersion',
+     xlab = 'edgeR tagwise dispersion', main = 'Dispersion')
+print(cor(disp$tagwise.dispersion, 1/exp(zinb@zeta), method="spearman"))
+
+par(mfrow = c(1, 2))
+plot(density(1/exp(zinb@zeta)), main = 'zinb dispersion')
+plot(density(disp$tagwise.dispersion), main = 'edgeR dispersion')
+
+par(mfrow = c(1, 2))
+mean = apply(log1p(core), 1, function(x) mean(x[x!=0]))
+plot(mean, 1/exp(zinb@zeta), main = 'zinb', xlab = 'mean expression', ylab = 'dispersion', ylim = c(0, 14))
+plot(mean, disp$tagwise.dispersion, main = 'edgeR',xlab = 'mean expression', ylab = 'dispersion', ylim = c(0, 14))
+```
+
+```{r dispSim}
+par(mfrow = c(1, 2))
+hist(zinb@zeta, xlab = 'fitted zeta', main = '')
+c(mean = mean(zinb@zeta), sd = sd(zinb@zeta))
+true_zeta = rnorm(1000, -.75, .45)
+hist(true_zeta, breaks = 15, xlab = 'simulated zeta', main = '')
+```
+
+### Simulate
+```{r sim}
+true_alpha_mu <- matrix(c(true_alpha_mu_1, true_alpha_mu_2),
+                        nrow = 2, byrow = T)
+true_alpha_pi <- matrix(c(true_alpha_pi_1, true_alpha_pi_2),
+                        nrow = 2, byrow = T)
+true_beta_mu <- matrix(true_beta_mu, nrow = 1)
+true_beta_pi <- matrix(true_beta_pi, nrow = 1)
+true_gamma_mu <- matrix(true_gamma_mu, nrow = 1)
+true_gamma_pi <- matrix(true_gamma_mu, nrow = 1)
+
+sim_obj <- zinbModel(W=true_W, alpha_mu=true_alpha_mu, alpha_pi=true_alpha_pi, 
+                     beta_mu=true_beta_mu, beta_pi=true_beta_pi,
+                     zeta = true_zeta, gamma_mu=true_gamma_mu,
+                     gamma_pi=true_gamma_pi)
+sim_data <- zinbSim(sim_obj, seed=3984)
+
+sim_data$zeroFraction
+sum(core==0)/(nrow(core) * ncol(core))
+```
+
+### Estimated mu and pi
+```{r overall}
+detection_rate <- colMeans(core>0)
+coverage <- colSums(core)
+true_detection_rate <- rowMeans(sim_data$counts>0)
+true_coverage <- rowSums(sim_data$counts)
+
+par(mfrow=c(2, 2))
+plot(rowMeans(getPi(zinb)), detection_rate,
+     xlab="Average fitted Pi", ylab="Detection Rate",
+     pch=19, col=cols[bio], ylim = c(0, 1), xlim = c(0,1))
+plot(rowMeans(log1p(getMu(zinb))), log1p(coverage), xlim = c(5, 7),
+     xlab="Average fitted log Mu", ylab="log Coverage", pch=19,
+     col=cols[bio])
+plot(rowMeans(getPi(sim_obj)), true_detection_rate,
+     xlab="Average simulated Pi", ylab="True Detection Rate",
+     pch=19, col=cols[bio], ylim = c(0, 1), xlim = c(0,1))
+plot(rowMeans(log1p(getMu(sim_obj))), log1p(true_coverage), xlim = c(5, 7),
+     xlab="Average simulated log Mu", ylab="log Coverage", pch=19,
+     col=cols[bio])
+
+par(mfrow=c(1, 3))
+smoothScatter(mean, rowMeans(core == 0),xlim = c(3,8),
+              nrpoints=Inf, pch = "", cex = .7, ylim = c(0,1),
+              xlab = "Mean Expression", ylab = "Dropout Rate", 
+              colramp = pal, main = 'Observed')
+smoothScatter(colMeans(log1p(getMu(zinb))), colMeans(getPi(zinb)), nbin = 256,
+              nrpoints=Inf, pch="", cex=.7, xlim = c(3,8),
+              xlab = "Mean Expression", main = 'Fitted',
+              ylab = "Dropout Rate",ylim = c(0,1),
+              colramp = pal)
+smoothScatter(colMeans(log1p(getMu(sim_obj))), colMeans(getPi(sim_obj)),
+              nrpoints=Inf, pch="", cex=.7, xlim = c(3,8), nbin = 256,
+              xlab = "Mean Expression", main = 'Simulated',
+              ylab = "Dropout Rate",ylim = c(0,1),
+              colramp = pal)
+```
+
+### Why it does not look good?
+```{r alphaBeta}
+df <- data.frame(alpha_pi_1 = alpha_pi_1,
+                 alpha_pi_2 = alpha_pi_2,
+                 beta_pi = beta_pi)
+pairs(df, pch=19, main = 'fitted')
+print(cor(df, method="spearman"))
+```
+
+```{r alphaFit}
+mod <- model.matrix(~ true_W)
+zinb_sim <- zinbFit(core, ncores = 3, X=mod, which_X_mu=1:3, which_X_pi=1:3, commondispersion=FALSE)
+```
+
+```{r newSim}
+true_alpha_mu <- zinb_sim@beta_mu[-1,]
+true_alpha_pi <- zinb_sim@beta_pi[-1,]
+true_beta_mu <- zinb_sim@beta_mu[1,,drop=FALSE]
+true_beta_pi <- zinb_sim@beta_pi[1,,drop=FALSE]
+true_gamma_mu <- zinb_sim@gamma_mu
+true_gamma_pi <- zinb_sim@gamma_pi
+
+sim_obj <- zinbModel(W=true_W, alpha_mu=true_alpha_mu, alpha_pi=true_alpha_pi, 
+                     beta_mu=true_beta_mu, beta_pi=true_beta_pi,
+                     zeta = true_zeta, gamma_mu=true_gamma_mu,
+                     gamma_pi=true_gamma_pi)
+sim_data <- zinbSim(sim_obj, seed=3984)
+sim_data$zeroFraction
+sum(core==0)/(nrow(core) * ncol(core))
+```
+
+
+```{r newOverall}
+detection_rate <- colMeans(core>0)
+coverage <- colSums(core)
+true_detection_rate <- rowMeans(sim_data$counts>0)
+true_coverage <- rowSums(sim_data$counts)
+
+par(mfrow=c(2, 2))
+plot(rowMeans(getPi(zinb)), detection_rate,
+     xlab="Average fitted Pi", ylab="Detection Rate",
+     pch=19, col=cols[bio], ylim = c(0, 1), xlim = c(0,1))
+plot(rowMeans(log1p(getMu(zinb))), log1p(coverage), xlim = c(5, 7),
+     xlab="Average fitted log Mu", ylab="log Coverage", pch=19,
+     col=cols[bio])
+plot(rowMeans(getPi(sim_obj)), true_detection_rate,
+     xlab="Average simulated Pi", ylab="True Detection Rate",
+     pch=19, col=cols[bio], ylim = c(0, 1), xlim = c(0,1))
+plot(rowMeans(log1p(getMu(sim_obj))), log1p(true_coverage), xlim = c(5, 7),
+     xlab="Average simulated log Mu", ylab="log Coverage", pch=19,
+     col=cols[bio])
+
+par(mfrow=c(1, 3))
+smoothScatter(mean, rowMeans(core == 0),xlim = c(3,8),
+              nrpoints=Inf, pch = "", cex = .7, ylim = c(0,1),
+              xlab = "Mean Expression", ylab = "Dropout Rate", 
+              colramp = pal, main = 'Observed')
+smoothScatter(colMeans(log1p(getMu(zinb))), colMeans(getPi(zinb)), nbin = 256,
+              nrpoints=Inf, pch="", cex=.7, xlim = c(3,8),
+              xlab = "Mean Expression", main = 'Fitted',
+              ylab = "Dropout Rate",ylim = c(0,1),
+              colramp = pal)
+smoothScatter(colMeans(log1p(getMu(sim_obj))), colMeans(getPi(sim_obj)),
+              nrpoints=Inf, pch="", cex=.7, xlim = c(3,8), nbin = 256,
+              xlab = "Mean Expression", main = 'Simulated',
+              ylab = "Dropout Rate",ylim = c(0,1),
+              colramp = pal)
+```
+
+```{r simAll}
+B <- 50
+sim_data <- lapply(seq_len(B), function(i) zinbSim(sim_obj, seed=i))
+save(sim_obj, sim_data, file="sim_allen_k2_noCorr.rda")
+```

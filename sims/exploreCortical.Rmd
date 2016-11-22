@@ -209,22 +209,24 @@ par(mfrow=c(1, 2))
 detection_rate <- colMeans(core>0)
 coverage <- colSums(core)
 plot(rowMeans(getPi(zinb)), detection_rate, xlab="Average estimated Pi", ylab="Detection Rate for each cell", pch=19, col=cols[bio], ylim = c(0, 1))
-plot(rowMeans(log1p(getMu(zinb))), coverage, xlab="Average estimated log Mu", ylab="Coverage", pch=19, col=cols[bio])
+plot(rowMeans(log1p(getMu(zinb))), log1p(coverage), xlab="Average estimated log Mu", ylab="log Coverage", pch=19, col=cols[bio])
 
-par(mfrow=c(1, 3))
+par(mfrow=c(1, 2))
 smoothScatter(mean, rowMeans(core == 0),xlim = c(2,8),
               nrpoints=Inf, pch = "", cex = .7, ylim = c(0,1),
               xlab = "Mean Expression", ylab = "Dropout Rate", 
-              colramp = pal, main = 'True')
+              colramp = pal, main = 'Observed')
 smoothScatter(colMeans(log1p(getMu(zinb))), colMeans(getPi(zinb)), nbin = 256,
               nrpoints=Inf, pch="", cex=.7, xlim = c(2,8),
-              xlab = "Estimated Mean Expression", main = 'Estimated',
+              xlab = "Estimated Mean Expression", main = 'Fitted',
               ylab = "Estimated Dropout Rate",ylim = c(0,1),
               colramp = pal)
-plot(colMeans(log1p(getMu(zinb))), colMeans(getPi(zinb)),
-     xlab = "Estimated Mean Expression", xlim = c(2,8),
-     ylab = "Estimated Dropout Rate", pch=19,
-     ylim = c(0, 1), main = 'Estimated')
+mdplot(matrix(c(colMeans(log1p(getMu(zinb))), mean), ncol = 2),
+       main = 'MD plot - mu')
+abline(h=0, col = 'red')
+mdplot(matrix(c(colMeans(getPi(zinb)), rowMeans(core == 0)), ncol = 2),
+       main = 'MD plot - pi')
+abline(h=0, col = 'red')
 ```
 
 
