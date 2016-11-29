@@ -100,8 +100,30 @@ plot(zinb@W, col=cols2[cl], pch=19, xlab="W1", ylab="W2",
 #legend("topright", levels(cl), fill=cols2)
 ```
 
+```{r Wsim}
+W = data.frame(W1 = zinb@W[,1], W2 = zinb@W[,1], bio= bio)
+ggplot(melt(W), aes(value, fill = bio)) + geom_density(alpha = 0.2) +
+  facet_grid(~ variable) + xlab('W') + theme_bw()
+
+Sc = grepl('^Scnn1a', W$bio)
+Rb = grepl('^Rbp4', W$bio)
+Nt = grepl('^Ntsr1', W$bio)
+W[Sc, 'W1sim'] = rnorm(sum(Sc), -2, .5)
+W[Sc, 'W2sim'] = rnorm(sum(Sc), -2, .5)
+W[Rb, 'W1sim'] = rnorm(sum(Rb), 4, .5)
+W[Rb, 'W2sim'] = rnorm(sum(Rb), -.5, .5)
+W[Nt, 'W1sim'] = rnorm(sum(Nt), 0, .5)
+W[Nt, 'W2sim'] = rnorm(sum(Nt), 2.5, .5)
+
+par(mfrow=c(1, 2))
+plot(zinb@W, col=cols[bio], pch=19, xlab="W1", ylab="W2",
+     main="Fitted")
+plot(W[,c('W1sim', 'W2sim')], col=cols[bio], pch=19, xlab="W1", ylab="W2",
+     main="Simulated")
+```
+
 ```{r trueW}
-true_W <- zinb@W
+true_W <- as.matrix(W[, c('W1sim', 'W2sim')])
 ```
 
 ### Gamma
@@ -404,6 +426,7 @@ true_beta_mu <- zinb_sim@beta_mu[1,,drop=FALSE]
 true_beta_pi <- zinb_sim@beta_pi[1,,drop=FALSE]
 true_gamma_mu <- zinb_sim@gamma_mu
 true_gamma_pi <- zinb_sim@gamma_pi
+true_zeta <- zinb_sim@zeta
 
 sim_obj <- zinbModel(W=true_W, alpha_mu=true_alpha_mu, alpha_pi=true_alpha_pi, 
                      beta_mu=true_beta_mu, beta_pi=true_beta_pi,

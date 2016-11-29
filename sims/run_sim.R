@@ -1,5 +1,6 @@
 # Use the allen data to simulate with realistic parameters
 library(zinb)
+#setwd('~/Documents/BRAIN/gitrepo/zinb_analysis/sims/datasets/')
 
 makeZinbFit <- function(Xintercept = T, Vintercept = T, K = 2,
                         commondispersion = T, ngenes = 1000, ncells = 100){
@@ -14,19 +15,16 @@ makeZinbFit <- function(Xintercept = T, Vintercept = T, K = 2,
   buildZinb <- function(Y, ...){
     zinbFit(Y, X = X, V = V, K = K, commondispersion = commondispersion, ...)
   }
-  
   return(buildZinb)
 }
 
-# load simulated datasets
-load("sim_allen_k2_noCorr.rda")
-
-# 32 different sets of parameters 
 K = 1:4
 Vintercept = c(TRUE, FALSE)
 commondispersion = c(TRUE, FALSE)
 ncores = max(1, detectCores() - 2)
 
+load("sim_allen_lowZero.rda")
+load("sim_allen_highZero.rda")
 fittedSim = lapply(K, function(k){
   lapply(Vintercept, function(Vint){
     lapply(commondispersion, function(commondisp){
@@ -34,12 +32,26 @@ fittedSim = lapply(K, function(k){
                               Vintercept = Vint,
                               K = k,
                               commondispersion = commondisp)
-      mclapply(1:length(sim_data), function(i){
-        myZinbFit(t(sim_data[[i]]$counts))
+      mclapply(1:length(simData), function(i){
+        myZinbFit(t(simData[[i]]$counts))
       },mc.cores = ncores)
     })
   })
 })
-save(fittedSim, file = 'sim_allen_k2_noCorr_fitted.rda')
+save(fittedSim, file = 'sim_allen_lowZero_fitted.rda')
+fittedSim = lapply(K, function(k){
+  lapply(Vintercept, function(Vint){
+    lapply(commondispersion, function(commondisp){
+      myZinbFit = makeZinbFit(Xintercept = TRUE,
+                              Vintercept = Vint,
+                              K = k,
+                              commondispersion = commondisp)
+      mclapply(1:length(simData_more0), function(i){
+        myZinbFit(t(simData_more0[[i]]$counts))
+      },mc.cores = ncores)
+    })
+  })
+})
+save(fittedSim_more0, file = 'sim_allen_highZero_fitted.rda')
 
 

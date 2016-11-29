@@ -1,0 +1,341 @@
+---
+title: "Simulations from Zeisel"
+author: "Fanny, Davide, Sandrine"
+date: "11/28/2016"
+output: 
+  html_document: 
+    fig_height: 10
+    fig_width: 10
+    toc: yes
+    code_folding: hide
+    toc_float: yes
+---
+
+```{r options, echo=FALSE, results="hide",mesasge=FALSE, error=FALSE, include=FALSE, autodep=TRUE}
+knitr::opts_chunk$set(fig.align="center", cache=TRUE, error=FALSE,
+                      message=FALSE, warning=TRUE, fig.width=6, fig.height=6)
+library(SummarizedExperiment)
+library(scRNAseq)
+library(zinb)
+library(scran)
+library(EDASeq)
+library(ggplot2)
+library(magrittr)
+library(matrixStats)
+library(reshape)
+library(ggplot2)
+library(edgeR)
+library(RColorBrewer)
+require(knitr)
+cols <- brewer.pal(8, "Set1")
+cols2 <- c(brewer.pal(8, "Set2"), brewer.pal(8, "Set3"), brewer.pal(8, "Set1"))
+set.seed(975)
+```
+
+```{r fct}
+zinbModelFromW <- function(counts, sim_W){
+  mod <- model.matrix(~ sim_W)
+  zinb_sim <- zinbFit(counts, ncores = 3, X=mod, which_X_mu=1:3, which_X_pi=1:3,
+                      commondispersion=FALSE)
+  true_alpha_mu <- zinb_sim@beta_mu[-1,]
+  true_alpha_pi <- zinb_sim@beta_pi[-1,]
+  true_beta_mu <- zinb_sim@beta_mu[1,,drop=FALSE]
+  true_beta_pi <- zinb_sim@beta_pi[1,,drop=FALSE]
+  true_gamma_mu <- zinb_sim@gamma_mu
+  true_gamma_pi <- zinb_sim@gamma_pi
+  true_zeta <- zinb_sim@zeta
+  zinbModel(W=sim_W, alpha_mu=true_alpha_mu, alpha_pi=true_alpha_pi,
+            beta_mu=true_beta_mu, beta_pi=true_beta_pi,
+            zeta = true_zeta, gamma_mu=true_gamma_mu,
+            gamma_pi=true_gamma_pi)
+}
+
+zinbSimFromZinb <- function(simData, simModel, binFactor = 1){
+  n = nrow(simData$counts)
+  J = ncol(simData$counts)
+  pi = getPi(simModel)
+  datado = lapply(seq(n*J), function(i) {
+    pp = binFactor * pi[i]
+    pp = ifelse(pp > 1, 1, pp)
+    rbinom(1, size = 1, prob = pp)
+    })
+  data.dropout = matrix(unlist(datado), nrow = n)
+  counts = simData$dataNB * (1 - data.dropout)
+  t(counts)
+}
+```
+
+
+We want to look at real datasets to simulate realistic datasets.
+```{r datain}
+data <- read.table("~/Documents/BRAIN/gitrepo/zinb_analysis/sims/datasets/expression_mRNA_17-Aug-2014.txt", sep='\t', stringsAsFactors = FALSE, comment.char = '%')
+
+level1 <- as.factor(as.matrix(data)[9,-(1:2)])
+tissue <- as.factor(as.matrix(data)[1,-(1:2)])
+table(tissue)
+group <- as.factor(as.matrix(data)[2,-(1:2)])
+table(tissue, group)
+nmolecule <- as.numeric(as.matrix(data)[3,-(1:2)])
+sex <- as.factor(as.matrix(data)[5,-(1:2)])
+table(tissue, sex)
+level2 <- as.factor(as.matrix(data)[10,-(1:2)])
+table(level1)
+
+counts <- as.matrix(data[12:NROW(data),-(1:2)])
+counts <- matrix(as.numeric(counts), ncol=ncol(counts), nrow=nrow(counts))
+rownames(counts) <- data[12:NROW(data),1]
+colnames(counts) <- data[8, -(1:2)]
+
+level1unique = c('pyramidal CA1', 'interneurons',
+                 'astrocytes_ependymal', 'oligodendrocytes')
+select = level1 %in% level1unique
+counts = counts[, select]
+group = droplevels(group[select])
+sex = sex[select]
+tissue = tissue[select]
+level1 = droplevels(level1[select])
+level2 = level2[select]
+
+filter = lapply(level1unique, function(x){
+  sample(which(level1 == x), 25, replace = F)
+})
+filter = sample(unlist(filter), 100, replace = F)
+counts = counts[, filter]
+group = droplevels(group[filter])
+sex = sex[filter]
+tissue = tissue[filter]
+level1 = droplevels(level1[filter])
+level2 = level2[filter]
+table(tissue)
+table(tissue, group)
+table(tissue, sex)
+table(level1)
+
+vars <- rowVars(log1p(counts))
+names(vars) <- rownames(counts)
+vars <- sort(vars, decreasing = TRUE)
+core <- counts[names(vars)[1:1000],]
+detection_rate <- colSums(core>0)
+coverage <- colSums(core)
+
+col1 <- brewer.pal(9, "Set1")
+col2 <- brewer.pal(8, "Set2")
+colTissue <- col1[tissue]
+colMerged <- col2[level1]
+```
+
+Filter out the genes that do not have at least 10 counts in at least 10 cells, sample at random 100 cells, select 1,000 most variable genes. Then, dimensions are
+```{r}
+dim(core)
+```
+
+```{r filtering}
+par(mfrow = c(1,2))
+pal =colorRampPalette(c("black","black", "red","yellow"), space="rgb")
+mean = apply(log1p(core), 1, function(x) mean(x[x!=0]))
+plot(mean, rowMeans(core == 0), xlim = c(1,5), ylim = c(0,1),
+              xlab = "Mean Expression", ylab = "Dropout Rate", 
+              main = '1,000 most variable genes')
+smoothScatter(mean, rowMeans(core == 0), xlim = c(1,5),
+              nrpoints=Inf, pch = "", cex = .7, ylim = c(0,1),
+              xlab = "Mean Expression", ylab = "Dropout Rate", 
+              colramp = pal, main = '1,000 most variable genes')
+```
+
+Fit data with K = 3, V and X intercepts in both Mu and Pi, commondispersion = FALSE, and no covariate.
+```{r zinb}
+print(system.time(zinb <- zinbFit(core, ncores = 3, K = 2,
+                                  commondispersion = FALSE)))
+```
+
+# True W
+```{r zinb_plot}
+par(mfrow=c(1, 2))
+plot(zinb@W, col=colTissue, pch=19, main="Fitted W")
+plot(zinb@W, col=colMerged, pch=19, main="Fitted W")
+```
+
+```{r Wdistri}
+W = data.frame(W1 = zinb@W[,1], W2 = zinb@W[,2], level = level1)
+ggplot(melt(W), aes(value, fill = level)) + geom_density(alpha = 0.2) +
+  facet_grid(~ variable) + xlab('fitted W') + theme_bw()
+```
+
+```{r Wsim}
+Py = grepl('^pyramidal', W$level)
+Ne = grepl('^interneurons', W$level)
+As = grepl('^astrocytes', W$level)
+Ol = grepl('^oligo', W$level)
+W[Py, 'W1sim'] = rnorm(sum(Py), 8, 1)
+W[Py, 'W2sim'] = rnorm(sum(Py), -1, 1)
+W[Ne, 'W1sim'] = rnorm(sum(Ne), -5, 1)
+W[Ne, 'W2sim'] = rnorm(sum(Ne), -5, 1)
+W[As, 'W1sim'] = rnorm(sum(As), 3, 1)
+W[As, 'W2sim'] = rnorm(sum(As), 4, 1)
+W[Ol, 'W1sim'] = rnorm(sum(Ol), -6, 1)
+W[Ol, 'W2sim'] = rnorm(sum(Ol), 2, 1)
+
+par(mfrow=c(1, 2))
+plot(zinb@W, col=colMerged, pch=19, xlab="W1", ylab="W2",
+     main="Fitted")
+plot(W[,c('W1sim', 'W2sim')], col=colMerged, pch=19, xlab="W1", ylab="W2",
+     main="Simulated")
+```
+
+```{r trueW}
+sim_W <- as.matrix(W[,c('W1sim', 'W2sim')])
+```
+
+# Simulate
+Two datasets were simulated     
+
+1. from sim_W and real counts -> simData,   
+2. from sim_W and simData@counts with additionnal zeros -> simData_more0
+
+
+```{r simulate}
+simModel = zinbModelFromW(core, sim_W)
+simData = zinbSim(simModel, seed = 8746)
+```
+
+When we filter out the genes that do not have at least 10 counts in at least 10 cells, we get only about 200 genes (not 1,000). Is it a problem? Do you have ideas to solve the problem?
+```{r dimMore0}
+counts_more0 = zinbSimFromZinb(simData, simModel, 500)
+#counts_more0 = counts_more0[rowSums(counts_more0) != 0, ]
+counts_more0 = counts_more0[apply(counts_more0 > 5, 1, sum) >= 5, ]
+dim(counts_more0)
+```
+
+```{r simMore0}
+simModel_more0 = zinbModelFromW(counts_more0, sim_W)
+simData_more0 = zinbSim(simModel_more0, seed = 8746)
+```
+
+```{r zeroFraction}
+c(observed = sum(core==0)/(nrow(core) * ncol(core)),
+  simulated = simData$zeroFraction,
+  sim_more0 = simData_more0$zeroFraction)
+```
+
+Same sim_W for the two simulated datasets.
+```{r simW}
+par(mfrow=c(1, 3))
+plot(zinb@W, col=colMerged, pch=19, xlab="W1", ylab="W2",
+     main="Fitted")
+plot(simModel@W, col=colMerged, pch=19, xlab="W1", ylab="W2",
+     main="Simulated")
+plot(simModel_more0@W, col=colMerged, pch=19, xlab="W1", ylab="W2",
+     main="Simulated with more zeros")
+```
+
+```{r simGamma}
+df <- data.frame(gamma_mu = simModel@gamma_mu[1, ],
+                 gamma_pi = simModel@gamma_pi[1, ],
+                 gamma_mu_more0 = simModel_more0@gamma_mu[1, ],
+                 gamma_pi_more0 = simModel_more0@gamma_pi[1, ],
+                 detection_rate = detection_rate,
+                 coverage = coverage)
+pairs(df, pch=19, col=colMerged)
+print(cor(df, method="spearman"))
+```
+
+```{r simalpha}
+df <- data.frame(alpha_mu_1 = simModel@alpha_mu[1, ],
+                 alpha_mu_2 = simModel@alpha_mu[2, ],
+                 alpha_pi_1 = simModel@alpha_pi[1, ],
+                 alpha_pi_2 = simModel@alpha_pi[2, ])
+pairs(df, pch=19, main = 'alpha')
+print(cor(df, method="spearman"))
+
+df <- data.frame(alpha_mu_1 = simModel_more0@alpha_mu[1, ],
+                 alpha_mu_2 = simModel_more0@alpha_mu[2, ],
+                 alpha_pi_1 = simModel_more0@alpha_pi[1, ],
+                 alpha_pi_2 = simModel_more0@alpha_pi[2, ])
+pairs(df, pch=19, main = 'alpha, more zeros')
+print(cor(df, method="spearman"))
+```
+
+```{r simBeta}
+df <- data.frame(beta_mu = simModel@beta_mu[1, ],
+                 beta_pi = simModel@beta_pi[1, ])
+pairs(df, pch=19, main = 'Beta')
+print(cor(df, method="spearman"))
+
+df <- data.frame(beta_mu_more0 = simModel_more0@beta_mu[1, ],
+                 beta_pi_more0 = simModel_more0@beta_pi[1, ])
+pairs(df, pch=19, main = 'Beta more 0s')
+print(cor(df, method="spearman"))
+```
+
+
+```{r newOverall}
+obs_detection_rate <- colMeans(core>0)
+obs_coverage <- colSums(core)
+sim1_detection_rate <- rowMeans(simData$counts>0)
+sim1_coverage <- rowSums(simData$counts)
+sim2_detection_rate <- rowMeans(simData_more0$counts>0)
+sim2_coverage <- rowSums(simData_more0$counts)
+
+par(mfrow=c(3, 2))
+plot(rowMeans(getPi(zinb)), obs_detection_rate,
+     xlab="Average fitted Pi", ylab="Detection Rate",
+     pch=19, col=colMerged, ylim = c(0, 1), xlim = c(0,1))
+plot(rowMeans(log1p(getMu(zinb))), log1p(obs_coverage), xlim = c(0, 4),
+     xlab="Average fitted log Mu", ylab="log Coverage", pch=19, ylim = c(4,11),
+     col=colMerged)
+plot(rowMeans(getPi(simModel)), sim1_detection_rate,
+     xlab="Average simulated Pi", ylab="True Detection Rate",
+     pch=19, col=colMerged, ylim = c(0, 1), xlim = c(0,1))
+plot(rowMeans(log1p(getMu(simModel))), log1p(sim1_coverage), xlim = c(0, 4),
+     xlab="Average simulated log Mu", ylab="log Coverage", pch=19,
+     col=colMerged,ylim = c(4,11))
+plot(rowMeans(getPi(simModel_more0)), sim2_detection_rate,
+     xlab="Average simulated Pi, more zeros", ylab="True Detection Rate",
+     pch=19, col=colMerged, ylim = c(0, 1), xlim = c(0,1))
+plot(rowMeans(log1p(getMu(simModel_more0))), log1p(sim2_coverage),
+     xlim = c(0, 4), xlab="Average simulated log Mu, more zeros", ylab="log Coverage",
+     pch=19, col=colMerged, ylim = c(4,11))
+```
+
+```{r mupi}
+par(mfrow=c(1, 3))
+smoothScatter(mean, rowMeans(core == 0),xlim = c(0,4),
+              nrpoints=Inf, pch = "", cex = .7, ylim = c(0,1),
+              xlab = "Mean Expression", ylab = "Dropout Rate", 
+              colramp = pal, main = 'Observed')
+smoothScatter(colMeans(log1p(getMu(simModel))), colMeans(getPi(simModel)), nbin = 256,
+              nrpoints=Inf, pch="", cex=.7, xlim = c(0,4),
+              xlab = "Mean Expression", main = 'Simulated',
+              ylab = "Dropout Rate",ylim = c(0,1),
+              colramp = pal)
+smoothScatter(colMeans(log1p(getMu(simModel_more0))), colMeans(getPi(simModel_more0)),
+              nrpoints=Inf, pch="", cex=.7, xlim = c(0,4), nbin = 256,
+              xlab = "Mean Expression", main = 'Simulated more 0s',
+              ylab = "Dropout Rate",ylim = c(0,1),
+              colramp = pal)
+```
+
+```{r sim10low}
+B = 10
+simData = lapply(seq_len(B), function(i) zinbSim(simModel, seed=i))
+save(simModel, simData, file = "sim_zeisel_lowZero.rda")
+```
+
+```{r sim10high}
+B = 10
+simData_more0 = lapply(seq_len(B), function(i) zinbSim(simModel_more0, seed=i))
+save(simModel_more0, simData_more0, file = "sim_zeisel_highZero.rda")
+```
+
+```{r zeroFractionAll}
+zeroFrac = data.frame(low = sapply(simData, function(x) x$zeroFraction),
+                      high = sapply(simData_more0, function(x) x$zeroFraction),
+                      observed = sum(core==0)/(nrow(core) * ncol(core)))
+zeroFrac = melt(zeroFrac)
+zeroFrac$variable = factor(zeroFrac$variable,
+                           levels = c('observed', 'low', 'high'))
+ggplot(zeroFrac, aes(x = variable, y = value)) + geom_boxplot() + 
+  ylab('zero fraction')
+```
+
+
