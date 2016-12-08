@@ -1,0 +1,241 @@
+---
+title: "Simulations from Allen"
+author: "Fanny, Davide, Sandrine"
+date: "11/27/2016"
+output: 
+  html_document: 
+    fig_height: 10
+    fig_width: 10
+    toc: yes
+    code_folding: hide
+    toc_float: yes
+---
+
+```{r options, echo=FALSE, results="hide",mesasge=FALSE, error=FALSE, include=FALSE, autodep=TRUE}
+knitr::opts_chunk$set(fig.align="center", cache=TRUE, error=FALSE,
+                      message=FALSE, warning=TRUE, fig.width=6, fig.height=6)
+library(SummarizedExperiment)
+library(scRNAseq)
+library(zinb)
+library(scran)
+library(EDASeq)
+library(ggplot2)
+library(magrittr)
+library(matrixStats)
+library(reshape)
+library(ggplot2)
+library(edgeR)
+library(RColorBrewer)
+require(knitr)
+library(EDASeq)
+cols <- brewer.pal(8, "Set1")
+cols2 <- c(brewer.pal(8, "Set2"), brewer.pal(8, "Set3"), brewer.pal(8, "Set1"))
+set.seed(975)
+```
+
+# Allen
+We want to look at real datasets to simulate realistic datasets.
+```{r datain}
+set.seed(975)
+data("allen")
+
+load("~/Documents/BRAIN/gitrepo/zinb_analysis/sims/datasets/sim_allen5.rda")
+prefilter <- allen[grep("^ERCC-", rownames(allen), invert = TRUE),
+                    which(colData(allen)$Core.Type=="Core")]
+sampleCells <- colnames(prefilter) %in% colnames(originalCounts)
+postfilter <- prefilter[, sampleCells]
+filterGenes <- apply(assay(postfilter) > 5, 1, sum) >= 5
+postfilter <- postfilter[filterGenes, ]
+
+bio = bioIni =  as.factor(colData(postfilter)$driver_1_s)
+cl <- as.factor(colData(postfilter)$Primary.Type)
+postfilter <- assay(postfilter)
+
+vars <- rowVars(log1p(postfilter))
+names(vars) <- rownames(postfilter)
+vars <- sort(vars, decreasing = TRUE)
+pZero <- apply(log1p(postfilter), 1, function(x) sum(x==0)/ncol(postfilter))
+names(pZero) <- rownames(postfilter)
+pZero = pZero[names(vars)]
+chosenGenes = c(names(pZero)[pZero > 0.4][1:50],
+                names(pZero)[pZero<0.4 & pZero>0.2][1:550],
+                names(pZero)[pZero<0.2][1:400])
+
+core <- postfilter[chosenGenes, ]
+sum(core == 0)/(nrow(core) * ncol(core))
+detection_rate <- colSums(core>0)
+coverage <- colSums(core)
+```
+
+We will color-code the cells by either known cell type or by inferred cluster (inferred in the original study). Remove ERCC spike-ins, filter out the genes that do not have at least 10 counts in at least 10 cells, sample at random 100 cells, select 1,000 most variable genes. Then, dimensions are
+```{r}
+dim(core)
+```
+
+```{r pca}
+par(mfrow = c(1,2))
+fq <- betweenLaneNormalization(core, which="full")
+pca <- prcomp(t(log1p(fq)))
+plot(pca$x, col=cols[bio], pch=19, main="PCA of log-counts")
+#legend("bottomleft", levels(bio), fill=cols)
+plot(pca$x, col=cols2[cl], pch=19, main="PCA of log-counts")
+```
+
+Fit data with K = 2, V and X intercepts in both Mu and Pi, commondispersion = FALSE, and no covariate.
+```{r zinb}
+print(system.time(zinb <- zinbFit(core, ncores = 3, K = 2,
+                                  commondispersion = FALSE)))
+```
+
+# True W
+```{r Wdistri}
+W = data.frame(W1 = zinb@W[,1], W2 = zinb@W[,2], bio = bio)
+ggplot(melt(W), aes(value, fill = bio)) + geom_density(alpha = 0.2) +
+  facet_grid(~ variable) + xlab('fitted W') + theme_bw()
+```
+
+sim_W simulated with
+$$W_1^{Scnn1a} \sim \mathcal{N}(.5, .3)$$
+$$W_2^{Scnn1a} \sim \mathcal{N}(2, .3)$$
+$$W_1^{Rbp4} \sim \mathcal{N}(-4, .3)$$
+$$W_2^{Rbp4} \sim \mathcal{N}(-1, .3)$$
+$$W_1^{Ntsr1} \sim \mathcal{N}(2, .3)$$
+$$W_2^{Ntsr1} \sim \mathcal{N}(-3, .3)$$
+```{r Wsim}
+Sc = grepl('^Scnn1a', W$bio)
+Rb = grepl('^Rbp4', W$bio)
+Nt = grepl('^Ntsr1', W$bio)
+W[Sc, 'W1sim'] = rnorm(sum(Sc), 1.5, .3)
+W[Sc, 'W2sim'] = rnorm(sum(Sc), -1.5, .3)
+W[Rb, 'W1sim'] = rnorm(sum(Rb), 1, .3)
+W[Rb, 'W2sim'] = rnorm(sum(Rb), 3, .3)
+W[Nt, 'W1sim'] = rnorm(sum(Nt), -3, .3)
+W[Nt, 'W2sim'] = rnorm(sum(Nt), 0, .3)
+
+par(mfrow=c(1, 2))
+plot(zinb@W, col=cols[bio], pch=19, xlab="W1", ylab="W2",
+     main="Fitted")
+plot(W[,c('W1sim', 'W2sim')], col=cols[bio], pch=19, xlab="W1", ylab="W2",
+     main="Simulated")
+```
+
+```{r trueW}
+sim_W <- as.matrix(W[, c('W1sim', 'W2sim')])
+```
+
+# Simulated dataset
+
+```{r fct}
+zinbModelFromW <- function(counts, sim_W){
+  mod <- model.matrix(~ sim_W)
+  zinb_sim <- zinbFit(counts, ncores = 3, X=mod, which_X_mu=1:3, which_X_pi=1:3,
+                      commondispersion=FALSE)
+  true_alpha_mu <- zinb_sim@beta_mu[-1,]
+  true_alpha_pi <- zinb_sim@beta_pi[-1,]
+  true_beta_mu <- zinb_sim@beta_mu[1,,drop=FALSE]
+  true_beta_pi <- zinb_sim@beta_pi[1,,drop=FALSE]
+  true_gamma_mu <- zinb_sim@gamma_mu
+  true_gamma_pi <- zinb_sim@gamma_pi
+  true_zeta <- zinb_sim@zeta
+  zinbModel(W=sim_W, alpha_mu=true_alpha_mu, alpha_pi=true_alpha_pi,
+            beta_mu=true_beta_mu, beta_pi=true_beta_pi,
+            zeta = true_zeta, gamma_mu=true_gamma_mu,
+            gamma_pi=true_gamma_pi)
+}
+```
+
+```{r simulate}
+simModel = zinbModelFromW(core, sim_W)
+simData = zinbSim(simModel, seed = 8746)
+```
+
+```{r zeroFraction}
+c(observed = sum(core==0)/(nrow(core) * ncol(core)),
+  simulated = simData$zeroFraction)
+```
+
+```{r simGamma}
+df <- data.frame(gamma_mu = simModel@gamma_mu[1, ],
+                 gamma_pi = simModel@gamma_pi[1, ],
+                 detection_rate = detection_rate,
+                 coverage = coverage)
+pairs(df, pch=19, col=cols[bio])
+print(cor(df, method="spearman"))
+```
+
+```{r simalpha}
+df <- data.frame(alpha_mu_1 = simModel@alpha_mu[1, ],
+                 alpha_mu_2 = simModel@alpha_mu[2, ],
+                 alpha_pi_1 = simModel@alpha_pi[1, ],
+                 alpha_pi_2 = simModel@alpha_pi[2, ])
+pairs(df, pch=19, main = 'alpha')
+print(cor(df, method="spearman"))
+```
+
+```{r simBeta}
+df <- data.frame(beta_mu = simModel@beta_mu[1, ],
+                 beta_pi = simModel@beta_pi[1, ])
+pairs(df, pch=19, main = 'Beta')
+print(cor(df, method="spearman"))
+```
+
+
+```{r newOverall}
+obs_detection_rate <- colMeans(core>0)
+obs_coverage <- colSums(core)
+sim1_detection_rate <- rowMeans(simData$counts>0)
+sim1_coverage <- rowSums(simData$counts)
+
+par(mfrow=c(2, 2))
+plot(rowMeans(getPi(zinb)), obs_detection_rate,
+     xlab="Average fitted Pi", ylab="Detection Rate",
+     pch=19, col=cols[bio], ylim = c(0, 1), xlim = c(0,1))
+plot(rowMeans(log1p(getMu(zinb))), log1p(obs_coverage), xlim = c(5, 8),
+     xlab="Average fitted log Mu", ylab="log Coverage", pch=19, ylim = c(11,15),
+     col=cols[bio])
+plot(rowMeans(getPi(simModel)), sim1_detection_rate,
+     xlab="Average simulated Pi", ylab="True Detection Rate",
+     pch=19, col=cols[bio], ylim = c(0, 1), xlim = c(0,1))
+plot(rowMeans(log1p(getMu(simModel))), log1p(sim1_coverage), xlim = c(5, 8),
+     xlab="Average simulated log Mu", ylab="log Coverage", pch=19,
+     col=cols[bio],ylim = c(11,15))
+```
+
+```{r mupi}
+pal =colorRampPalette(c("black","black", "red","yellow"), space="rgb")
+mean = apply(log1p(core), 1, function(x) mean(x[x!=0]))
+par(mfrow=c(1, 2))
+smoothScatter(mean, rowMeans(core == 0),xlim = c(3,8),
+              nrpoints=Inf, pch = "", cex = .7, ylim = c(0,1),
+              xlab = "Mean Expression", ylab = "Dropout Rate", 
+              colramp = pal, main = 'Observed')
+smoothScatter(colMeans(log1p(getMu(simModel))), colMeans(getPi(simModel)), 
+              nbin = 256,
+              nrpoints=Inf, pch="", cex=.7, xlim = c(3,8),
+              xlab = "Mean Expression", main = 'Simulated',
+              ylab = "Dropout Rate",ylim = c(0,1),
+              colramp = pal)
+```
+
+
+# 10 simulated datasets
+```{r sim10low}
+originalCounts = core
+bio = as.vector(bio)
+B = 10
+simData = lapply(seq_len(B), function(i) zinbSim(simModel, seed=i))
+save(originalCounts, bio, simModel, simData,
+     file = "~/Documents/BRAIN/gitrepo/zinb_analysis/sims/datasets/sim_allen25.rda")
+```
+
+```{r zeroFractionAll}
+zeroFrac = data.frame(simulated = sapply(simData, function(x) x$zeroFraction),
+                      observed = sum(core==0)/(nrow(core) * ncol(core)))
+zeroFrac = melt(zeroFrac)
+zeroFrac$variable = factor(zeroFrac$variable,
+                           levels = c('observed', 'simulated'))
+ggplot(zeroFrac, aes(x = variable, y = value)) + geom_boxplot() + 
+  ylab('zero fraction')
+```
+
+

@@ -318,13 +318,15 @@ smoothScatter(colMeans(log1p(getMu(simModel_more0))), colMeans(getPi(simModel_mo
 ```{r sim10low}
 B = 10
 simData = lapply(seq_len(B), function(i) zinbSim(simModel, seed=i))
-save(simModel, simData, file = "sim_zeisel_lowZero.rda")
+save(simModel, simData, 
+     file = "~/Documents/BRAIN/gitrepo/zinb_analysis/sims/datasets/sim_zeisel_lowZero.rda")
 ```
 
 ```{r sim10high}
 B = 10
 simData_more0 = lapply(seq_len(B), function(i) zinbSim(simModel_more0, seed=i))
-save(simModel_more0, simData_more0, file = "sim_zeisel_highZero.rda")
+save(simModel_more0, simData_more0,
+     file = "~/Documents/BRAIN/gitrepo/zinb_analysis/sims/datasets/sim_zeisel_highZero.rda")
 ```
 
 ```{r zeroFractionAll}
