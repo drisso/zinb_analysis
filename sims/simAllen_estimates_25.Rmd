@@ -1,0 +1,329 @@
+---
+title: "Allen, estimates, zFrac 0.25"
+author: "Fanny, Davide, Sandrine"
+date: "12/13/2016"
+output: 
+  html_document: 
+    fig_height: 10
+    fig_width: 10
+    toc: yes
+    code_folding: hide
+    toc_float: yes
+---
+```{r options, echo=FALSE, results="hide",message=FALSE, error=FALSE, include=FALSE, autodep=TRUE}
+knitr::opts_chunk$set(fig.align="center", cache=TRUE, error=FALSE, message=FALSE, warning=TRUE, fig.width=6, fig.height=6)
+library(zinb)
+library(cluster)
+library(RColorBrewer)
+library(ggplot2)
+library(reshape)
+library(EDASeq)
+library(edgeR)
+theme_set(theme_bw())
+cols <- brewer.pal(8, "Set1")
+cols2 <- c(brewer.pal(8, "Set2"), brewer.pal(8, "Set3"), brewer.pal(8, "Set1"))
+```
+
+```{r load}
+load("./datasets/sim_allen25.rda")
+load("./datasets/sim_allen25_fitted.rda")
+```
+
+# Results
+## Explore the results for one simulated matrix
+```{r one_sim}
+fit <- lapply(1:4, function(i) fittedSim[[i]][[1]][[1]][[1]])
+true_W <- simModel@W
+biotrue <- as.numeric(factor(bio))
+
+plot(true_W, pch=19, col=biotrue, main="True W", xlab="W1", ylab="W2")
+plot(fit[[1]]@W, rep(0, NROW(true_W)), pch=19, col=biotrue, main="K=1", xlab="W1", ylab="")
+plot(fit[[2]]@W, pch=19, col=biotrue, main="K=2", xlab="W1", ylab="W2")
+pairs(fit[[3]]@W, pch=19, col=biotrue, main="K=3")
+pairs(fit[[4]]@W, pch=19, col=biotrue, main="K=4")
+```
+
+## Estimates
+### Bias
+```{r bias}
+load("./datasets/sim_allen25_bias.rda")
+K <- 1:4
+ggplot(bias[bias$param == 'beta_mu', ], aes(x = K, y = bias)) + 
+  geom_boxplot() + ggtitle('beta_mu') + facet_grid(disp ~ V) + 
+  geom_hline(yintercept = 0, col = 'red')
+
+ggplot(bias[bias$param == 'beta_pi', ], aes(x = K, y = bias)) + 
+  geom_boxplot() + ggtitle('beta_pi') + facet_grid(disp ~ V) + 
+  geom_hline(yintercept = 0, col = 'red')
+
+ggplot(bias[bias$param == 'beta_pi', ], aes(x = K, y = bias)) + 
+  geom_boxplot(outlier.shape = NA) + ggtitle('beta_pi, no outlier') + 
+  facet_grid(disp ~ V) + 
+  geom_hline(yintercept = 0, col = 'red') +
+  coord_cartesian(ylim = c(-30,15))
+
+ggplot(bias[bias$param == 'beta_pi', ], aes(x = V, y = bias)) + 
+  geom_boxplot() + ggtitle('beta_pi') + facet_grid(disp ~ K) + 
+  geom_hline(yintercept = 0, col = 'red')
+
+ggplot(bias[bias$param == 'gamma_mu', ], aes(x = K, y = bias)) + 
+  geom_boxplot() + ggtitle('gamma_mu') + facet_grid(disp ~ V) + 
+  geom_hline(yintercept = 0, col = 'red')
+
+ggplot(bias[bias$param == 'gamma_mu' & bias$V == 'V', ],
+       aes(x = K, y = bias)) + 
+  geom_boxplot() + ggtitle('gamma_mu') + facet_grid( ~ disp) + 
+  geom_hline(yintercept = 0, col = 'red')
+
+ggplot(bias[bias$param == 'gamma_pi', ], aes(x = K, y = bias)) + 
+  geom_boxplot() + ggtitle('gamma_pi') + facet_grid(disp ~ V) + 
+  geom_hline(yintercept = 0, col = 'red')
+
+ggplot(bias[bias$param == 'gamma_pi' & bias$V == 'V', ],
+       aes(x = K, y = bias)) + 
+  geom_boxplot() + ggtitle('gamma_pi') + facet_grid( ~ disp) + 
+  geom_hline(yintercept = 0, col = 'red')
+
+ggplot(bias[bias$param == 'gamma_pi' & bias$V == 'V', ],
+       aes(x = K, y = bias)) + 
+  geom_boxplot(outlier.shape = NA) + ggtitle('gamma_pi, no outlier') +
+  facet_grid( ~ disp) + coord_cartesian(ylim = c(-.5,.5)) + 
+  geom_hline(yintercept = 0, col = 'red')
+  
+ggplot(bias[bias$param == 'theta', ], aes(x = K, y = bias)) + 
+  geom_boxplot() + ggtitle('theta') + facet_grid(disp ~ V) + 
+  geom_hline(yintercept = 0, col = 'red')
+
+ggplot(bias[bias$param == 'theta', ],
+       aes(x = disp, y = bias)) + 
+  geom_boxplot() + ggtitle('theta') + facet_grid(V ~ K) + 
+  geom_hline(yintercept = 0, col = 'red')
+
+ggplot(bias[bias$param == 'walpha_mu', ], aes(x = K, y = bias)) + 
+  geom_boxplot() + ggtitle('walpha_mu') + facet_grid(disp ~ V) + 
+  geom_hline(yintercept = 0, col = 'red')
+
+ggplot(bias[bias$param == 'walpha_mu', ],
+       aes(x = interaction(disp, K, V), y = bias)) + 
+  geom_boxplot() + ggtitle('walpha_mu') + xlab('') +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  geom_hline(yintercept = 0, col = 'red')
+
+ggplot(bias[bias$param == 'walpha_mu', ],
+       aes(x = interaction(disp, K, V), y = bias)) + 
+  geom_boxplot(outlier.shape = NA) + xlab('') +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  geom_hline(yintercept = 0, col = 'red') + 
+  coord_cartesian(ylim = c(-2,2)) + ggtitle('walpha_mu, no outlier')
+
+ggplot(bias[bias$param == 'walpha_pi', ], aes(x = K, y = bias)) + 
+  geom_boxplot() + ggtitle('walpha_pi') + facet_grid(disp ~ V) + 
+  geom_hline(yintercept = 0, col = 'red')
+
+ggplot(bias[bias$param == 'walpha_pi', ],
+       aes(x = interaction(disp, K, V), y = bias)) + 
+  geom_boxplot() + ggtitle('walpha_pi') + xlab('') +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  geom_hline(yintercept = 0, col = 'red')
+
+ggplot(bias[bias$param == 'walpha_pi', ],
+       aes(x = interaction(disp, K, V), y = bias)) + 
+  geom_boxplot(outlier.shape = NA) + xlab('') +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  geom_hline(yintercept = 0, col = 'red') + 
+  coord_cartesian(ylim = c(-10,10)) + ggtitle('walpha_pi, no outlier')
+
+ggplot(bias[bias$param == 'mu', ], aes(x = K, y = bias)) + 
+  geom_boxplot() + ggtitle('mu') + facet_grid(disp ~ V) + 
+  geom_hline(yintercept = 0, col = 'red')
+
+ggplot(bias[bias$param == 'mu', ], aes(x = K, y = bias)) + 
+  geom_boxplot(outlier.shape = NA) + ggtitle('mu, no outlier') +
+  facet_grid(disp ~ V) + 
+  geom_hline(yintercept = 0, col = 'red') + coord_cartesian(ylim = c(-2,2))
+
+ggplot(bias[bias$param == 'pi', ], aes(x = K, y = bias)) + 
+  geom_boxplot() + ggtitle('pi') + facet_grid(disp ~ V) + 
+  geom_hline(yintercept = 0, col = 'red')
+
+ggplot(bias[bias$param == 'pi', ], aes(x = K, y = bias)) + 
+  geom_boxplot(outlier.shape = NA) + ggtitle('pi, no outlier') +
+  facet_grid(disp ~ V) + 
+  geom_hline(yintercept = 0, col = 'red') + coord_cartesian(ylim = c(-25,25))
+```
+
+
+### Variance
+```{r variance}
+load("./datasets/sim_allen25_variance.rda")
+K <- 1:4
+ggplot(variance[variance$param == 'beta_mu', ], aes(x = K, y = variance)) + 
+  geom_boxplot() + ggtitle('beta_mu') + facet_grid(disp ~ V) + 
+  geom_hline(yintercept = 0, col = 'red')
+
+ggplot(variance[variance$param == 'beta_pi', ], aes(x = K, y = variance)) + 
+  geom_boxplot() + ggtitle('beta_pi') + facet_grid(disp ~ V) + 
+  geom_hline(yintercept = 0, col = 'red')
+
+ggplot(variance[variance$param == 'gamma_mu', ], aes(x = K, y = variance)) + 
+  geom_boxplot() + ggtitle('gamma_mu') + facet_grid(disp ~ V) + 
+  geom_hline(yintercept = 0, col = 'red')
+
+ggplot(variance[variance$param == 'gamma_mu' & variance$V == 'V', ],
+       aes(x = K, y = variance)) + 
+  geom_boxplot() + ggtitle('gamma_mu') + facet_grid( ~ disp) + 
+  geom_hline(yintercept = 0, col = 'red')
+
+ggplot(variance[variance$param == 'gamma_pi', ], aes(x = K, y = variance)) + 
+  geom_boxplot() + ggtitle('gamma_pi') + facet_grid(disp ~ V) + 
+  geom_hline(yintercept = 0, col = 'red')
+
+ggplot(variance[variance$param == 'gamma_pi' & variance$V == 'V', ],
+       aes(x = K, y = variance)) + 
+  geom_boxplot() + ggtitle('gamma_pi') + facet_grid( ~ disp) + 
+  geom_hline(yintercept = 0, col = 'red')
+
+ggplot(variance[variance$param == 'theta', ], aes(x = K, y = variance)) + 
+  geom_boxplot() + ggtitle('theta') + facet_grid(disp ~ V) + 
+  geom_hline(yintercept = 0, col = 'red')
+
+ggplot(variance[variance$param == 'theta', ],
+       aes(x = disp, y = variance)) + 
+  geom_boxplot() + ggtitle('theta') + facet_grid(V ~ K) + 
+  geom_hline(yintercept = 0, col = 'red')
+
+ggplot(variance[variance$param == 'walpha_mu', ], aes(x = K, y = variance)) + 
+  geom_boxplot() + ggtitle('walpha_mu') + facet_grid(disp ~ V) + 
+  geom_hline(yintercept = 0, col = 'red')
+
+ggplot(variance[variance$param == 'walpha_mu', ],
+       aes(x = interaction(disp, K, V), y = variance)) + 
+  geom_boxplot() + ggtitle('walpha_mu') + xlab('') +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  geom_hline(yintercept = 0, col = 'red')
+
+ggplot(variance[variance$param == 'walpha_pi', ], aes(x = K, y = variance)) + 
+  geom_boxplot() + ggtitle('walpha_pi') + facet_grid(disp ~ V) + 
+  geom_hline(yintercept = 0, col = 'red')
+
+ggplot(variance[variance$param == 'walpha_pi', ],
+       aes(x = interaction(disp, K, V), y = variance)) + 
+  geom_boxplot() + ggtitle('walpha_pi') + xlab('') +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  geom_hline(yintercept = 0, col = 'red')
+
+ggplot(variance[variance$param == 'mu', ], aes(x = K, y = variance)) + 
+  geom_boxplot() + ggtitle('mu') + facet_grid(disp ~ V) + 
+  geom_hline(yintercept = 0, col = 'red')
+
+ggplot(variance[variance$param == 'pi', ], aes(x = K, y = variance)) + 
+  geom_boxplot() + ggtitle('pi') + facet_grid(disp ~ V) + 
+  geom_hline(yintercept = 0, col = 'red')
+```
+
+### MSE
+```{r mse}
+mse = bias
+colnames(mse)[1] = c('mse')
+mse$mse = bias$bias^2 + variance$variance
+ggplot(mse[mse$param == 'beta_mu', ], aes(x = K, y = mse)) + 
+  geom_boxplot() + ggtitle('beta_mu') + facet_grid(disp ~ V) + 
+  geom_hline(yintercept = 0, col = 'red')
+
+ggplot(mse[mse$param == 'beta_mu', ], aes(x = K, y = mse)) + 
+  geom_boxplot(outlier.shape = NA) + ggtitle('beta_mu, no outlier') +
+  facet_grid(disp ~ V) + coord_cartesian(ylim = c(0,75)) +
+  geom_hline(yintercept = 0, col = 'red') 
+
+ggplot(mse[mse$param == 'beta_mu' & mse$V == 'V', ], aes(x = K, y = mse)) + 
+  geom_boxplot(outlier.shape = NA) + ggtitle('beta_mu, no outlier') +
+  facet_grid(disp ~ V) + coord_cartesian(ylim = c(0, .2)) +
+  geom_hline(yintercept = 0, col = 'red') 
+
+ggplot(mse[mse$param == 'beta_pi', ], aes(x = K, y = mse)) + 
+  geom_boxplot() + ggtitle('beta_pi') + facet_grid(disp ~ V) + 
+  geom_hline(yintercept = 0, col = 'red')
+
+ggplot(mse[mse$param == 'beta_pi', ], aes(x = K, y = mse)) + 
+  geom_boxplot(outlier.shape = NA) + ggtitle('beta_pi, no outlier') +
+  facet_grid(disp ~ V) + coord_cartesian(ylim = c(0,1600)) +
+  geom_hline(yintercept = 0, col = 'red') 
+
+ggplot(mse[mse$param == 'gamma_mu' & mse$V == 'V', ],
+       aes(x = K, y = mse)) + 
+  geom_boxplot() + ggtitle('gamma_mu') + facet_grid( ~ disp) + 
+  geom_hline(yintercept = 0, col = 'red')
+
+ggplot(mse[mse$param == 'gamma_pi' & mse$V == 'V', ],
+       aes(x = K, y = mse)) + 
+  geom_boxplot() + ggtitle('gamma_pi') + facet_grid( ~ disp) + 
+  geom_hline(yintercept = 0, col = 'red')
+
+ggplot(mse[mse$param == 'gamma_pi' & mse$V == 'V', ],
+       aes(x = K, y = mse)) + 
+  geom_boxplot(outlier.shape = NA) + ggtitle('gamma_pi, no outlier') +
+  facet_grid( ~ disp) + coord_cartesian(ylim = c(0,.2)) +
+  geom_hline(yintercept = 0, col = 'red')
+  
+ggplot(mse[mse$param == 'theta', ], aes(x = K, y = mse)) + 
+  geom_boxplot() + ggtitle('theta') + facet_grid(disp ~ V) + 
+  geom_hline(yintercept = 0, col = 'red')
+
+ggplot(mse[mse$param == 'theta', ], aes(x = K, y = mse)) + 
+  geom_boxplot(outlier.shape = NA) + ggtitle('theta, no outlier') +
+  facet_grid(disp ~ V) + 
+  geom_hline(yintercept = 0, col = 'red') + coord_cartesian(ylim = c(0,1.5))
+
+ggplot(mse[mse$param == 'walpha_mu', ], aes(x = K, y = mse)) + 
+  geom_boxplot() + ggtitle('walpha_mu') + facet_grid(disp ~ V) + 
+  geom_hline(yintercept = 0, col = 'red')
+
+ggplot(mse[mse$param == 'walpha_mu', ],
+       aes(x = interaction(disp, K, V), y = mse)) + 
+  geom_boxplot() + ggtitle('walpha_mu') + xlab('') +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  geom_hline(yintercept = 0, col = 'red')
+
+ggplot(mse[mse$param == 'walpha_mu', ],
+       aes(x = interaction(disp, K, V), y = mse)) + 
+  geom_boxplot(outlier.shape = NA) + ggtitle('walpha_mu, no outlier') +
+  xlab('') + coord_cartesian(ylim = c(0,2)) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  geom_hline(yintercept = 0, col = 'red')
+
+ggplot(mse[mse$param == 'walpha_pi', ], aes(x = K, y = mse)) + 
+  geom_boxplot() + ggtitle('walpha_pi') + facet_grid(disp ~ V) + 
+  geom_hline(yintercept = 0, col = 'red')
+
+ggplot(mse[mse$param == 'walpha_pi', ],
+       aes(x = interaction(disp, K, V), y = mse)) + 
+  geom_boxplot() + ggtitle('walpha_pi') + xlab('') +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  geom_hline(yintercept = 0, col = 'red')
+
+ggplot(mse[mse$param == 'walpha_pi', ],
+       aes(x = interaction(disp, K, V), y = mse)) + 
+  geom_boxplot(outlier.shape = NA) + ggtitle('walpha_pi, no outlier') +
+  xlab('') + coord_cartesian(ylim = c(0,1000)) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  geom_hline(yintercept = 0, col = 'red')
+
+ggplot(mse[mse$param == 'mu', ], aes(x = K, y = mse)) + 
+  geom_boxplot() + ggtitle('mu') + facet_grid(disp ~ V) + 
+  geom_hline(yintercept = 0, col = 'red')
+
+ggplot(mse[mse$param == 'mu', ], aes(x = K, y = mse)) + 
+  geom_boxplot(outlier.shape = NA) + ggtitle('mu, no outlier') +
+  facet_grid(disp ~ V) + coord_cartesian(ylim = c(0,2)) +
+  geom_hline(yintercept = 0, col = 'red')
+
+ggplot(mse[mse$param == 'pi', ], aes(x = K, y = mse)) + 
+  geom_boxplot() + ggtitle('pi') + facet_grid(disp ~ V) + 
+  geom_hline(yintercept = 0, col = 'red')
+
+ggplot(mse[mse$param == 'pi', ], aes(x = K, y = mse)) + 
+  geom_boxplot(outlier.shape = NA) + ggtitle('pi, no outlier') +
+  facet_grid(disp ~ V) + coord_cartesian(ylim = c(0,2000)) +
+  geom_hline(yintercept = 0, col = 'red')
+```
+

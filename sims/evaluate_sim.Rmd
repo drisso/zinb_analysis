@@ -1,7 +1,7 @@
 ---
 title: "Evaluate simulations"
 author: "Fanny, Davide, Sandrine"
-date: "11/27/2016"
+date: "12/13/2016"
 output: 
   html_document: 
     fig_height: 10
@@ -18,6 +18,7 @@ library(RColorBrewer)
 library(ggplot2)
 library(reshape)
 library(EDASeq)
+library(edgeR)
 cols <- brewer.pal(8, "Set1")
 cols2 <- c(brewer.pal(8, "Set2"), brewer.pal(8, "Set3"), brewer.pal(8, "Set1"))
 ```
@@ -39,278 +40,39 @@ For each simulated data, we fit a ZINB model with all the possible combinations 
 - V intercept: yes, no
 - Dispersion: common, genewise
 
+# Estimates 
+See bias, variance, and MSE in separate Rmd files (simAllen_estimates_25.Rmd, simAllen_estimates_5.Rmd, and simAllen_estimates_75.Rmd).
 
-# Results
-## Explore the results for one simulated matrix
-```{r one_sim}
-load("./datasets/sim_allen5.rda")
-load("./datasets/sim_allen5_fitted.rda")
-load("./datasets/sim_allen5_first.rda")
-true_W <- simModel@W
-dtrue <- as.matrix(dist(true_W))
-biotrue <- as.numeric(factor(bio))
+ERRORS with zero fraction = 75%.
 
-plot(true_W, pch=19, col=biotrue, main="True W", xlab="W1", ylab="W2")
-plot(fit[[1]]@W, rep(0, NROW(true_W)), pch=19, col=biotrue, main="K=1", xlab="W1", ylab="")
-plot(fit[[2]]@W, pch=19, col=biotrue, main="K=2", xlab="W1", ylab="W2")
-pairs(fit[[3]]@W, pch=19, col=biotrue, main="K=3")
-pairs(fit[[4]]@W, pch=19, col=biotrue, main="K=4")
-```
-
-## Estimates
-### Bias
-```{r bias}
-load("./datasets/sim_allen5_bias.rda")
-K <- 1:4
-
-ggplot(bias[bias$param == 'beta_mu', ], aes(x = K, y = bias)) + 
-  geom_boxplot() + ggtitle('beta_mu') + facet_grid(disp ~ V) + 
-  geom_hline(yintercept = 0, col = 'red')
-
-ggplot(bias[bias$param == 'beta_mu', ], aes(x = V, y = bias)) + 
-  geom_boxplot() + ggtitle('beta_mu') + facet_grid(disp ~ K) + 
-  geom_hline(yintercept = 0, col = 'red')
-
-ggplot(bias[bias$param == 'beta_pi', ], aes(x = K, y = bias)) + 
-  geom_boxplot() + ggtitle('beta_pi') + facet_grid(disp ~ V) + 
-  geom_hline(yintercept = 0, col = 'red')
-
-ggplot(bias[bias$param == 'beta_pi', ], aes(x = V, y = bias)) + 
-  geom_boxplot() + ggtitle('beta_pi') + facet_grid(disp ~ K) + 
-  geom_hline(yintercept = 0, col = 'red')
-
-ggplot(bias[bias$param == 'gamma_mu', ], aes(x = K, y = bias)) + 
-  geom_boxplot() + ggtitle('gamma_mu') + facet_grid(disp ~ V) + 
-  geom_hline(yintercept = 0, col = 'red')
-
-ggplot(bias[bias$param == 'gamma_mu' & bias$V == 'V', ],
-       aes(x = K, y = bias)) + 
-  geom_boxplot() + ggtitle('gamma_mu') + facet_grid( ~ disp) + 
-  geom_hline(yintercept = 0, col = 'red')
-
-ggplot(bias[bias$param == 'gamma_pi', ], aes(x = K, y = bias)) + 
-  geom_boxplot() + ggtitle('gamma_pi') + facet_grid(disp ~ V) + 
-  geom_hline(yintercept = 0, col = 'red')
-
-ggplot(bias[bias$param == 'gamma_pi' & bias$V == 'V', ],
-       aes(x = K, y = bias)) + 
-  geom_boxplot() + ggtitle('gamma_pi') + facet_grid( ~ disp) + 
-  geom_hline(yintercept = 0, col = 'red')
-
-ggplot(bias[bias$param == 'theta', ], aes(x = K, y = bias)) + 
-  geom_boxplot() + ggtitle('theta') + facet_grid(disp ~ V) + 
-  geom_hline(yintercept = 0, col = 'red')
-
-ggplot(bias[bias$param == 'theta', ],
-       aes(x = disp, y = bias)) + 
-  geom_boxplot() + ggtitle('theta') + facet_grid(V ~ K) + 
-  geom_hline(yintercept = 0, col = 'red')
-
-ggplot(bias[bias$param == 'walpha_mu', ], aes(x = K, y = bias)) + 
-  geom_boxplot() + ggtitle('walpha_mu') + facet_grid(disp ~ V) + 
-  geom_hline(yintercept = 0, col = 'red')
-
-ggplot(bias[bias$param == 'walpha_mu', ],
-       aes(x = interaction(disp, K, V), y = bias)) + 
-  geom_boxplot() + ggtitle('walpha_mu') + xlab('') +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-  geom_hline(yintercept = 0, col = 'red')
-
-ggplot(bias[bias$param == 'walpha_pi', ], aes(x = K, y = bias)) + 
-  geom_boxplot() + ggtitle('walpha_pi') + facet_grid(disp ~ V) + 
-  geom_hline(yintercept = 0, col = 'red')
-
-ggplot(bias[bias$param == 'walpha_pi', ],
-       aes(x = interaction(disp, K, V), y = bias)) + 
-  geom_boxplot() + ggtitle('walpha_pi') + xlab('') +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-  geom_hline(yintercept = 0, col = 'red')
-
-ggplot(bias[bias$param == 'mu', ], aes(x = K, y = bias)) + 
-  geom_boxplot() + ggtitle('mu') + facet_grid(disp ~ V) + 
-  geom_hline(yintercept = 0, col = 'red')
-
-ggplot(bias[bias$param == 'pi', ], aes(x = K, y = bias)) + 
-  geom_boxplot() + ggtitle('pi') + facet_grid(disp ~ V) + 
-  geom_hline(yintercept = 0, col = 'red')
-```
-
-
-### Variance
-
-```{r variance}
-load("./datasets/sim_allen5_variance.rda")
-K <- 1:4
-
-ggplot(variance[variance$param == 'beta_mu', ], aes(x = K, y = variance)) + 
-  geom_boxplot() + ggtitle('beta_mu') + facet_grid(disp ~ V) + 
-  geom_hline(yintercept = 0, col = 'red')
-
-ggplot(variance[variance$param == 'beta_mu', ], aes(x = V, y = variance)) + 
-  geom_boxplot() + ggtitle('beta_mu') + facet_grid(disp ~ K) + 
-  geom_hline(yintercept = 0, col = 'red')
-
-ggplot(variance[variance$param == 'beta_pi', ], aes(x = K, y = variance)) + 
-  geom_boxplot() + ggtitle('beta_pi') + facet_grid(disp ~ V) + 
-  geom_hline(yintercept = 0, col = 'red')
-
-ggplot(variance[variance$param == 'beta_pi', ], aes(x = V, y = variance)) + 
-  geom_boxplot() + ggtitle('beta_pi') + facet_grid(disp ~ K) + 
-  geom_hline(yintercept = 0, col = 'red')
-
-ggplot(variance[variance$param == 'gamma_mu', ], aes(x = K, y = variance)) + 
-  geom_boxplot() + ggtitle('gamma_mu') + facet_grid(disp ~ V) + 
-  geom_hline(yintercept = 0, col = 'red')
-
-ggplot(variance[variance$param == 'gamma_mu' & variance$V == 'V', ],
-       aes(x = K, y = variance)) + 
-  geom_boxplot() + ggtitle('gamma_mu') + facet_grid( ~ disp) + 
-  geom_hline(yintercept = 0, col = 'red')
-
-ggplot(variance[variance$param == 'gamma_pi', ], aes(x = K, y = variance)) + 
-  geom_boxplot() + ggtitle('gamma_pi') + facet_grid(disp ~ V) + 
-  geom_hline(yintercept = 0, col = 'red')
-
-ggplot(variance[variance$param == 'gamma_pi' & variance$V == 'V', ],
-       aes(x = K, y = variance)) + 
-  geom_boxplot() + ggtitle('gamma_pi') + facet_grid( ~ disp) + 
-  geom_hline(yintercept = 0, col = 'red')
-
-ggplot(variance[variance$param == 'theta', ], aes(x = K, y = variance)) + 
-  geom_boxplot() + ggtitle('theta') + facet_grid(disp ~ V) + 
-  geom_hline(yintercept = 0, col = 'red')
-
-ggplot(variance[variance$param == 'theta', ],
-       aes(x = disp, y = variance)) + 
-  geom_boxplot() + ggtitle('theta') + facet_grid(V ~ K) + 
-  geom_hline(yintercept = 0, col = 'red')
-
-ggplot(variance[variance$param == 'walpha_mu', ], aes(x = K, y = variance)) + 
-  geom_boxplot() + ggtitle('walpha_mu') + facet_grid(disp ~ V) + 
-  geom_hline(yintercept = 0, col = 'red')
-
-ggplot(variance[variance$param == 'walpha_mu', ],
-       aes(x = interaction(disp, K, V), y = variance)) + 
-  geom_boxplot() + ggtitle('walpha_mu') + xlab('') +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-  geom_hline(yintercept = 0, col = 'red')
-
-ggplot(variance[variance$param == 'walpha_pi', ], aes(x = K, y = variance)) + 
-  geom_boxplot() + ggtitle('walpha_pi') + facet_grid(disp ~ V) + 
-  geom_hline(yintercept = 0, col = 'red')
-
-ggplot(variance[variance$param == 'walpha_pi', ],
-       aes(x = interaction(disp, K, V), y = variance)) + 
-  geom_boxplot() + ggtitle('walpha_pi') + xlab('') +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-  geom_hline(yintercept = 0, col = 'red')
-
-ggplot(variance[variance$param == 'mu', ], aes(x = K, y = variance)) + 
-  geom_boxplot() + ggtitle('mu') + facet_grid(disp ~ V) + 
-  geom_hline(yintercept = 0, col = 'red')
-
-ggplot(variance[variance$param == 'pi', ], aes(x = K, y = variance)) + 
-  geom_boxplot() + ggtitle('pi') + facet_grid(disp ~ V) + 
-  geom_hline(yintercept = 0, col = 'red')
-```
-
-### MSE
-
-```{r mse}
-mse = bias
-colnames(mse)[1] = c('mse')
-mse$mse = bias$bias^2 + variance$variance
-ggplot(mse[mse$param == 'beta_mu', ], aes(x = K, y = mse)) + 
-  geom_boxplot() + ggtitle('beta_mu') + facet_grid(disp ~ V) + 
-  geom_hline(yintercept = 0, col = 'red')
-
-ggplot(mse[mse$param == 'beta_mu', ], aes(x = V, y = mse)) + 
-  geom_boxplot() + ggtitle('beta_mu') + facet_grid(disp ~ K) + 
-  geom_hline(yintercept = 0, col = 'red')
-
-ggplot(mse[mse$param == 'beta_pi', ], aes(x = K, y = mse)) + 
-  geom_boxplot() + ggtitle('beta_pi') + facet_grid(disp ~ V) + 
-  geom_hline(yintercept = 0, col = 'red')
-
-ggplot(mse[mse$param == 'beta_pi', ], aes(x = V, y = mse)) + 
-  geom_boxplot() + ggtitle('beta_pi') + facet_grid(disp ~ K) + 
-  geom_hline(yintercept = 0, col = 'red')
-
-ggplot(mse[mse$param == 'gamma_mu', ], aes(x = K, y = mse)) + 
-  geom_boxplot() + ggtitle('gamma_mu') + facet_grid(disp ~ V) + 
-  geom_hline(yintercept = 0, col = 'red')
-
-ggplot(mse[mse$param == 'gamma_mu' & mse$V == 'V', ],
-       aes(x = K, y = mse)) + 
-  geom_boxplot() + ggtitle('gamma_mu') + facet_grid( ~ disp) + 
-  geom_hline(yintercept = 0, col = 'red')
-
-ggplot(mse[mse$param == 'gamma_pi', ], aes(x = K, y = mse)) + 
-  geom_boxplot() + ggtitle('gamma_pi') + facet_grid(disp ~ V) + 
-  geom_hline(yintercept = 0, col = 'red')
-
-ggplot(mse[mse$param == 'gamma_pi' & mse$V == 'V', ],
-       aes(x = K, y = mse)) + 
-  geom_boxplot() + ggtitle('gamma_pi') + facet_grid( ~ disp) + 
-  geom_hline(yintercept = 0, col = 'red')
-
-ggplot(mse[mse$param == 'theta', ], aes(x = K, y = mse)) + 
-  geom_boxplot() + ggtitle('theta') + facet_grid(disp ~ V) + 
-  geom_hline(yintercept = 0, col = 'red')
-
-ggplot(mse[mse$param == 'theta', ],
-       aes(x = disp, y = mse)) + 
-  geom_boxplot() + ggtitle('theta') + facet_grid(V ~ K) + 
-  geom_hline(yintercept = 0, col = 'red')
-
-ggplot(mse[mse$param == 'walpha_mu', ], aes(x = K, y = mse)) + 
-  geom_boxplot() + ggtitle('walpha_mu') + facet_grid(disp ~ V) + 
-  geom_hline(yintercept = 0, col = 'red')
-
-ggplot(mse[mse$param == 'walpha_mu', ],
-       aes(x = interaction(disp, K, V), y = mse)) + 
-  geom_boxplot() + ggtitle('walpha_mu') + xlab('') +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-  geom_hline(yintercept = 0, col = 'red')
-
-ggplot(mse[mse$param == 'walpha_pi', ], aes(x = K, y = mse)) + 
-  geom_boxplot() + ggtitle('walpha_pi') + facet_grid(disp ~ V) + 
-  geom_hline(yintercept = 0, col = 'red')
-
-ggplot(mse[mse$param == 'walpha_pi', ],
-       aes(x = interaction(disp, K, V), y = mse)) + 
-  geom_boxplot() + ggtitle('walpha_pi') + xlab('') +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-  geom_hline(yintercept = 0, col = 'red')
-
-ggplot(mse[mse$param == 'mu', ], aes(x = K, y = mse)) + 
-  geom_boxplot() + ggtitle('mu') + facet_grid(disp ~ V) + 
-  geom_hline(yintercept = 0, col = 'red')
-
-ggplot(mse[mse$param == 'pi', ], aes(x = K, y = mse)) + 
-  geom_boxplot() + ggtitle('pi') + facet_grid(disp ~ V) + 
-  geom_hline(yintercept = 0, col = 'red')
-```
-
-## Impact on dimensionality reduction
+# Impact on dimensionality reduction
 ```{r corr}
 load("./datasets/sim_allen5_dist.rda")
-corr5 <- lapply(6:10, function(i) rowMeans(sapply(res, function(x) x[[i]])))
+corr5 <- lapply(8:14, function(i) rowMeans(sapply(res, function(x) x[[i]])))
 corr5 = do.call(cbind, corr5)
-corr5 = data.frame(corr5,stringsAsFactors = F)
-colnames(corr5) <- c(paste0("zinb k=", 1:4), "FQ PCA (k=2)")
+corr5 = data.frame(corr5, stringsAsFactors = F)
+colnames(corr5) <- c(paste0("zinb k=", 1:4), "FQ PCA (k=2)", "true W", 'ZIFA (k=2)')
 corr5$pzero = .5
-boxplot(corr5[,1:5],border=c(1, 2, 1, 1), xlab="method", ylab="Correlation",
-        las=2, 
-        main="Correlation between true and estimated sample distances in W\npzero = 0.5")
+boxplot(corr5[,c(6, 1:5, 7)], main="Correlation between true and estimated sample distances in W\npzero = 0.5", border=c(3, 1, 2, 1, 1, 1, 1), xlab="method", ylab="Correlation", las=2)
+abline(h=1,lty = 2)
 
 load("./datasets/sim_allen25_dist.rda")
-corr25 <- lapply(6:10, function(i) rowMeans(sapply(res, function(x) x[[i]])))
+corr25 <- lapply(8:14, function(i) rowMeans(sapply(res, function(x) x[[i]])))
 corr25 = do.call(cbind, corr25)
-corr25 = data.frame(corr25,stringsAsFactors = F)
-colnames(corr25) <- c(paste0("zinb k=", 1:4), "FQ PCA (k=2)")
+corr25 = data.frame(corr25, stringsAsFactors = F)
+colnames(corr25) <- c(paste0("zinb k=", 1:4), "FQ PCA (k=2)", "true W", 'ZIFA (k=2)')
 corr25$pzero = .25
-boxplot(corr25[,1:5], main="Correlation between true and estimated sample distances in W\npzero = 0.25", border=c(1, 2, 1, 1), xlab="method", ylab="Correlation", las=2)
+boxplot(corr25[,c(6, 1:5, 7)], main="Correlation between true and estimated sample distances in W\npzero = 0.25", border=c(3, 1, 2, 1, 1, 1, 1), xlab="method", ylab="Correlation", las=2)
+abline(h=1,lty = 2)
+
+load("./datasets/sim_allen75_dist.rda")
+corr75 <- lapply(c(8,9,12:14), function(i) rowMeans(sapply(res, function(x) x[[i]])))
+corr75 = do.call(cbind, corr75)
+corr75 = data.frame(corr75, stringsAsFactors = F)
+colnames(corr75) <- c(paste0("zinb k=", 1:2), "FQ PCA (k=2)", "true W", 'ZIFA (k=2)')
+corr75$pzero = .75
+boxplot(corr75[,c(4, 1:3, 5)], main="Correlation between true and estimated sample distances in W\npzero = 0.75", border=c(3, 1, 2, 1, 1, 1, 1), xlab="method", ylab="Correlation", las=2)
+abline(h=1,lty = 2)
 
 corr = rbind(corr5, corr25)
 corr = melt(corr, id.vars = 'pzero')
@@ -324,22 +86,50 @@ ggplot(corr, aes(x = factor(pzero), y= value, col = factor(pzero))) +
 ## Silhouette width
 ```{r sil}
 load("./datasets/sim_allen5_dist.rda")
-sil5 <- lapply(11:15, function(i) rowMeans(sapply(res, function(x) x[[i]])))
+sil5 <- lapply(15:21, function(i) rowMeans(sapply(res, function(x) x[[i]])))
 sil5 = do.call(cbind, sil5)
 sil5 = data.frame(sil5,stringsAsFactors = F)
-colnames(sil5) <- c(paste0("zinb k=", 1:4), "FQ PCA (k=2)")
+colnames(sil5) <- c(paste0("zinb k=", 1:4), "FQ PCA (k=2)", 'true W', "ZIFA (k=2)")
 sil5$pzero = .5
-boxplot(sil5[,1:5],border=c(1, 2, 1, 1), xlab="", ylab="Silhouette width",
-        las=2, 
-        main="Silhouette width of true labels\npzero = 0.5")
+boxplot(sil5[,c(6, 1:5, 7)],
+        main="Silhouette width of true labels\npzero = 0.5",
+        border=c(3, 1, 2, 1, 1, 1, 1), xlab="", ylab="Silhouette width", las=2)
+abline(h = 1, lty = 2)
+boxplot(sil5[,6] - sil5[,c(6, 1:5, 7)],
+        main="Difference of Silhouette width of true labels\npzero = 0.5",
+        border=c(3, 1, 2, 1, 1, 1, 1), xlab="", ylab="Silhouette width", las=2)
+abline(h = 0, lty = 2)
 
 load("./datasets/sim_allen25_dist.rda")
-sil25 <- lapply(11:15, function(i) rowMeans(sapply(res, function(x) x[[i]])))
+sil25 <- lapply(15:21, function(i) rowMeans(sapply(res, function(x) x[[i]])))
 sil25 = do.call(cbind, sil25)
 sil25 = data.frame(sil25,stringsAsFactors = F)
-colnames(sil25) <- c(paste0("zinb k=", 1:4), "FQ PCA (k=2)")
+colnames(sil25) <- c(paste0("zinb k=", 1:4), "FQ PCA (k=2)", 'true W', "ZIFA (k=2)")
 sil25$pzero = .25
-boxplot(sil25[,1:5], main="Silhouette width of true labels\npzero = 0.25", border=c(1, 2, 1, 1), xlab="", ylab="Silhouette width", las=2)
+boxplot(sil25[,c(6, 1:5, 7)],
+        main="Silhouette width of true labels\npzero = 0.25",
+        border=c(3, 1, 2, 1, 1, 1, 1), xlab="", ylab="Silhouette width", las=2)
+abline(h = 1, lty = 2)
+boxplot(sil25[,6] - sil25[,c(6, 1:5, 7)],
+        main="Difference of Silhouette width of true labels\npzero = 0.25",
+        border=c(3, 1, 2, 1, 1, 1, 1), xlab="", ylab="Silhouette width", las=2)
+abline(h = 0, lty = 2)
+
+load("./datasets/sim_allen75_dist.rda")
+sil75 <- lapply(c(15, 16, 19:21), function(i) rowMeans(sapply(res, function(x) x[[i]])))
+sil75 = do.call(cbind, sil75)
+sil75 = data.frame(sil75,stringsAsFactors = F)
+colnames(sil75) <- c(paste0("zinb k=", 1:2), "FQ PCA (k=2)", 'true W', "ZIFA (k=2)")
+sil75$pzero = .75
+boxplot(sil75[,c(4, 1:3, 5)],
+        main="Silhouette width of true labels\npzero = 0.75",
+        border=c(3, 1, 2, 1, 1, 1, 1), xlab="", ylab="Silhouette width", las=2)
+abline(h = 1, lty = 2)
+boxplot(sil75[,4] - sil75[,c(4, 1:3, 5)],
+        main="Difference of Silhouette width of true labels\npzero = 0.75",
+        border=c(3, 1, 2, 1, 1, 1, 1), xlab="", ylab="Silhouette width", las=2)
+abline(h = 0, lty = 2)
+
 
 sil = rbind(sil25, sil5)
 sil = melt(sil, id.vars = 'pzero')
@@ -353,30 +143,56 @@ ggplot(sil, aes(x = factor(pzero), y= value, col = factor(pzero))) +
 ```{r pcaK2}
 load('./datasets/sim_allen25.rda')
 load('./datasets/sim_allen25_fitted.rda')
+load('./datasets/sim_allen25_zifa.rda')
+biotrue = factor(bio)
 fit = fittedSim[[2]][[1]][[2]][[1]]
 fq <- betweenLaneNormalization(t(simData[[1]]$counts), which="full")
 pca <- prcomp(t(log1p(fq)))
-par(mfrow=c(1,2))
+par(mfrow=c(1,3))
 plot(pca$x, col = biotrue, main = 'PCA\nfZero = 0.25')
 plot(fit@W, col = biotrue, main = 'Estimated W, k = 2\nfZero = 0.25', 
      xlab = 'W1', ylab = 'W2')
+plot(zifa[[1]], col = biotrue, main = 'ZIFA\nfZero = 0.25')
 
 load('./datasets/sim_allen5.rda')
 load('./datasets/sim_allen5_fitted.rda')
+load('./datasets/sim_allen5_zifa.rda')
 fit = fittedSim[[2]][[1]][[2]][[1]]
 fq <- betweenLaneNormalization(t(simData[[1]]$counts), which="full")
 pca <- prcomp(t(log1p(fq)))
-par(mfrow=c(1,2))
+par(mfrow=c(1,3))
 plot(pca$x, col = biotrue, main = 'PCA\nfZero = 0.5')
 plot(fit@W, col = biotrue, main = 'Estimated W, k = 2\nfZero = 0.5', 
      xlab = 'W1', ylab = 'W2')
+plot(zifa[[1]], col = biotrue, main = 'ZIFA\nfZero = 0.5')
+
+load('./datasets/sim_allen75.rda')
+load('./datasets/sim_allen75_fitted.rda')
+load('./datasets/sim_allen75_zifa.rda')
+fit = fittedSim[[2]][[1]][[2]][[1]]
+fq <- betweenLaneNormalization(t(simData[[1]]$counts), which="full")
+pca <- prcomp(t(log1p(fq)))
+par(mfrow=c(1,3))
+plot(pca$x, col = biotrue, main = 'PCA\nfZero = 0.75')
+plot(fit@W, col = biotrue, main = 'Estimated W, k = 2\nfZero = 0.75', 
+     xlab = 'W1', ylab = 'W2')
+plot(zifa[[1]], col = biotrue, main = 'ZIFA\nfZero = 0.75')
 ```
 
 ## Model fit
 Let's look at model fit when chosen parameters are correct (V, genewise dispersion, K=2).
 
+From Sandrine's slide.
+
+Mean, variance, and zero probability for the ZINB model are
+$$E[Y_{i,j}] = (1 - \pi_{i,j})\mu_{i,j},$$
+$$var(Y_{i,j}) = (1 - \pi_{i,j})\mu_{i,j}(1 + \mu_{i,j}(\phi_j + \pi_{i,j})),$$
+$$P(Y_{i,j} = 0) = \pi_{i,j} + (1 - \pi_{i,j})(1 + \phi_j \mu_{i,j})^{\frac{1}{\phi_j}}.$$
+
+For the NB model, $\pi_{i,j}=0$. We fitted the NB using edgeR after full quantile normalization.
+
 ### Zero Fraction 50%
-```{r modelFit}
+```{r helperFit}
 computeExp <- function(zinbModel, model = 'zinb'){
   if (model == 'zinb'){
     (1 - t(getPi(zinbModel))) * t(getMu(zinbModel))
@@ -419,130 +235,114 @@ plotMD <- function(x, y, xlim = c(0,10), ylim = c(-5, 5),
   lines(xpred, pred, col = 'red', type = 'l', lwd=2)
 }
 
-load('./datasets/sim_allen5_fitted.rda')
-zz = fittedSim[[2]][[1]][[2]][[1]]
-zinbEY = log(rowMeans(computeExp(zz, model = 'zinb')))
-nbEY = log(rowMeans(computeExp(zz, model = 'nb')))
-logAveCount = log(rowMeans(originalCounts))
-prop0 = rowMeans(originalCounts == 0)
-zinbPY0 = rowMeans(computeP0(zz, model = 'zinb'))
-nbPY0 = rowMeans(computeP0(zz, model = 'nb'))
-
-plotMD(logAveCount, zinbEY, xlim = c(2, 12), ylim = c(-15, 5),
-       main = 'ZINB: MD-plot estimated vs. observed mean count, log scale')
-plotMD(logAveCount, zinbEY, xlim = c(3, 10), ylim = c(-2, 2),
-       main = 'ZINB: MD-plot estimated vs. observed mean count,\n log scale, zoomed')
-
-plotMD(logAveCount, nbEY, xlim = c(0, 60), ylim = c(-110, 2),
-       main = 'NB: MD-plot estimated vs. observed mean count, log scale')
-plotMD(logAveCount, nbEY, xlim = c(3, 10), ylim = c(-5, 5),
-       main = 'NB: MD-plot estimated vs. observed mean count,\n log scale, zoomed')
+fitNB <- function(rda, i = 1){
+  load(rda)
+  counts = t(simData[[i]]$counts)
+  phenoData = data.frame(bio, row.names=colnames(originalCounts))
+  set = newSeqExpressionSet(counts, phenoData = phenoData)
+  fq = betweenLaneNormalization(set, which = "full", offset = T)
+  disp = estimateDisp(counts(fq), offset = -offst(fq)) 
+  fit = glmFit(counts(fq), dispersion = disp$tagwise.dispersion, offset = -offst(fq))
+  list(fitted = fit$fitted.values, disp = disp$tagwise.dispersion)
+}
 ```
 
-MD-plot estimated vs. observed mean count, log scale, zoomed
+There is one outlier for zinb fit.
+```{r modelfit50}
+# zinb
+load('./datasets/sim_allen5_fitted.rda')
+load('./datasets/sim_allen5.rda')
+zz = fittedSim[[2]][[1]][[2]][[1]]
+zinbEY = log(rowMeans(computeExp(zz, model = 'zinb')))
+zinbPY0 = rowMeans(computeP0(zz, model = 'zinb'))
+# observed
+logAveCount = log(rowMeans(originalCounts))
+prop0 = rowMeans(originalCounts == 0)
+# edgeR
+nb50 = fitNB('./datasets/sim_allen5.rda')
+nbEY = log(rowMeans(nb50$fitted))
+nbPY0 = rowMeans((1 + nb50$fitted * nb50$disp)^(-1/nb50$disp))
+```
+
+MD-plot estimated vs. observed mean count, log scale, zoomed (we do not see the outlier)
 ```{r meanCount50}
 par(mfrow=c(1,2))
-plotMD(logAveCount, zinbEY, xlim = c(3, 10), ylim = c(-5, 5),
+plotMD(logAveCount, zinbEY, xlim = c(4, 9), ylim = c(-5, 5),
        main = 'ZINB')
-plotMD(logAveCount, nbEY, xlim = c(3, 10), ylim = c(-5, 5),
+plotMD(logAveCount, nbEY, xlim = c(4, 9), ylim = c(-5, 5),
        main = 'NB')
 ```
 
 MD-plot estimated vs. observed zero probability
 ```{r zeroProb50}
 par(mfrow=c(1,2))
-plotMD(prop0, zinbPY0, xlim = c(0, 1), ylim = c(-1, 1),
+plotMD(prop0, zinbPY0, xlim = c(0, 1), ylim = c(-.6, .6),
        main = 'ZINB')
-plotMD(prop0, nbPY0, xlim = c(0, 1), ylim = c(-1, 1), 
+plotMD(prop0, nbPY0, xlim = c(0, 1), ylim = c(-.6, .6), 
        main = 'NB')
 ```
 
 ```{r obszero50}
-smoothScatter(logAveCount, rowMeans(originalCounts == 0), xlab = 'log average count',
-              ylab = 'proportion of zeros', main = 'Zero probability versus Mean')
+par(mfrow=c(1,2))
+smoothScatter(logAveCount, rowMeans(originalCounts == 0),
+              xlab = 'log average count', xlim = c(2,10),
+              ylab = 'proportion of zeros', ylim = c(0,1),
+              main = 'Zero probability versus Mean')
 fit = loess(zinbPY0 ~ zinbEY)
-xpred = seq(1,10,.1)
+xpred = seq(2,9,.1)
 pred = predict(fit, xpred)
-lines(xpred, pred, col = 'red', type = 'l', lwd=2)
+lines(xpred, pred,col='green',type = 'l', lwd=2, ylim = c(0,1), xlim = c(2,10))
 fit = loess(nbPY0 ~ nbEY)
-xpred = seq(1,10,.1)
+xpred = seq(2,9,.1)
 pred = predict(fit, xpred)
-lines(xpred, pred, col = 'green', type = 'l', lwd=2)
+lines(xpred, pred,col='red', type='l', lwd=2, ylim = c(0,1), xlim = c(2,10))
 fit = loess(rowMeans(originalCounts == 0) ~ logAveCount)
-xpred = seq(1,10,.1)
+xpred = seq(2,9,.1)
 pred = predict(fit, xpred)
-lines(xpred, pred, col = 'blue', type = 'l', lwd=2)
+lines(xpred, pred,col = 'blue',type = 'l',lwd=2, ylim = c(0,1), xlim = c(2,10))
 legend('topright', c('observed', 'zinb', 'nb'), 
-   lty=1, col=c('blue', 'red', 'green'), bty='n', cex=.75)
+   lty=1, col=c('blue', 'green', 'red'), bty='n', cex=.75)
+
+smoothScatter(nbEY, nbPY0,
+              xlab = 'fitted log average count (edgeR)', xlim = c(2,10),
+              ylab = 'estimated proportion of zeros (edgeR)', ylim = c(0,1),
+              main = 'Zero probability versus Mean - edgeR')
+fit = loess(nbPY0 ~ nbEY)
+xpred = seq(2,9,.1)
+pred = predict(fit, xpred)
+lines(xpred, pred,col='red', type='l', lwd=2, ylim = c(0,1), xlim = c(2,10))
+legend('topright', c('nb'), lty=1, col=c('red'), bty='n', cex=.75)
 ```
 
 ```{r disp50}
-smoothScatter(rowMeans(originalCounts == 0), exp(-zz@zeta),
-              xlab = 'Observed zero probability', ylab = 'Estimated dispersion',
-              main = 'ZINB: dispersion versus zero probability')
-fit = loess(exp(-zz@zeta) ~ rowMeans(originalCounts == 0))
+par(mfrow = c(1, 2))
+smoothScatter(rowMeans(originalCounts == 0), nb50$disp, xlim = c(0,1), 
+              xlab = 'Observed zero probability',ylim = c(0, 30),
+              ylab = 'Estimated dispersion',
+              main = 'NB: dispersion versus zero probability')
 xpred = seq(0, 1, .05)
-pred = predict(fit, xpred)
-lines(xpred, pred, col = 'red', type = 'l', lwd=2)
-```
+fitzinb = loess(exp(-zz@zeta) ~ rowMeans(originalCounts == 0))
+predzinb = predict(fitzinb, xpred)
+fitnb = loess(nb50$disp ~ rowMeans(originalCounts == 0))
+prednb = predict(fitnb, xpred)
+lines(xpred, predzinb, col = 'green', type = 'l', lwd=2)
+lines(xpred, prednb, col = 'red', type = 'l', lwd=2)
+legend('topright',c('zinb','nb'),lty=1,col=c('green','red'), bty='n', cex=.75)
 
-### Zero Fraction 25%
-```{r modelFit25}
-load('./datasets/sim_allen25_fitted.rda')
-zz = fittedSim[[2]][[1]][[2]][[1]]
-zinbEY = log(rowMeans(computeExp(zz, model = 'zinb')))
-logAveCount = log(rowMeans(originalCounts))
-nbEY = log(rowMeans(computeExp(zz, model = 'nb')))
-zinbPY0 = rowMeans(computeP0(zz, model = 'zinb'))
-prop0 = rowMeans(originalCounts == 0)
-nbPY0 = rowMeans(computeP0(zz, model = 'nb'))
-```
-
-MD-plot estimated vs. observed mean count, log scale, zoomed
-```{r meanCount25}
-par(mfrow=c(1,2))
-plotMD(logAveCount, zinbEY, xlim = c(3, 10), ylim = c(-5, 5),
-       main = 'ZINB')
-plotMD(logAveCount, nbEY, xlim = c(3, 10), ylim = c(-5, 5),
-       main = 'NB')
-```
-
-MD-plot estimated vs. observed zero probability
-```{r zeroProb25}
-par(mfrow=c(1,2))
-plotMD(prop0, zinbPY0, xlim = c(0, 1), ylim = c(-1, 1),
-       main = 'ZINB')
-plotMD(prop0, nbPY0, xlim = c(0, 1), ylim = c(-1, 1), 
-       main = 'NB')
-```
-
-```{r obszero25}
-smoothScatter(logAveCount, rowMeans(originalCounts == 0), xlab = 'log average count',
-              ylab = 'proportion of zeros', main = 'Zero probability versus Mean')
-fit = loess(zinbPY0 ~ zinbEY)
-xpred = seq(1,10,.1)
-pred = predict(fit, xpred)
-lines(xpred, pred, col = 'red', type = 'l', lwd=2)
-fit = loess(nbPY0 ~ nbEY)
-xpred = seq(1,10,.1)
-pred = predict(fit, xpred)
-lines(xpred, pred, col = 'green', type = 'l', lwd=2)
-fit = loess(rowMeans(originalCounts == 0) ~ logAveCount)
-xpred = seq(1,10,.1)
-pred = predict(fit, xpred)
-lines(xpred, pred, col = 'blue', type = 'l', lwd=2)
-legend('topright', c('observed', 'zinb', 'nb'), 
-   lty=1, col=c('blue', 'red', 'green'), bty='n', cex=.75)
-```
-
-```{r disp25}
-smoothScatter(rowMeans(originalCounts == 0), exp(-zz@zeta),
-              xlab = 'Observed zero probability', ylab = 'Estimated dispersion',
+smoothScatter(rowMeans(originalCounts == 0), exp(-zz@zeta),xlim = c(0,1), 
+              xlab = 'Observed zero probability',ylim = c(0, 30),
+              ylab = 'Estimated dispersion',
               main = 'ZINB: dispersion versus zero probability')
-fit = loess(exp(-zz@zeta) ~ rowMeans(originalCounts == 0))
-xpred = seq(0, 1, .05)
-pred = predict(fit, xpred)
-lines(xpred, pred, col = 'red', type = 'l', lwd=2)
-```
+lines(xpred, predzinb, col = 'green', type = 'l', lwd=2)
+lines(xpred, prednb, col = 'red', type = 'l', lwd=2)
+legend('topright',c('zinb','nb'),lty=1,col=c('green','red'), bty='n', cex=.75)
 
+smoothScatter(rowMeans(originalCounts == 0), exp(-simModel@zeta),
+              xlab = 'Observed zero probability',ylim = c(0, 30),
+              ylab = 'Estimated dispersion',xlim = c(0,1), 
+              main = 'ZINB: dispersion versus zero probability')
+lines(xpred, predzinb, col = 'green', type = 'l', lwd=2)
+lines(xpred, prednb, col = 'red', type = 'l', lwd=2)
+legend('topright',c('zinb','nb'),lty=1,col=c('green','red'), bty='n', cex=.75)
+```
 
