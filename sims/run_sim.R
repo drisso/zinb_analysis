@@ -23,18 +23,20 @@ Vintercept = c(TRUE, FALSE)
 commondispersion = c(TRUE, FALSE)
 ncores = 10
 
-load("sim_allen75.rda")
+load("sim_allen5.rda")
 fittedSim = lapply(K, function(k){
   lapply(Vintercept, function(Vint){
     lapply(commondispersion, function(commondisp){
-      myZinbFit = makeZinbFit(Xintercept = TRUE,
-                              Vintercept = Vint,
-                              K = k,
-                              commondispersion = commondisp)
       mclapply(1:length(simData), function(i){
-        myZinbFit(t(simData[[i]]$counts))
+        counts = t(simData[[i]]$counts)
+        counts = counts[rowSums(counts) != 0, ] 
+        myZinbFit = makeZinbFit(Xintercept = TRUE, Vintercept = Vint,
+                                K = k, commondispersion = commondisp,
+                                ngenes = nrow(counts), 
+                                ncells = ncol(counts))
+        myZinbFit(counts)
       },mc.cores =  ncores)
     })
   })
 })
-save(fittedSim, file = 'sim_allen75_fitted.rda')
+save(fittedSim, file = 'sim_allen5_fitted.rda')
