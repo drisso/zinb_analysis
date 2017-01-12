@@ -1,7 +1,7 @@
 ---
 title: "Allen, estimates, zFrac 0.25"
 author: "Fanny, Davide, Sandrine"
-date: "12/13/2016"
+date: "01/05/2017"
 output: 
   html_document: 
     fig_height: 10
@@ -25,8 +25,8 @@ cols2 <- c(brewer.pal(8, "Set2"), brewer.pal(8, "Set3"), brewer.pal(8, "Set1"))
 ```
 
 ```{r load}
-load("./datasets/sim_allen25.rda")
-load("./datasets/sim_allen25_fitted.rda")
+load("./datasets/simAllen25.rda")
+load("./datasets/simAllen25_fitted.rda")
 ```
 
 # Results
@@ -46,7 +46,7 @@ pairs(fit[[4]]@W, pch=19, col=biotrue, main="K=4")
 ## Estimates
 ### Bias
 ```{r bias}
-load("./datasets/sim_allen25_bias.rda")
+load("./datasets/simAllen25_bias.rda")
 K <- 1:4
 ggplot(bias[bias$param == 'beta_mu', ], aes(x = K, y = bias)) + 
   geom_boxplot() + ggtitle('beta_mu') + facet_grid(disp ~ V) + 
@@ -155,7 +155,7 @@ ggplot(bias[bias$param == 'pi', ], aes(x = K, y = bias)) +
 
 ### Variance
 ```{r variance}
-load("./datasets/sim_allen25_variance.rda")
+load("./datasets/simAllen25_variance.rda")
 K <- 1:4
 ggplot(variance[variance$param == 'beta_mu', ], aes(x = K, y = variance)) + 
   geom_boxplot() + ggtitle('beta_mu') + facet_grid(disp ~ V) + 
@@ -326,4 +326,3 @@ ggplot(mse[mse$param == 'pi', ], aes(x = K, y = mse)) +
   facet_grid(disp ~ V) + coord_cartesian(ylim = c(0,2000)) +
   geom_hline(yintercept = 0, col = 'red')
 ```
-

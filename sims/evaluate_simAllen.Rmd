@@ -1,0 +1,351 @@
+---
+title: "Evaluate simulations Allen"
+author: "Fanny, Davide, Sandrine"
+date: "01/06/2017"
+output: 
+  html_document: 
+    fig_height: 10
+    fig_width: 10
+    toc: yes
+    code_folding: hide
+    toc_float: yes
+---
+```{r options, echo=FALSE, results="hide",message=FALSE, error=FALSE, include=FALSE, autodep=TRUE}
+knitr::opts_chunk$set(fig.align="center", cache=TRUE, error=FALSE, message=FALSE, warning=TRUE, fig.width=6, fig.height=6)
+library(zinb)
+library(cluster)
+library(RColorBrewer)
+library(ggplot2)
+library(reshape)
+library(EDASeq)
+library(edgeR)
+cols <- brewer.pal(8, "Set1")
+cols2 <- c(brewer.pal(8, "Set2"), brewer.pal(8, "Set3"), brewer.pal(8, "Set1"))
+```
+
+# Description of the simulations
+
+Here we simulate from the true model, with the following parameters.
+
+- 2 unknown factors in W
+- V intercept
+- X intercept
+- Genewise dispersion
+
+For each simulated data, we fit a ZINB model with all the possible combinations (16) of the following parameters:
+
+- Dimension of W: 1 through 4
+- V intercept: yes, no
+- Dispersion: common, genewise
+
+# Estimates 
+See bias, variance, and MSE in separate Rmd files (simAllen_estimates_25.Rmd, simAllen_estimates_5.Rmd, and simAllen_estimates_75.Rmd).
+
+# Impact on dimensionality reduction
+```{r corr25}
+load("./datasets/simAllen25_dist.rda")
+corr25 <- lapply(1:12, function(i) rowMeans(sapply(res, function(x) x[[i]])))
+corr25 = do.call(cbind, corr25)
+corr25 = data.frame(corr25, stringsAsFactors = F)
+colnames(corr25) <- c("true W", paste0("zinb k=", 1:4), 
+                      "PCA (k=2)", "PCA TC (k=2)", "PCA TMM (k=2)",
+                      "PCA FQ (k=2)",
+                      'ZIFA (k=2)', 'ZIFA TMM (k=2)', 'ZIFA FQ (k=2)')
+corr25$pzero = .25
+boxplot(corr25[,1:12], main="Correlation between true and estimated sample distances in W\npzero = 0.25", border=c(3, 1, 2, rep(1,10)), xlab="", ylab="Correlation", las=2)
+abline(h=1,lty = 2)
+```
+
+```{r corr50}
+load("./datasets/simAllen50_dist.rda")
+corr50 <- lapply(1:12, function(i) rowMeans(sapply(res, function(x) x[[i]])))
+corr50 = do.call(cbind, corr50)
+corr50 = data.frame(corr50, stringsAsFactors = F)
+colnames(corr50) <- c("true W", paste0("zinb k=", 1:4), 
+                      "PCA (k=2)", "PCA TC (k=2)", "PCA TMM (k=2)",
+                      "PCA FQ (k=2)",
+                      'ZIFA (k=2)', 'ZIFA TMM (k=2)', 'ZIFA FQ (k=2)')
+corr50$pzero = .50
+boxplot(corr50[,1:12], main="Correlation between true and estimated sample distances in W\npzero = 0.50", border=c(3, 1, 2, rep(1,10)), xlab="method", ylab="Correlation", las=2)
+abline(h=1,lty = 2)
+```
+
+
+```{r corr}
+#corr75 = cbind(cbind(corr75[,1:8], 
+#                     matrix(rep(NA, 100), ncol=1, nrow=100)),
+#               corr75[,9:13])
+#colnames(corr75) = colnames(corr50)
+#corr = rbind(corr25, corr50, corr75)
+corr = rbind(corr25, corr50)
+corr = melt(corr, id.vars = 'pzero')
+ggplot(corr, aes(x = factor(pzero), y= value, col = factor(pzero))) +
+  geom_boxplot(outlier.shape = NA) + facet_grid(~ variable) +
+  ggtitle('Correlation between true and estimated sample distances in W') +
+  ylab('Correlation') + xlab('Method')
+```
+
+## Silhouette width
+```{r sil25}
+load("./datasets/simAllen25_dist.rda")
+sil25 <- lapply(13:length(res[[1]]), function(i){
+  rowMeans(sapply(res, function(x) x[[i]]))
+})
+sil25 = do.call(cbind, sil25)
+sil25 = data.frame(sil25,stringsAsFactors = F)
+colnames(sil25) <- c("true W", paste0("zinb k=", 1:4), 
+                      "PCA (k=2)", "PCA TC (k=2)", "PCA TMM (k=2)",
+                      "PCA FQ (k=2)",
+                      'ZIFA (k=2)', 'ZIFA TMM (k=2)', 'ZIFA FQ (k=2)')
+sil25$pzero = .25
+boxplot(sil25[,1:12], main="Silhouette width of true labels\npzero = 0.25",
+        border=c(3, 1, 2, rep(1,10)), xlab="", 
+        ylab="Silhouette width", las=2)
+boxplot(sil25[,1] - sil25[,1:12],
+        main="Difference of Silhouette width of true labels\npzero = 0.25",
+        border=c(3, 1, 2, rep(1,10)), xlab="",
+        ylab="Silhouette width - True Silhouette width", las=2)
+abline(h = 0, lty = 2)
+```
+
+```{r sil50}
+load("./datasets/simAllen50_dist.rda")
+sil50 <- lapply(13:length(res[[1]]), function(i){
+  rowMeans(sapply(res, function(x) x[[i]]))
+})
+sil50 = do.call(cbind, sil50)
+sil50 = data.frame(sil50,stringsAsFactors = F)
+colnames(sil50) <- c("true W", paste0("zinb k=", 1:4), 
+                      "PCA (k=2)", "PCA TC (k=2)", "PCA TMM (k=2)",
+                      "PCA FQ (k=2)",
+                      'ZIFA (k=2)', 'ZIFA TMM (k=2)', 'ZIFA FQ (k=2)')
+sil50$pzero = .50
+boxplot(sil50[,1:12], main="Silhouette width of true labels\npzero = 0.50",
+        border=c(3, 1, 2, rep(1,10)), xlab="", 
+        ylab="Silhouette width", las=2)
+boxplot(sil50[,1] - sil50[,1:12],
+        main="Difference of Silhouette width of true labels\npzero = 0.50",
+        border=c(3, 1, 2, rep(1,10)), xlab="",
+        ylab="Silhouette width - True Silhouette width", las=2)
+abline(h = 0, lty = 2)
+```
+
+
+```{r sil}
+#sil75 = cbind(cbind(sil75[,1:8], 
+#                     matrix(rep(NA, 100), ncol=1, nrow=100)),
+#               sil75[,9:13])
+#colnames(sil75) = colnames(sil50)
+#sil = rbind(sil25, sil50, sil75)
+sil = rbind(sil25, sil50)
+sil = melt(sil, id.vars = 'pzero')
+ggplot(sil, aes(x = factor(pzero), y= value, col = factor(pzero))) +
+  geom_boxplot(outlier.shape = NA) + facet_grid(~ variable) +
+  ggtitle('Silhouette width of true labels') +
+  ylab('Silhouette width') + xlab('Zero Fraction')
+```
+
+For one simulated dataset with the right parameters (Vintercept, genewise dispersion, K= 2).
+```{r pca25}
+load('./datasets/simAllen25.rda')
+load('./datasets/simAllen25_fitted.rda')
+load('./datasets/simAllen25_zifaFQ.rda')
+biotrue = factor(bio)
+fit = fittedSim[[2]][[1]][[2]][[1]]
+fq <- betweenLaneNormalization(t(simData[[1]]$counts), which="full")
+pca <- prcomp(t(log1p(fq)))
+par(mfrow=c(2,2))
+plot(simModel@W, col = biotrue, main = 'True W\nfZero = 0.25', 
+     xlab = 'W1', ylab = 'W2')
+plot(fit@W, col = biotrue, main = 'estimated ZINB W\nfZero = 0.25', 
+     xlab = 'W1', ylab = 'W2')
+plot(pca$x, col = biotrue, main = 'PCA FQ\nfZero = 0.25')
+plot(zifaFQ[[1]], col = biotrue, main = 'ZIFA FQ\nfZero = 0.25')
+```
+
+```{r pca50}
+load('./datasets/simAllen50.rda')
+load('./datasets/simAllen50_fitted.rda')
+load('./datasets/simAllen50_zifaFQ.rda')
+biotrue = factor(bio)
+fit = fittedSim[[2]][[1]][[2]][[1]]
+fq <- betweenLaneNormalization(t(simData[[1]]$counts), which="full")
+pca <- prcomp(t(log1p(fq)))
+par(mfrow=c(2,2))
+plot(simModel@W, col = biotrue, main = 'True W\nfZero = 0.50', 
+     xlab = 'W1', ylab = 'W2')
+plot(fit@W, col = biotrue, main = 'estimated ZINB W\nfZero = 0.50', 
+     xlab = 'W1', ylab = 'W2')
+plot(pca$x, col = biotrue, main = 'PCA FQ\nfZero = 0.50')
+plot(zifaFQ[[1]], col = biotrue, main = 'ZIFA FQ\nfZero = 0.50')
+```
+
+```{r pca75}
+load('./datasets/simAllen75.rda')
+load('./datasets/simAllen75_fitted.rda')
+load('./datasets/simAllen75_zifaFQ.rda')
+biotrue = factor(bio)
+fit = fittedSim[[2]][[1]][[2]][[1]]
+fq <- betweenLaneNormalization(t(simData[[1]]$counts), which="full")
+pca <- prcomp(t(log1p(fq)))
+par(mfrow=c(2,2))
+plot(simModel@W, col = biotrue, main = 'True W\nfZero = 0.75', 
+     xlab = 'W1', ylab = 'W2')
+plot(fit@W, col = biotrue, main = 'estimated ZINB W\nfZero = 0.75', 
+     xlab = 'W1', ylab = 'W2')
+plot(pca$x, col = biotrue, main = 'PCA FQ\nfZero = 0.75')
+plot(zifaFQ[[1]], col = biotrue, main = 'ZIFA FQ\nfZero = 0.75')
+```
+
+## Model fit
+Let's look at model fit when chosen parameters are correct (V, genewise dispersion, K=2).
+
+From Sandrine's slide.
+
+Mean, variance, and zero probability for the ZINB model are
+$$E[Y_{i,j}] = (1 - \pi_{i,j})\mu_{i,j},$$
+$$var(Y_{i,j}) = (1 - \pi_{i,j})\mu_{i,j}(1 + \mu_{i,j}(\phi_j + \pi_{i,j})),$$
+$$P(Y_{i,j} = 0) = \pi_{i,j} + (1 - \pi_{i,j})(1 + \phi_j \mu_{i,j})^{\frac{1}{\phi_j}}.$$
+
+For the NB model, $\pi_{i,j}=0$. We fitted the NB using edgeR after full quantile normalization.
+
+### Zero Fraction 50%
+```{r helperFit}
+computeExp <- function(zinbModel){
+    (1 - t(getPi(zinbModel))) * t(getMu(zinbModel))
+}
+
+computeVar <- function(zinbModel){
+  mu = t(getMu(zinbModel))
+  pi = t(getPi(zinbModel))
+  phi = exp(-getZeta(zinbModel))
+  (1 - pi) * mu * (1 + mu*(phi + pi))
+}
+
+computeP0 <- function(zinbModel){
+  mu = t(getMu(zinbModel))
+  pi = t(getPi(zinbModel))
+  phi = exp(-getZeta(zinbModel))
+  pi + (1 - pi) * (1 + phi * mu) ^ (-1/phi)
+}
+
+plotMD <- function(x, y, xlim = c(0,10), ylim = c(-5, 5),
+                   main = 'ZINB: MD-plot estimated vs. observed mean count, log scale'){
+  mm = .5*(x + y)
+  dd = x - y
+  smoothScatter(mm, dd, xlim = xlim, ylim = ylim, xlab = 'Mean', ylab = 'Diff', main = main)
+  abline(h = 0, col = 'gray')
+  fit = loess(dd ~ mm)
+  xpred = seq(0, 10, .1)
+  pred = predict(fit, xpred)
+  lines(xpred, pred, col = 'red', type = 'l', lwd=2)
+}
+
+fitNB <- function(rda, i = 1){
+  load(rda)
+  counts = t(simData[[i]]$counts)
+  phenoData = data.frame(bio)
+  set = newSeqExpressionSet(counts, phenoData = phenoData)
+  fq = betweenLaneNormalization(set, which = "full", offset = T)
+  disp = estimateDisp(counts(fq), offset = -offst(fq)) 
+  fit = glmFit(counts(fq), dispersion = disp$tagwise.dispersion, offset = -offst(fq))
+  list(fitted = fit$fitted.values, disp = disp$tagwise.dispersion)
+}
+```
+
+There is one outlier for zinb fit.
+```{r modelfit50}
+# zinb
+load('./datasets/simAllen25_fitted.rda')
+load('./datasets/simAllen25.rda')
+zz = fittedSim[[2]][[1]][[2]][[1]]
+zinbEY = rowMeans(log1p(computeExp(zz)))
+zinbPY0 = rowMeans(computeP0(zz))
+# observed
+counts = t(simData[[1]]$counts)
+logAveCount = rowMeans(log1p(counts))
+prop0 = rowMeans(counts == 0)
+# edgeR
+nb50 = fitNB('./datasets/simAllen50.rda')
+nbEY = rowMeans(log1p(nb50$fitted))
+nbPY0 = rowMeans((1 + nb50$fitted * nb50$disp)^(-1/nb50$disp))
+```
+
+MD-plot estimated vs. observed mean count, log scale, zoomed (we do not see the outlier)
+```{r meanCount50}
+par(mfrow=c(1,2))
+plotMD(logAveCount, zinbEY, xlim = c(0, 7), ylim = c(-6, 6),
+       main = 'ZINB')
+plotMD(logAveCount, nbEY, xlim = c(0, 7), ylim = c(-6, 6),
+       main = 'NB, edgeR')
+```
+
+MD-plot estimated vs. observed zero probability
+```{r zeroProb50}
+par(mfrow=c(1,2))
+plotMD(prop0, zinbPY0, xlim = c(0, 1), ylim = c(-1, 1),
+       main = 'ZINB')
+plotMD(prop0, nbPY0, xlim = c(0, 1), ylim = c(-1, 1), 
+       main = 'NB, edgeR')
+```
+
+```{r obszero50}
+par(mfrow=c(1,2))
+smoothScatter(logAveCount, rowMeans(counts == 0),
+              xlab = 'log average count', xlim = c(0,7),
+              ylab = 'proportion of zeros', ylim = c(0,1),
+              main = 'Zero probability versus Mean')
+fit = loess(zinbPY0 ~ zinbEY)
+xpred = seq(0,9,.1)
+pred = predict(fit, xpred)
+lines(xpred, pred,col='green',type = 'l', lwd=2, ylim = c(0,1), xlim = c(0,7))
+fit = loess(nbPY0 ~ nbEY)
+xpred = seq(0,9,.1)
+pred = predict(fit, xpred)
+lines(xpred, pred,col='red', type='l', lwd=2, ylim = c(0,1), xlim = c(0,7))
+fit = loess(rowMeans(counts == 0) ~ logAveCount)
+xpred = seq(0,9,.1)
+pred = predict(fit, xpred)
+lines(xpred, pred,col = 'blue',type = 'l',lwd=2, ylim = c(0,1), xlim = c(0,7))
+legend('topright', c('observed', 'zinb', 'nb, edgeR'), 
+   lty=1, col=c('blue', 'green', 'red'), bty='n', cex=.75)
+
+smoothScatter(nbEY, nbPY0,
+              xlab = 'fitted log average count (edgeR)', xlim = c(0,10),
+              ylab = 'estimated proportion of zeros (edgeR)', ylim = c(0,1),
+              main = 'Zero probability versus Mean - edgeR')
+fit = loess(nbPY0 ~ nbEY)
+xpred = seq(0,9,.1)
+pred = predict(fit, xpred)
+lines(xpred, pred,col='red', type='l', lwd=2, ylim = c(0,1), xlim = c(2,10))
+legend('topright', c('nb'), lty=1, col=c('red'), bty='n', cex=.75)
+```
+
+```{r disp50}
+par(mfrow = c(1, 2))
+smoothScatter(exp(-simModel@zeta),exp(-zz@zeta), 
+              xlab = 'True Dispersion', ylab = 'Estimated Dispersion', 
+              ylim = c(0, 10),xlim = c(0,10), 
+              main = 'ZINB')
+abline(a = 0, b = 1, col = 'gray')
+smoothScatter(exp(-simModel@zeta), nb50$disp, 
+              xlab = 'True Dispersion', ylab = 'Estimated Dispersion', 
+              ylim = c(0, 10),xlim = c(0,10), 
+              main = 'NB, edgeR')
+abline(a = 0, b = 1, col = 'gray')
+par(mfrow = c(1, 1))
+
+xpred = seq(0, 1, .05)
+fitzinb = loess(exp(-zz@zeta) ~ rowMeans(counts == 0))
+predzinb = predict(fitzinb, xpred)
+fitnb = loess(nb50$disp ~ rowMeans(counts == 0))
+prednb = predict(fitnb, xpred)
+smoothScatter(rowMeans(counts == 0), exp(-simModel@zeta),
+              xlab = 'Observed zero probability',ylim = c(0, 15),
+              ylab = 'True dispersion',xlim = c(0,1), 
+              main = 'True Dispersion versus observed zero probability')
+lines(xpred, predzinb, col = 'green', type = 'l', lwd=2)
+lines(xpred, prednb, col = 'red', type = 'l', lwd=2)
+legend('topright',c('zinb','nb, edgeR'),lty=1,col=c('green','red'), bty='n', cex=.75)
+```
+
