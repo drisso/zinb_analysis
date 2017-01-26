@@ -1,7 +1,7 @@
 ---
 title: "Simulations from Allen"
 author: "Fanny, Davide, Sandrine"
-date: "01/12/2017"
+date: "01/13/2017"
 output: 
   html_document: 
     fig_height: 10
@@ -165,8 +165,10 @@ nclust
 # W
 ## From real data
 We simulate $W$ from three bivariate gaussians.
-```{r plotmclust}
-par(mfrow = c(1,3))
+```{r plotmclust, fig.width=6, fig.height=6}
+mar <- par("mar")
+mar[c(2, 4)] <- 0
+par(mfrow = c(1,3), mar = mar)
 # zinbW
 xlim = c(min(zinb@W[,1]) - 1, max(zinb@W[,1]) + 1) 
 ylim = c(min(zinb@W[,2]) - 1, max(zinb@W[,2]) + 1)
@@ -245,8 +247,10 @@ rect(a[1], ylim[1], a[length(a)], 0, density = 10,
 ```
 
 Check that code works for a = 0 and b = 0.
-```{r WsnrlikeExtreme}
-par(mfrow = c(1,3))
+```{r WsnrlikeExtreme, fig.width=6, fig.height=6}
+mar <- par("mar")
+mar[c(2, 4)] <- 0
+par(mfrow = c(1,3), mar = mar)
 # zinbW
 xlim = c(min(zinb@W[,1]) - 1, max(zinb@W[,1]) + 1) 
 ylim = c(min(zinb@W[,2]) - 1, max(zinb@W[,2]) + 1)
@@ -255,6 +259,7 @@ plot(simW1, col = bio, main = 'multivar gauss sim\na=1',
 
 a = c(0, 0)
 b2 = computeB2(mclustW, a)
+b2 = matrix(c(b2[1], 1, 1, b2[2]), ncol = 2, nrow=2)
 simW = lapply(clust, function(i){
   mvrnorm(n = 1, mu = mclustW$parameters$mean[, i] * a, 
           Sigma = mclustW$parameters$variance$sigma[,, i] * b2)
@@ -263,27 +268,28 @@ simW = do.call(rbind, simW)
 plot(simW, col = bio, main = 'multivar gauss sim\na=0',
      xlab = 'W1', ylab = 'W2', xlim = xlim, ylim = ylim)
 
-a = c(1.133, 1.222)
+a = c(1.07, 1.137)
 b2 = computeB2(mclustW, a)
+b2 = matrix(c(b2[1], 1, 1, b2[2]), ncol = 2, nrow=2)
 simW = lapply(clust, function(i){
   mvrnorm(n = 1, mu = mclustW$parameters$mean[, i] * a, 
           Sigma = mclustW$parameters$variance$sigma[,, i] * b2)
 })
 simW = do.call(rbind, simW)
-plot(simW, col = bio, main = 'multivar gauss sim\nb very small',
+plot(simW, col = bio, main = 'multivar gauss sim\nb small',
      xlab = 'W1', ylab = 'W2', xlim = xlim, ylim = ylim)
 ```
 
-```{r WsnrlikeNormal}
+```{r WsnrlikeNormal, fig.width=6, fig.height=6}
 par(mfrow = c(1,2))
 # zinbW
-xlim = c(min(zinb@W[,1]) - 1, max(zinb@W[,1]) + 1) 
-ylim = c(min(zinb@W[,2]) - 1, max(zinb@W[,2]) + 1)
-plot(simW1, col = bio, main = 'multivar gauss sim\ntrue W, 100 cells\na=1, b2=1',
+plot(simW1, col = bio,
+     main = 'multivar gauss sim\ntrue W, 100 cells\na=1, b2=1',
      xlab = 'W1', ylab = 'W2', xlim = xlim, ylim = ylim)
 
 a = c(.85, .7)
 b2 = computeB2(mclustW, a)
+b2 = matrix(c(b2[1], 1, 1, b2[2]), ncol = 2, nrow=2)
 simW2 = lapply(clust, function(i){
   mvrnorm(n = 1, mu = mclustW$parameters$mean[, i] * a, 
           Sigma = mclustW$parameters$variance$sigma[,, i] * b2)
@@ -299,12 +305,17 @@ simW = list(simW1, simW2)
 
 
 # Gamma
+
+We fit a bivariate gaussian to $\gamma_{\pi}$ and $\gamma_{\mu}$ and use the fitted means and covariance matrix to simulate $\gamma_{\pi}$ and $\gamma_{\mu}$.  
+
+
 ## From real data
-```{r gamma}
+```{r gamma, fig.width=6, fig.height=6}
 gamma = data.frame(gammaMu = zinb@gamma_mu[1, ],
                    gammaPi = zinb@gamma_pi[1, ])
-
-par(mfrow = c(1,3))
+mar <- par("mar")
+mar[c(2, 4)] <- 0
+par(mfrow = c(1,3), mar = mar)
 # zinbGamma
 xlim = c(min(gamma[,1]) - .5, max(gamma[,1]) + .5) 
 ylim = c(min(gamma[,2]) - .5, max(gamma[,2]) + .5)
@@ -338,15 +349,33 @@ core = t(sim$counts)
 sum(core == 0)/(nrow(core) * ncol(core))
 ```
 
+Note that correlation smaller than for real data, I think because $\gamma_{\mu}$ and $\gamma_{\pi}$ are not really gaussians. 
+```{r gammaCorrrReal}
+df <- data.frame(gamma_mu = mod@gamma_mu[1, ],
+                 gamma_pi = mod@gamma_pi[1, ])
+pairs(df, pch=19, col = clust, main = 'Beta')
+print(cor(df, method="spearman"))
+```
+
 ## Changing zero fraction
-We want three different zero fractions (25\%, 45\%, 75\%).  
-QUESTION: TRANSLATION or RE-SIMULATION CHANGING MEAN? I did the second.
+We want three different zero fractions (25\%, 45\%, 75\%). A zero fraction of 45\% corresponds to the real dataset zero fraction, $\gamma_{\pi}$ and $\gamma_{\mu}$ are simulated as described above. To change the zero fraction to 25\% and 75\%, we simulate $\gamma_{\pi}$ and $\gamma_{\mu}$ as before but the mean of $\gamma_{\pi}$ is changed. We keep the mean of $\gamma_{\mu}$ and the covariance matrix constant.  
+
 ```{r gammaPi}
 gammaOffset = c('25' = -3.5, '45' = 0, '75' = 3.6)
 simGamma = lapply(gammaOffset, function(i){
   mvrnorm(n = ncells, mu = mclustGamma$parameters$mean[,1] + c(0, i),
           Sigma = mclustGamma$parameters$variance$sigma[,, 1])
 })
+```
+
+Again, for the three different zero fraction, correlation is smaller than for real data.
+```{r gammaCorrr}
+for (i in 1:3){
+  df <- data.frame(gamma_mu = simGamma[[i]][, 1],
+                   gamma_pi = simGamma[[i]][, 2])
+  pairs(df, pch=19, col = clust, main = 'Beta')
+  print(cor(df, method="spearman"))
+}
 ```
 
 # Models
@@ -385,8 +414,8 @@ bio = clust
 sim = lapply(1:2, function(k){
   lapply(1:3, function(i){
     simModel = models[[k]][[i]]
-    simData = lapply(seq_len(B), function(i){
-      zinbSim(simModel, seed = i*k)
+    simData = lapply(seq_len(B), function(j){
+      zinbSim(simModel, seed = j*i*k)
     })
     fileName = sprintf("./datasets/simAllen_var%s_z%s.rda",
                        k, names(gammaOffset[i]))
@@ -413,7 +442,7 @@ for (k in 1:2){
     counts = simData[[1]]$counts
     zero_rate <- rowMeans(counts == 0)
     plot(rowMeans(getPi(models[[k]][[i]])), zero_rate,
-         main = paste0('var', k, '_z', names(gammaOffset)[k]),
+         main = paste0('var', k, '_z', names(gammaOffset)[i]),
          xlab="Average simulated Pi", ylab="Simulated Zero Rate",
          pch=19, col=bio, ylim = c(0, 1), xlim = c(0,1))
     abline(a=0,b=1,col='gray')
@@ -427,15 +456,17 @@ for (k in 1:2){
                        k, names(gammaOffset[i]))
     load(fileName)
     counts = simData[[1]]$counts
-    coverage <- rowSums(counts)
-    plot(rowMeans(log1p(getMu(models[[k]][[i]]))), log1p(coverage),
-         xlim = c(4, 8),
-         xlab="Average simulated log Mu", ylab="log Coverage", pch=19,
-         col=bio,ylim = c(10,15), 
-         main = paste0('var', k, '_z', names(gammaOffset)[k]))
+    coverage <- rowMeans(log1p(counts))
+    plot(rowMeans(log1p(getMu(models[[k]][[i]]))), coverage,
+         xlim = c(3, 7),
+         xlab="Average simulated log Mu", ylab="Average log counts", pch=19,
+         col=bio,ylim = c(0,6), 
+         main = paste0('var', k, '_z', names(gammaOffset)[i]))
+    abline(a=0,b=1,col='gray')
   }
 }
 ```
+
 
 
 

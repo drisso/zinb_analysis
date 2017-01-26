@@ -1,6 +1,4 @@
-# Use the allen data to simulate with realistic parameters
 library(zinb)
-#setwd('~/Documents/BRAIN/gitrepo/zinb_analysis/sims/datasets/')
 
 makeZinbFit <- function(Xintercept = T, Vintercept = T, K = 2,
                         commondispersion = T, ngenes = 1000, ncells = 100){
@@ -21,22 +19,34 @@ makeZinbFit <- function(Xintercept = T, Vintercept = T, K = 2,
 K = 1:4
 Vintercept = c(TRUE, FALSE)
 commondispersion = c(TRUE, FALSE)
-ncores = 10
+ncores = 20
 
-load("sim_allen5.rda")
-fittedSim = lapply(K, function(k){
-  lapply(Vintercept, function(Vint){
-    lapply(commondispersion, function(commondisp){
-      mclapply(1:length(simData), function(i){
-        counts = t(simData[[i]]$counts)
-        counts = counts[rowSums(counts) != 0, ] 
-        myZinbFit = makeZinbFit(Xintercept = TRUE, Vintercept = Vint,
-                                K = k, commondispersion = commondisp,
-                                ngenes = nrow(counts), 
-                                ncells = ncol(counts))
-        myZinbFit(counts)
-      },mc.cores =  ncores)
+ds = 'Allen'
+for (j in 1){
+  for (l in c(25, 45, 75)){
+    fileName = sprintf('sim%s_var%s_z%s', ds, j, l)
+    load(paste0(fileName,".rda"))
+    fittedSim = lapply(K, function(k){
+      lapply(Vintercept, function(Vint){
+        lapply(commondispersion, function(commondisp){
+          mclapply(1:length(simData), function(i){
+            counts = t(simData[[i]]$counts)
+            zeros = (rowSums(counts) == 0)
+            counts = counts[!zeros, ] 
+            myZinbFit = makeZinbFit(Xintercept = TRUE, Vintercept = Vint,
+                                    K = k, commondispersion = commondisp,
+                                    ngenes = nrow(counts), 
+                                    ncells = ncol(counts))
+            ff = myZinbFit(counts, ncores = 2)
+            
+            
+            ff
+          },mc.cores =  ncores)
+        })
+      })
     })
-  })
-})
-save(fittedSim, file = 'sim_allen5_fitted.rda')
+    out = paste0(fileName, '_fitted.rda')
+    save(fittedSim, file = out)
+  }
+}
+
