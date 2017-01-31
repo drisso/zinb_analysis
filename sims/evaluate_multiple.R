@@ -163,9 +163,9 @@ computeVarianceList <- function(prefix, K = 1:4, Vintercept = 1:2,
 ############
 # BIAS
 ############
-ds = 'AllenMostVar'
+ds = 'Allen'
 for (k in 1){
-  for (i in c(33, 65, 85)){
+  for (i in c(25, 45, 75)){
     print(k)
     print(i)
     biasList = computeBiasList(sprintf('./datasets/sim%s_var%s_z%s', ds, k, i))
@@ -182,9 +182,9 @@ for (k in 1){
 ###########
 # VARIANCE
 ###########
-ds = 'AllenMostVar'
+ds = 'Allen'
 for (k in 1){
-  for (i in c(33, 65)){
+  for (i in c(25, 45, 75)){
     print(k)
     print(i)
   varianceList = computeVarianceList(sprintf('./datasets/sim%s_var%s_z%s', ds, k, i))
@@ -219,47 +219,51 @@ wrapRzifa <- function(Y, block = F){
 }
 
 ds = 'Allen'
-for (k in 2){
-  for (i in c(75)){
-    load(sprintf('./datasets/sim%s_var%s_z%s.rda', ds, k, i))
+for (k in 1:2){
+  for (i in c(25, 45)){
+    pref = sprintf('./datasets/sim%s_var%s_z%s', ds, k, i)
+    load(paste0(pref, '.rda'))
+    
     zifa = lapply(1:10, function(i){
       Y = t(simData[[i]]$counts)
       Y = Y[rowSums(Y) != 0, ]
       Y = log1p(Y)
       wrapRzifa(Y)
     })
-    save(zifa, file = sprintf('./datasets/sim%s_var%s_z%s_zifa.rda', ds, k, i))
-  }
-}
-
-for (k in 2){
-  for (i in c(75)){
-    load(sprintf('./datasets/sim%s_var%s_z%s.rda', ds, k, i))
-    zifaFQ = lapply(c(1:3,3,5:8,8,8), function(i){
-      print(i)
-      fq <- betweenLaneNormalization(t(simData[[i]]$counts), which="full")
-      Y = log1p(fq)
+    save(zifa, file = paste0(pref, '_zifa.rda'))
+    
+    zifaTC = lapply(1:10, function(i){
+      Y = t(simData[[i]]$counts)
       Y = Y[rowSums(Y) != 0, ]
+      mult = sum(Y) / (ncol(Y) * nrow(Y))
+      fact = colSums(Y)
+      Y = mult * (t(Y) / fact)
+      Y = log1p(t(Y))
       wrapRzifa(Y)
     })
-    save(zifaFQ, file = sprintf('./datasets/sim%s_var%s_z%s_zifaFQ.rda', ds, k, i))
-  }
-}
-
-for (k in 2){
-  for (i in c(75)){
-    load(sprintf('./datasets/sim%s_var%s_z%s.rda', ds, k, i))
-    zifaTMM = lapply(c(1:9,9), function(i){
+    save(zifaTC, file = paste0(pref, '_zifaTC.rda'))
+    
+    zifaFQ = lapply(1:10, function(i){
+      print(i)
+      Y = t(simData[[i]]$counts)
+      Y = Y[rowSums(Y) != 0, ]
+      fq <- betweenLaneNormalization(Y, which="full")
+      Y = log1p(fq)
+      wrapRzifa(Y)
+    })
+    save(zifaFQ, file = paste0(pref, '_zifaFQ.rda'))
+    
+    zifaTMM = lapply(1:10, function(i){
       print(i)
       counts = t(simData[[i]]$counts)
+      counts = counts[rowSums(counts) != 0, ]
       y = DGEList(counts)
       y = calcNormFactors(y, method="TMM")
       tmm = t(t(counts) / (y$samples$lib.size * y$samples$norm.factors))
       Y = log1p(tmm)
-      Y = Y[rowSums(Y) != 0, ]
       wrapRzifa(Y)
     })
-    save(zifaTMM, file = sprintf('./datasets/sim%s_var%s_z%s_zifaTMM.rda', ds, k, i))
+    save(zifaTMM, file = paste0(pref, '_zifaTMM.rda'))
   }
 }
 
@@ -285,7 +289,7 @@ eval_sil <- function(labels, dest) {
 }
 
 ## comments: there is no guarantee on the order of the W's
-eval_data <- function(fittedSim, simData, simModel, zifa, zifaFQ, zifaTMM,
+eval_data <- function(fittedSim, simData, simModel, zifa, zifaTC, zifaTMM, zifaFQ,
                       k = 1:4, Vintercept = 1, commondisp = 2, sim = 1) {
   # ini
   dest = corr = sil = list()
@@ -301,7 +305,8 @@ eval_data <- function(fittedSim, simData, simModel, zifa, zifaFQ, zifaTMM,
   
   ## ZINB
   fit = lapply(k, function(i){
-    fittedSim[[i]][[Vintercept]][[commondisp]][[sim]]
+    #fittedSim[[i]][[Vintercept]][[commondisp]][[sim]]
+    fittedSim[[i]][[sim]]
   })
   dest[2:(length(k)+1)] = lapply(k, function(i) as.matrix(dist(fit[[i]]@W)))
   corr[2:(length(k)+1)] = lapply(k, function(i) eval_cor(dtrue, dest[[i+1]]))
@@ -362,6 +367,12 @@ eval_data <- function(fittedSim, simData, simModel, zifa, zifaFQ, zifaTMM,
   corr[[m]] <- eval_cor(dtrue, dest[[m]])
   sil[[m]] <- eval_sil(biotrue, dest[[m]])
   
+  ## ZIFA TC
+  m = m + 1
+  dest[[m]] <- as.matrix(dist(zifaTC[[sim]]))
+  corr[[m]] <- eval_cor(dtrue, dest[[m]])
+  sil[[m]] <- eval_sil(biotrue, dest[[m]])
+  
   ## ZIFA TMM
   m = m + 1
   dest[[m]] <- as.matrix(dist(zifaTMM[[sim]]))
@@ -378,22 +389,23 @@ eval_data <- function(fittedSim, simData, simModel, zifa, zifaFQ, zifaTMM,
   return(retval)
 }
 
-ds = 'Allen'
-for (k in 2){
-  for (j in c(75)){
-    print(k)
-    print(j)
-    pp = sprintf('./datasets/sim%s_var%s_z%s', ds, k, j)
-    load(paste0(pp, '.rda'))
-    load(paste0(pp, '_fitted.rda'))
-    load(paste0(pp, '_zifa.rda'))
-    load(paste0(pp, '_zifaFQ.rda'))
-    load(paste0(pp, '_zifaTMM.rda'))
-    res <- mclapply(1:10, function(i){
-      eval_data(fittedSim, simData, simModel, zifa, zifaFQ, zifaTMM,
-                sim = i, k = 1:2)
-    })
-    save(res, file = paste0(pp, '_dist.rda'))
+setwd('~/Documents/BRAIN/gitrepo/zinb_analysis/sims/datasets/data/data')
+for (nc in c(1000)){
+  for (aa in c(1, .85)){
+    for (offs in c(-3.5, 0)){
+      pp = sprintf('simAllen_%s_a%s_offs%s_seed9128', nc, aa, offs)
+      load(paste0(pp, '.rda'))
+      load(paste0(pp, '_fitted.rda'))
+      load(paste0(pp, '_zifa.rda'))
+      load(paste0(pp, '_zifaTC.rda'))
+      load(paste0(pp, '_zifaTMM.rda'))
+      load(paste0(pp, '_zifaFQ.rda'))
+      res <- mclapply(1:10, function(i){
+        eval_data(fittedSim, simData, simModel, zifa, zifaTC, zifaTMM, zifaFQ,
+                  sim = i, k = 1:4)
+      })
+      save(res, file = paste0(pp, '_dist.rda'))
+    }
   }
 }
 

@@ -1,0 +1,245 @@
+---
+title: "Explore Zeisel"
+author: "Fanny, Davide, Sandrine"
+date: "11/10/2016"
+output: 
+  html_document: 
+    fig_height: 10
+    fig_width: 10
+    toc: yes
+    code_folding: hide
+    toc_float: yes
+---
+
+```{r options, echo=FALSE, results="hide",mesasge=FALSE, error=FALSE, include=FALSE, autodep=TRUE}
+knitr::opts_chunk$set(fig.align="center", cache=TRUE, error=FALSE, message=FALSE, warning=TRUE, fig.width=6, fig.height=6)
+library(SummarizedExperiment)
+library(scRNAseq)
+library(zinb)
+library(scran)
+library(EDASeq)
+library(magrittr)
+library(matrixStats)
+library(reshape)
+library(ggplot2)
+library(edgeR)
+library(brainData)
+
+library(RColorBrewer)
+cols <- brewer.pal(8, "Set1")
+cols2 <- c(brewer.pal(8, "Set2"), brewer.pal(8, "Set3"), brewer.pal(8, "Set1"))
+
+set.seed(87432)
+```
+
+We want to look at real datasets to simulate realistic datasets.
+
+```{r datain}
+data <- read.table("expression_mRNA_17-Aug-2014.txt", sep='\t', stringsAsFactors = FALSE, comment.char = '%')
+
+level1 <- as.factor(as.matrix(data)[9,-(1:2)])
+tissue <- as.factor(as.matrix(data)[1,-(1:2)])
+table(tissue)
+group <- as.factor(as.matrix(data)[2,-(1:2)])
+table(tissue, group)
+nmolecule <- as.numeric(as.matrix(data)[3,-(1:2)])
+sex <- as.factor(as.matrix(data)[5,-(1:2)])
+table(tissue, sex)
+level2 <- as.factor(as.matrix(data)[10,-(1:2)])
+table(level1)
+table(level1, level2)
+
+counts <- as.matrix(data[12:NCOL(data),-(1:2)]) ## why NCOL here, not not NROW?
+counts <- matrix(as.numeric(counts), ncol=ncol(counts), nrow=nrow(counts))
+rownames(counts) <- data[12:NCOL(data),1]
+colnames(counts) <- data[8, -(1:2)]
+
+select = level1 %in% c('pyramidal CA1', 'interneurons',
+                       'astrocytes_ependymal', 'oligodendrocytes')
+counts = counts[, select]
+group = droplevels(group[select])
+sex = sex[select]
+tissue = tissue[select]
+level1 = droplevels(level1[select])
+level2 = level2[select]
+table(tissue)
+table(tissue, group)
+table(tissue, sex)
+table(level1)
+table(level1, level2)
+
+vars <- rowVars(log1p(counts))
+names(vars) <- rownames(counts)
+vars <- sort(vars, decreasing = TRUE)
+core <- counts[names(vars)[1:1000],]
+detection_rate <- colSums(core>0)
+coverage <- colSums(core)
+
+col1 <- brewer.pal(9, "Set1")
+col2 <- brewer.pal(8, "Set2")
+colTissue <- col1[tissue]
+colMerged <- col2[level1]
+```
+
+```{r dim}
+dim(core)
+```
+
+To speed up the computations, we will focus on the top 1,000 most variable genes.
+```{r filtering}
+par(mfrow = c(1,2))
+pal =colorRampPalette(c("black","black", "red","yellow"), space="rgb")
+mean = apply(log1p(core), 1, function(x) mean(x[x!=0]))
+plot(mean, rowMeans(core == 0), xlim = c(0,4), ylim = c(0,1),
+              xlab = "Mean Expression", ylab = "Dropout Rate", 
+              main = '1,000 most variable genes')
+smoothScatter(mean, rowMeans(core == 0), xlim = c(0,4),
+              nrpoints=Inf, pch = "", cex = .7, ylim = c(0,1),
+              xlab = "Mean Expression", ylab = "Dropout Rate", 
+              colramp = pal, main = '1,000 most variable genes')
+```
+
+Pink and glia cells have been removed. Fit data with K = 3, V intercepts in both Mu and Pi, commondispersion = FALSE, with X accounting for batch, qc.
+```{r zinb}
+print(system.time(zinb <- zinbFit(core, ncores = 3, K = 3,
+                                  commondispersion = FALSE)))
+```
+
+### True W
+If we simulate W from real data, it will look like that.
+```{r zinb_plot}
+pairs(zinb@W, col=colMerged, pch=19, main="W\ncolor = level1")
+pairs(zinb@W, col=colTissue, pch=19, main="W\ncolor = tissue")
+```
+
+### Gamma
+```{r gammaCor}
+gamma_mu = zinb@gamma_mu[1,]
+gamma_pi = zinb@gamma_pi[1,]
+
+df <- data.frame(gamma_mu = gamma_mu,
+                 gamma_pi = gamma_pi,
+                 detection_rate = detection_rate,
+                 coverage = coverage)
+pairs(df, pch=19, col=colMerged)
+print(cor(df, method="spearman"))
+```
+
+```{r gamma}
+gamma = data.frame(gamma_mu = gamma_mu, gamma_pi = gamma_pi,
+                   tissue = colTissue, level = colMerged)
+gamma = melt(gamma)
+
+ggplot(gamma, aes(x = value)) + 
+  geom_histogram(aes(y = ..density..), bins = 20, col = 'gray') +
+  geom_density(col= 'blue', size = .5) + 
+  facet_grid(~ variable) + xlab('gamma')
+
+ggplot(gamma, aes(x = variable, y = value)) + xlab('') + theme_bw() +
+  geom_boxplot() + coord_flip() + facet_grid(~ variable, scales = 'free') +
+  theme_bw() + ylab('gamma') + scale_x_discrete(breaks = c('', ''), drop=FALSE)
+  
+ggplot(gamma, aes(value, fill = level)) + geom_density(alpha = 0.2) +
+  facet_grid(~ variable) + xlab('gamma') + theme_bw()
+ggplot(gamma, aes(value, fill = tissue)) + geom_density(alpha = 0.2) +
+  facet_grid(~ variable) + xlab('gamma') + theme_bw()
+```
+
+### Beta
+```{r beta}
+beta_mu = zinb@beta_mu[1,]
+beta_pi = zinb@beta_pi[1,]
+
+df <- data.frame(beta_mu_intercept = beta_mu,
+                 beta_pi_intercept = beta_pi)
+pairs(df, pch=19)
+print(cor(df, method="spearman"))
+
+beta = data.frame(beta_mu_intercept = beta_mu, beta_pi_intercept = beta_pi)
+beta = melt(beta)
+ggplot(beta, aes(x = value)) + 
+  geom_histogram(aes(y = ..density..), bins = 100, col = 'gray') +
+  geom_density(col= 'blue', size = .5) + 
+  facet_grid(~ variable, scales = 'free') + xlab('beta')
+
+ggplot(beta, aes(x = variable, y = value)) + theme_bw() + xlab('') +
+  geom_boxplot() + facet_grid(~ variable, scales = 'free') + coord_flip() +
+  theme_bw() + ylab('beta') + scale_x_discrete(breaks = c('', ''), drop=FALSE)
+
+# remove outliers
+max = max(quantile(beta_pi, 0.1), quantile(beta_mu, 0.1))
+min = min(quantile(beta_pi, 0.1), quantile(beta_mu, 0.1))
+ggplot(beta, aes(x = variable, y = value)) + theme_bw() + xlab('') +
+  geom_boxplot(outlier.shape = NA) +
+  facet_grid(~ variable, scales = 'free') + coord_flip() +
+  theme_bw() + ylab('beta removing outliers') +
+  scale_x_discrete(breaks = c('', ''), drop=FALSE) +
+  scale_y_continuous(limits = c(min, max))
+```
+
+### Alpha
+```{r alpha}
+pairs(t(zinb@alpha_mu), main = 'alpha_mu')
+pairs(t(zinb@alpha_pi), main = 'alpha_pi')
+
+df <- data.frame(alpha_mu_1 = zinb@alpha_mu[1, ],
+                 alpha_mu_2 = zinb@alpha_mu[2, ],
+                 alpha_mu_3 = zinb@alpha_mu[3, ],
+                 alpha_pi_1 = zinb@alpha_pi[1, ],
+                 alpha_pi_2 = zinb@alpha_pi[2, ],
+                 alpha_pi_3 = zinb@alpha_pi[3, ])
+pairs(df, pch=19)
+print(cor(df, method="spearman"))
+```
+
+### Dispersion
+Something strange happened for the dispersion.
+```{r disp}
+par(mfrow=c(1,1))
+set = newSeqExpressionSet(core)
+fq = betweenLaneNormalization(set, which = "full", offset = T)
+disp = estimateDisp(counts(fq), offset = -offst(fq))
+
+plot(disp$tagwise.dispersion, 1/exp(zinb@zeta), ylab = 'zinb dispersion',
+     xlab = 'edgeR tagwise dispersion', main = 'Dispersion')
+print(cor(disp$tagwise.dispersion, 1/exp(zinb@zeta), method="spearman"))
+
+par(mfrow = c(1, 2))
+plot(density(1/exp(zinb@zeta)), main = 'zinb dispersion', xlim = c(0,10))
+plot(density(disp$tagwise.dispersion), main = 'edgeR dispersion', xlim = c(0,10))
+
+par(mfrow = c(1, 2))
+mean = apply(log1p(core), 1, function(x) mean(x[x!=0]))
+plot(mean, 1/exp(zinb@zeta), main = 'zinb', xlab = 'mean expression', ylab = 'dispersion', ylim = c(0, 9))
+plot(mean, disp$tagwise.dispersion, main = 'edgeR',xlab = 'mean expression', ylab = 'dispersion', ylim = c(0, 9))
+```
+
+### Estimated mu and pi
+```{r overall}
+par(mfrow=c(1, 2))
+detection_rate <- colMeans(core>0)
+coverage <- colSums(core)
+plot(rowMeans(getPi(zinb)), detection_rate, xlab="Average estimated Pi", ylab="Detection Rate for each cell", pch=19, col=colMerged, ylim = c(0, 1))
+plot(rowMeans(log1p(getMu(zinb))), log1p(coverage), xlab="Average estimated log Mu", ylab="log Coverage", pch=19, col=colMerged)
+
+par(mfrow=c(1, 2))
+smoothScatter(mean, rowMeans(core == 0),xlim = c(0,4),
+              nrpoints=Inf, pch = "", cex = .7, ylim = c(0,1),
+              xlab = "Mean Expression", ylab = "Dropout Rate", 
+              colramp = pal, main = 'Observed')
+smoothScatter(colMeans(log1p(getMu(zinb))), colMeans(getPi(zinb)), nbin = 256,
+              nrpoints=Inf, pch="", cex=.7, xlim = c(0,4),
+              xlab = "Estimated Mean Expression", main = 'Fitted',
+              ylab = "Estimated Dropout Rate",ylim = c(0,1),
+              colramp = pal)
+
+mdplot(matrix(c(colMeans(log1p(getMu(zinb))), mean), ncol = 2),
+       main = 'MD plot - mu')
+abline(h=0, col = 'red')
+mdplot(matrix(c(colMeans(getPi(zinb)), rowMeans(core == 0)), ncol = 2),
+       main = 'MD plot - pi')
+abline(h=0, col = 'red')
+
+```
+
+

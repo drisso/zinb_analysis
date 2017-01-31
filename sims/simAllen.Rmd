@@ -1,7 +1,7 @@
 ---
 title: "Simulations from Allen"
 author: "Fanny, Davide, Sandrine"
-date: "01/13/2017"
+date: "01/26/2017"
 output: 
   html_document: 
     fig_height: 10
@@ -181,7 +181,7 @@ plot(mclustW$data, main = 'multivar gauss fit\nmclust K = 3', xlab = 'W1', ylab 
      xlim = xlim, ylim = ylim, col = mclustW$classification)
 
 # multivar gaussian
-clust = sample(mclustW$classification, ncells)
+clust = sample(mclustW$classification, ncells, replace = TRUE)
 simW1 = lapply(clust, function(i){
   mvrnorm(n = 1, mu = mclustW$parameters$mean[, i], 
           Sigma = mclustW$parameters$variance$sigma[,, i])
@@ -254,7 +254,7 @@ par(mfrow = c(1,3), mar = mar)
 # zinbW
 xlim = c(min(zinb@W[,1]) - 1, max(zinb@W[,1]) + 1) 
 ylim = c(min(zinb@W[,2]) - 1, max(zinb@W[,2]) + 1)
-plot(simW1, col = bio, main = 'multivar gauss sim\na=1',
+plot(simW1, col = bio, main = 'multivar gauss sim\nb2=1',
      xlab = 'W1', ylab = 'W2', xlim = xlim, ylim = ylim)
 
 a = c(0, 0)
@@ -265,7 +265,7 @@ simW = lapply(clust, function(i){
           Sigma = mclustW$parameters$variance$sigma[,, i] * b2)
 })
 simW = do.call(rbind, simW)
-plot(simW, col = bio, main = 'multivar gauss sim\na=0',
+plot(simW, col = bio, main = 'multivar gauss sim\nb2 big',
      xlab = 'W1', ylab = 'W2', xlim = xlim, ylim = ylim)
 
 a = c(1.07, 1.137)
@@ -276,7 +276,7 @@ simW = lapply(clust, function(i){
           Sigma = mclustW$parameters$variance$sigma[,, i] * b2)
 })
 simW = do.call(rbind, simW)
-plot(simW, col = bio, main = 'multivar gauss sim\nb small',
+plot(simW, col = bio, main = 'multivar gauss sim\nb2 small',
      xlab = 'W1', ylab = 'W2', xlim = xlim, ylim = ylim)
 ```
 
@@ -284,7 +284,7 @@ plot(simW, col = bio, main = 'multivar gauss sim\nb small',
 par(mfrow = c(1,2))
 # zinbW
 plot(simW1, col = bio,
-     main = 'multivar gauss sim\ntrue W, 100 cells\na=1, b2=1',
+     main = 'multivar gauss sim\ntrue W, 100 cells\nb2=1',
      xlab = 'W1', ylab = 'W2', xlim = xlim, ylim = ylim)
 
 a = c(.85, .7)
@@ -315,7 +315,7 @@ gamma = data.frame(gammaMu = zinb@gamma_mu[1, ],
                    gammaPi = zinb@gamma_pi[1, ])
 mar <- par("mar")
 mar[c(2, 4)] <- 0
-par(mfrow = c(1,3), mar = mar)
+par(mfrow = c(1,2), mar = mar)
 # zinbGamma
 xlim = c(min(gamma[,1]) - .5, max(gamma[,1]) + .5) 
 ylim = c(min(gamma[,2]) - .5, max(gamma[,2]) + .5)
@@ -325,9 +325,6 @@ plot(gamma[,1], gamma[,2], col = cols[bioIni],
 
 # mclustW
 mclustGamma = Mclust(gamma, G = 1)
-plot(mclustGamma$data, main = 'bivar gauss fit\nmclust K = 1',
-     xlab = 'gamma_mu', ylab = 'gamma_pi', 
-     xlim = xlim, ylim = ylim)
 
 # multivar gaussian
 simGamma = mvrnorm(n = ncells, mu = mclustGamma$parameters$mean[,1], 
@@ -421,6 +418,7 @@ sim = lapply(1:2, function(k){
                        k, names(gammaOffset[i]))
     save(bio, simModel, simData, file = fileName)  
     sapply(simData, function(x) x$zeroFraction)
+    #sapply(simData, function(x) sum(colSums(x$counts) < 5))
   })
 })
 zeroFrac = data.frame(do.call(cbind, do.call(cbind, sim)), stringsAsFactors = F)

@@ -1,0 +1,223 @@
+---
+title: "Explore dropseq"
+author: "Fanny, Davide, Sandrine"
+date: "11/10/2016"
+output: 
+  html_document: 
+    fig_height: 10
+    fig_width: 10
+    toc: yes
+    code_folding: hide
+    toc_float: yes
+---
+
+```{r options, echo=FALSE, results="hide",mesasge=FALSE, error=FALSE, include=FALSE, autodep=TRUE}
+knitr::opts_chunk$set(fig.align="center", cache=TRUE, error=FALSE,
+                      message=FALSE, warning=TRUE, fig.width=6, fig.height=6)
+library(SummarizedExperiment)
+library(scRNAseq)
+library(zinb)
+library(scran)
+library(EDASeq)
+library(ggplot2)
+library(magrittr)
+library(matrixStats)
+library(reshape)
+library(ggplot2)
+library(edgeR)
+library(RColorBrewer)
+
+cols <- brewer.pal(8, "Set1")
+cols2 <- c(brewer.pal(8, "Set2"), brewer.pal(8, "Set3"), brewer.pal(8, "Set1"))
+set.seed(9938)
+```
+
+We want to look at real datasets to simulate realistic datasets.
+
+```{r datain}
+filterData = F
+if (filterData){
+  cluster = read.csv('retina_clusteridentities.txt', sep = '\t',
+                     stringsAsFactors = F, header = F)
+  rownames(cluster) = cluster$V1
+  dropseq = read.csv('GSE63472_P14Retina_merged_digital_expression.txt',
+                     sep = '\t', stringsAsFactors = F)
+  prefilter = dropseq[, colnames(dropseq) %in% cluster$V1]
+  selectCluster = cluster[colnames(prefilter), 'V2'] %in% c(1, 2, 7, 32, 37)
+  prefilter = prefilter[, selectCluster]
+  filter <- apply(prefilter > 10, 1, sum) >= 10
+  postfilter <- prefilter[filter,]
+  write.csv(postfilter, 'GSE63472_P14Retina_merged_digital_expression_filt.csv')
+}
+
+core = read.csv('GSE63472_P14Retina_merged_digital_expression_filt.csv',
+                stringsAsFactors = F)
+core = as.matrix(core)
+cluster = read.csv('retina_clusteridentities.txt', sep = '\t',
+                   stringsAsFactors = F, header = F)
+rownames(cluster) = cluster$V1
+bio = factor(cluster[colnames(core), 'V2'])
+detection_rate <- colSums(core>0)
+coverage <- colSums(core)
+```
+
+We will color-code the cells by inferred cluster (see paper 'Highly Parallel Genome-wide Expression Profiling of Individual Cells Using Nanoliter Droplets'). Select cells from clusters 1,2,7,32, and 37 (corresponding to different cell classes in the retina), filter out the genes that do not have at least 10 counts in at least 10 cells. Dimensions of the dataset is
+```{r}
+dim(core)
+```
+
+Note that after filtering, the number of genes is small than the number of cells (like in Zeisel dataset).
+```{r filtering}
+par(mfrow = c(1,2))
+pal =colorRampPalette(c("black","black", "red","yellow"), space="rgb")
+mean = apply(log1p(core), 1, function(x) mean(x[x!=0]))
+plot(mean, rowMeans(core == 0), xlim = c(0,4), ylim = c(0,1),
+              xlab = "Mean Expression", ylab = "Dropout Rate", 
+              main = '1,000 most variable genes')
+smoothScatter(mean, rowMeans(core == 0), xlim = c(0,4),
+              nrpoints=Inf, pch = "", cex = .7, ylim = c(0,1),
+              xlab = "Mean Expression", ylab = "Dropout Rate", 
+              colramp = pal, main = '1,000 most variable genes')
+```
+
+Fit data with K = 4, V and X intercepts in both Mu and Pi, and commondispersion = FALSE.
+```{r zinb}
+print(system.time(zinb <- zinbFit(core, ncores = 3, K = 4,
+                                  commondispersion = FALSE)))
+```
+
+### True W
+If we simulate W from real data, it will look like that.
+```{r zinb_plot}
+pairs(zinb@W, col = cols[bio], pch = 19, main = "ZINB")
+```
+
+### Gamma
+```{r gammaCor}
+gamma_mu = zinb@gamma_mu[1,]
+gamma_pi = zinb@gamma_pi[1,]
+
+df <- data.frame(gamma_mu = gamma_mu,
+                 gamma_pi = gamma_pi,
+                 detection_rate = detection_rate,
+                 coverage = coverage)
+pairs(df, pch=19, col=cols[bio])
+print(cor(df, method="spearman"))
+```
+
+```{r gamma}
+gamma = data.frame(gamma_mu = gamma_mu, gamma_pi = gamma_pi, celltype = bio)
+gamma = melt(gamma)
+
+ggplot(gamma, aes(x = value)) + 
+  geom_histogram(aes(y = ..density..), bins = 50, col = 'gray') +
+  geom_density(col= 'blue', size = .5) + 
+  facet_grid(~ variable) + xlab('gamma')
+
+ggplot(gamma, aes(x = variable, y = value)) + xlab('') + theme_bw() +
+  geom_boxplot() + coord_flip() + facet_grid(~ variable, scales = 'free') +
+  theme_bw() + ylab('gamma') + scale_x_discrete(breaks = c('', ''), drop=FALSE)
+  
+ggplot(gamma, aes(value, fill = celltype)) + geom_density(alpha = 0.2) +
+  facet_grid(~ variable) + xlab('gamma') + theme_bw()
+```
+
+### Beta
+```{r beta}
+beta_mu = zinb@beta_mu[1,]
+beta_pi = zinb@beta_pi[1,]
+
+df <- data.frame(beta_mu = beta_mu,
+                 beta_pi = beta_pi)
+pairs(df, pch=19)
+print(cor(df, method="spearman"))
+
+beta = data.frame(beta_mu = beta_mu, beta_pi = beta_pi)
+beta = melt(beta)
+ggplot(beta, aes(x = value)) + 
+  geom_histogram(aes(y = ..density..), bins = 100, col = 'gray') +
+  geom_density(col= 'blue', size = .5) + 
+  facet_grid(~ variable, scales = 'free') + xlab('beta')
+
+ggplot(beta, aes(x = variable, y = value)) + theme_bw() + xlab('') +
+  geom_boxplot() + facet_grid(~ variable, scales = 'free') + coord_flip() +
+  theme_bw() + ylab('beta') + scale_x_discrete(breaks = c('', ''), drop=FALSE)
+
+# remove outliers
+max = max(quantile(beta_pi, 0.1), quantile(beta_mu, 0.1))
+min = min(quantile(beta_pi, 0.1), quantile(beta_mu, 0.1))
+ggplot(beta, aes(x = variable, y = value)) + theme_bw() + xlab('') +
+  geom_boxplot(outlier.shape = NA) +
+  facet_grid(~ variable, scales = 'free') + coord_flip() +
+  theme_bw() + ylab('beta removing outliers') +
+  scale_x_discrete(breaks = c('', ''), drop=FALSE) +
+  scale_y_continuous(limits = c(min, max))
+```
+
+### Alpha
+```{r alpha}
+pairs(t(zinb@alpha_mu), main = 'alpha_mu')
+pairs(t(zinb@alpha_pi), main = 'alpha_pi')
+
+df <- data.frame(alpha_mu_1 = zinb@alpha_mu[1, ],
+                 alpha_mu_2 = zinb@alpha_mu[2, ],
+                 alpha_mu_3 = zinb@alpha_mu[3, ],
+                 alpha_mu_4 = zinb@alpha_mu[4, ],
+                 alpha_pi_1 = zinb@alpha_pi[1, ],
+                 alpha_pi_2 = zinb@alpha_pi[2, ],
+                 alpha_pi_3 = zinb@alpha_pi[3, ],
+                 alpha_pi_4 = zinb@alpha_pi[4, ])
+pairs(df, pch=19)
+print(cor(df, method="spearman"))
+```
+
+### Dispersion
+```{r disp}
+par(mfrow=c(1,1))
+set = newSeqExpressionSet(core)
+fq = betweenLaneNormalization(set, which = "full", offset = T)
+disp = estimateDisp(counts(fq), offset = -offst(fq))
+
+plot(disp$tagwise.dispersion, 1/exp(zinb@zeta), ylab = 'zinb dispersion',
+     xlab = 'edgeR tagwise dispersion', main = 'Dispersion')
+print(cor(disp$tagwise.dispersion, 1/exp(zinb@zeta), method="spearman"))
+
+par(mfrow = c(1, 2))
+plot(density(1/exp(zinb@zeta)), main = 'zinb dispersion')
+plot(density(disp$tagwise.dispersion), main = 'edgeR dispersion')
+
+par(mfrow = c(1, 2))
+mean = apply(log1p(core), 1, function(x) mean(x[x!=0]))
+plot(mean, 1/exp(zinb@zeta), main = 'zinb', xlab = 'mean expression', ylab = 'dispersion', ylim = c(0, 14))
+plot(mean, disp$tagwise.dispersion, main = 'edgeR',xlab = 'mean expression', ylab = 'dispersion', ylim = c(0, 14))
+```
+
+### Estimated mu and pi
+```{r overall}
+par(mfrow=c(1, 2))
+detection_rate <- colMeans(core>0)
+coverage <- colSums(core)
+plot(rowMeans(getPi(zinb)), detection_rate, xlab="Average estimated Pi", ylab="Detection Rate for each cell", pch=19, col=cols[bio], ylim = c(0, 1))
+plot(rowMeans(log1p(getMu(zinb))), log1p(coverage), xlab="Average estimated log Mu", ylab="log Coverage", pch=19, col=cols[bio])
+
+par(mfrow=c(1, 2))
+smoothScatter(mean, rowMeans(core == 0),xlim = c(0,4),
+              nrpoints=Inf, pch = "", cex = .7, ylim = c(0,1),
+              xlab = "Mean Expression", ylab = "Dropout Rate", 
+              colramp = pal, main = 'Observed')
+smoothScatter(colMeans(log1p(getMu(zinb))), colMeans(getPi(zinb)), nbin = 256,
+              nrpoints=Inf, pch="", cex=.7, xlim = c(0,4),
+              xlab = "Estimated Mean Expression", main = 'Fitted',
+              ylab = "Estimated Dropout Rate",ylim = c(0,1),
+              colramp = pal)
+
+mdplot(matrix(c(colMeans(log1p(getMu(zinb))), mean), ncol = 2),
+       main = 'MD plot - mu')
+abline(h=0, col = 'red')
+mdplot(matrix(c(colMeans(getPi(zinb)), rowMeans(core == 0)), ncol = 2),
+       main = 'MD plot - pi')
+abline(h=0, col = 'red')
+
+```
+
+

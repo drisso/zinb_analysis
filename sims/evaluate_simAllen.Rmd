@@ -19,6 +19,7 @@ library(ggplot2)
 library(reshape)
 library(EDASeq)
 library(edgeR)
+library(dplyr)
 cols <- brewer.pal(8, "Set1")
 cols2 <- c(brewer.pal(8, "Set2"), brewer.pal(8, "Set3"), brewer.pal(8, "Set1"))
 ```
@@ -43,48 +44,80 @@ See bias, variance, and MSE in separate Rmd files (simAllen_estimates_25.Rmd, si
 
 # Impact on dimensionality reduction
 ```{r corr25}
-load("./datasets/simAllen_var2_z25_dist.rda")
-corr25 <- lapply(1:12, function(i) rowMeans(sapply(res, function(x) x[[i]])))
+load("./datasets/data/data/simAllen_100_a0.85_offs-3.5_seed9128_dist.rda")
+corr25 <- lapply(1:13, function(i) rowMeans(sapply(res, function(x) x[[i]])))
 corr25 = do.call(cbind, corr25)
 corr25 = data.frame(corr25, stringsAsFactors = F)
 colnames(corr25) <- c("true W", paste0("zinb k=", 1:4), 
                       "PCA (k=2)", "PCA TC (k=2)", "PCA TMM (k=2)",
-                      "PCA FQ (k=2)",
-                      'ZIFA (k=2)', 'ZIFA TMM (k=2)', 'ZIFA FQ (k=2)')
+                      "PCA FQ (k=2)", 'ZIFA (k=2)', 'ZIFA TC (k=2)', 
+                      'ZIFA TMM (k=2)', 'ZIFA FQ (k=2)')
 corr25$pzero = .25
-boxplot(corr25[,1:12], main="Correlation between true and estimated sample distances in W\npzero = 0.25", border=c(3, 1, 2, rep(1,10)), xlab="", ylab="Correlation", las=2)
+boxplot(corr25[,1:13], main="Correlation between true and estimated sample distances in W\npzero = 0.25", border=c(3, 1, 2, rep(1,10)), xlab="",
+        ylab="Correlation", las=2)
 abline(h=1,lty = 2)
 ```
 
 ```{r corr45}
-load("./datasets/simAllen_var2_z45_dist.rda")
-corr45 <- lapply(1:11, function(i) rowMeans(sapply(res, function(x) x[[i]])))
+load("./datasets/data/data/simAllen_100_a0.85_offs0_seed9128_dist.rda")
+corr45 <- lapply(1:13, function(i) rowMeans(sapply(res, function(x) x[[i]])))
 corr45 = do.call(cbind, corr45)
 corr45 = data.frame(corr45, stringsAsFactors = F)
-colnames(corr45) <- c("true W", paste0("zinb k=", 1:3), 
+colnames(corr45) <- c("true W", paste0("zinb k=", 1:4), 
                       "PCA (k=2)", "PCA TC (k=2)", "PCA TMM (k=2)",
-                      "PCA FQ (k=2)",
-                      'ZIFA (k=2)', 'ZIFA TMM (k=2)', 'ZIFA FQ (k=2)')
+                      "PCA FQ (k=2)", 'ZIFA (k=2)', 'ZIFA TC (k=2)',
+                      'ZIFA TMM (k=2)', 'ZIFA FQ (k=2)')
 corr45$pzero = .45
-boxplot(corr45[,1:11], main="Correlation between true and estimated sample distances in W\npzero = 0.45", border=c(3, 1, 2, rep(1,10)), xlab="method", ylab="Correlation", las=2)
+boxplot(corr45[,1:13], main="Correlation between true and estimated sample distances in W\npzero = 0.45", border=c(3, 1, 2, rep(1,10)), xlab="method", ylab="Correlation", las=2)
 abline(h=1,lty = 2)
 ```
 
 
 ```{r corr75}
 load("./datasets/simAllen_var2_z75_dist.rda")
-corr75 <- lapply(1:10, function(i) rowMeans(sapply(res, function(x) x[[i]])))
+corr75 <- lapply(1:12, function(i) rowMeans(sapply(res, function(x) x[[i]])))
 corr75 = do.call(cbind, corr75)
 corr75 = data.frame(corr75, stringsAsFactors = F)
-colnames(corr75) <- c("true W", paste0("zinb k=", 1:2), 
+colnames(corr75) <- c("true W", paste0("zinb k=", 1:4), 
                       "PCA (k=2)", "PCA TC (k=2)", "PCA TMM (k=2)",
                       "PCA FQ (k=2)",
                       'ZIFA (k=2)', 'ZIFA TMM (k=2)', 'ZIFA FQ (k=2)')
 corr75$pzero = .75
-boxplot(corr75[,1:10], main="Correlation between true and estimated sample distances in W\npzero = 0.75", border=c(3, 1, 2, rep(1,10)), xlab="method", ylab="Correlation", las=2)
+boxplot(corr75[,1:12], main="Correlation between true and estimated sample distances in W\npzero = 0.75", border=c(3, 1, 2, rep(1,10)), xlab="method", ylab="Correlation", las=2)
 abline(h = 1, lty = 2)
 ```
 
+```{r summary}
+corr = lapply(1:2, function(x){
+  lapply(c(25,45,75), function(y){
+    nn = sprintf("./datasets/simAllen_var%s_z%s_dist.rda", x, y)
+    load(nn)
+    cc <- lapply(1:12, function(i) rowMeans(sapply(res, function(x) x[[i]])))
+    do.call(cbind, cc)
+  })
+})
+corr = do.call(rbind, do.call(rbind, corr))
+corr = data.frame(corr, stringsAsFactors = F)
+colnames(corr) <- c("true W", paste0("zinb k=", 1:4), 
+                      "PCA (k=2)", "PCA TC (k=2)", "PCA TMM (k=2)",
+                      "PCA FQ (k=2)",
+                      'ZIFA (k=2)', 'ZIFA TMM (k=2)', 'ZIFA FQ (k=2)')
+corr$pzero = rep(rep(c(.25,.45,.75), each = 100), 2)
+corr$var = rep(paste('Clustering', 1:2), each = 300)
+corrMolten = melt(corr, id.vars = c('pzero', 'var'))
+corrSum = corrMolten %>% group_by(pzero, var, variable) %>%
+  summarize(mean = mean(value), sd = sd(value)) %>% ungroup() %>%
+  as.data.frame()
+corrSum$pzero = factor(corrSum$pzero)
+
+c1 = corrSum[corrSum$variable != 'true W',]
+c1$method = sapply(strsplit(as.vector(c1$variable), ' '), '[[', 1)
+ggplot(c1, aes(x = pzero, y = mean, col = variable, group = variable)) +
+  geom_point() + geom_line() + labs(col='') + 
+  theme_bw() + xlab('Zero Fraction') + facet_grid( ~ var) +
+  ylab('Correlation between true and estimated sample distances in W')
+#geom_errorbar(aes(ymin = mean - sd, ymax = mean + sd), width = .1)
+```
 
 ## Silhouette width
 ```{r sil25}
@@ -111,20 +144,20 @@ abline(h = 0, lty = 2)
 
 ```{r sil45}
 load("./datasets/simAllen_var2_z45_dist.rda")
-sil45 <- lapply(12:length(res[[1]]), function(i){
+sil45 <- lapply(13:length(res[[1]]), function(i){
   rowMeans(sapply(res, function(x) x[[i]]))
 })
 sil45 = do.call(cbind, sil45)
 sil45 = data.frame(sil45,stringsAsFactors = F)
-colnames(sil45) <- c("true W", paste0("zinb k=", 1:3), 
+colnames(sil45) <- c("true W", paste0("zinb k=", 1:4), 
                       "PCA (k=2)", "PCA TC (k=2)", "PCA TMM (k=2)",
                       "PCA FQ (k=2)",
                       'ZIFA (k=2)', 'ZIFA TMM (k=2)', 'ZIFA FQ (k=2)')
 sil45$pzero = .45
-boxplot(sil45[,1:11], main="Silhouette width of true labels\npzero = 0.45",
+boxplot(sil45[,1:12], main="Silhouette width of true labels\npzero = 0.45",
         border=c(3, 1, 2, rep(1,10)), xlab="", 
         ylab="Silhouette width", las=2)
-boxplot(sil45[,1] - sil45[,1:11],
+boxplot(sil45[,1] - sil45[,1:12],
         main="Difference of Silhouette width of true labels\npzero = 0.45",
         border=c(3, 1, 2, rep(1,10)), xlab="",
         ylab="Silhouette width - True Silhouette width", las=2)
@@ -133,20 +166,20 @@ abline(h = 0, lty = 2)
 
 ```{r sil75}
 load("./datasets/simAllen_var2_z75_dist.rda")
-sil75 <- lapply(11:length(res[[1]]), function(i){
+sil75 <- lapply(13:length(res[[1]]), function(i){
   rowMeans(sapply(res, function(x) x[[i]]))
 })
 sil75 = do.call(cbind, sil75)
 sil75 = data.frame(sil75,stringsAsFactors = F)
-colnames(sil75) <- c("true W", paste0("zinb k=", 1:2), 
+colnames(sil75) <- c("true W", paste0("zinb k=", 1:4), 
                       "PCA (k=2)", "PCA TC (k=2)", "PCA TMM (k=2)",
                       "PCA FQ (k=2)",
                       'ZIFA (k=2)', 'ZIFA TMM (k=2)', 'ZIFA FQ (k=2)')
 sil75$pzero = .75
-boxplot(sil75[,1:10], main="Silhouette width of true labels\npzero = 0.75",
+boxplot(sil75[,1:12], main="Silhouette width of true labels\npzero = 0.75",
         border=c(3, 1, 2, rep(1,10)), xlab="", 
         ylab="Silhouette width", las=2)
-boxplot(sil75[,1] - sil75[,1:10],
+boxplot(sil75[,1] - sil75[,1:12],
         main="Difference of Silhouette width of true labels\npzero = 0.75",
         border=c(3, 1, 2, rep(1,10)), xlab="",
         ylab="Silhouette width - True Silhouette width", las=2)
