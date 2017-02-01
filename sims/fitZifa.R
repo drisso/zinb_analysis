@@ -17,16 +17,16 @@ wrapRzifa <- function(Y, block = T){
   if (!file.exists(paste0(tmp, '_zifa.csv'))){
     print('run ZIFA')
     bb = ifelse(block, '-b ', '')
-    cmd = sprintf('python ../../../../real_data/run_zifa.py %s%s.csv %s_zifa.csv', bb, tmp, tmp)
+    cmd = sprintf('python real_data/run_zifa.py %s%s.csv %s_zifa.csv', bb, tmp, tmp)
     system(cmd)
   }
   read.csv(sprintf("%s_zifa.csv", tmp), header=FALSE)
 }
 
 for (nc in c(1000)){
-  for (aa in c(1, .85)){
-    mclapply(c(-3.5, 0), function(offs){
-      pref = sprintf('simAllen_%s_a%s_offs%s_seed9128', nc, aa, offs)
+  for (offs in c(3.5)){
+    mclapply(c(1, .85), function(aa){
+      pref = sprintf('sims/datasets/simAllen_%s_a%s_offs%s_seed9128', nc, aa, offs)
       print(nc)
       print(aa)
       print(offs)
@@ -34,6 +34,7 @@ for (nc in c(1000)){
       
       print('zifa raw')
       zifa = lapply(1:10, function(i){
+        print(i)
         Y = t(simData[[i]]$counts)
         Y = Y[rowSums(Y) != 0, ]
         Y = log1p(Y)
@@ -43,6 +44,7 @@ for (nc in c(1000)){
       
       print('zifa tc')
       zifaTC = lapply(1:10, function(i){
+        print(i)
         Y = t(simData[[i]]$counts)
         Y = Y[rowSums(Y) != 0, ]
         mult = sum(Y) / (ncol(Y) * nrow(Y))

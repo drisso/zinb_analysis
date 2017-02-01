@@ -140,8 +140,6 @@ library(digest)
 library(RColorBrewer)
 library(MASS)
 
-setwd('~/Documents/BRAIN/gitrepo/zinb_analysis/sims')
-
 ##########
 ## ALLEN
 ##########
@@ -155,44 +153,13 @@ bioIni =  as.factor(colData(postfilter)$driver_1_s)
 core = assay(postfilter)
 colIni = cols[bioIni]
 
-testEpsilon = F
-if (testEpsilon){
-  # 1000
-  zinbSimWrapper(core = core, colIni = colIni, ncells = 1000, nclust = 3, 
-                 a = .85, gammapiOffset = 3.5, B = 1, seed = 9128, 
-                 fileName = 'test1000.rda')
-  load('test1000.rda')
-  counts = t(simData$counts)
-  counts = counts[rowSums(counts) != 0, ]
-  zz = mclapply(c(10, 100, nrow(counts), 1000, 5000, 10000), function(eps){
-    zinbFit(counts, K=2, commondispersion = F, ncores = 3, epsilon = eps)
-  }, mc.cores = 4)
-  save(zz, file = 'testEpsilon1000.rda')
-  
-  # 10000
-  zinbSimWrapper(core = core, colIni = colIni, ncells = 10000, nclust = 3, 
-                 a = .85, gammapiOffset = 3.5, B = 1, seed = 9128, 
-                 fileName = 'test10000.rda')
-  load('test10000.rda')
-  counts = t(simData$counts)
-  counts = counts[rowSums(counts) != 0, ]
-  zz = mclapply(c(10, 100, nrow(counts), 1000, 5000, 10000), function(eps){
-    zinbFit(counts, K=2, commondispersion = F, ncores = 3, epsilon = eps)
-  }, mc.cores = 4)
-  save(zz, file = 'testEpsilon10000.rda')
-}
-
-
-
-
-
 simAll = T
 if (simAll){
   seed = 9128
   for (nc in c(100, 1000, 10000)){
     for (aa in c(1, .85)){
       for (offs in c(-3.5, 0, 3.5)){
-        ff = sprintf('simAllen_%s_a%s_offs%s_seed%s.rda', nc, aa, offs, seed)
+        ff = sprintf('sims/datasets/simAllen_%s_a%s_offs%s_seed%s.rda', nc, aa, offs, seed)
         zinbSimWrapper(core = core, colIni = colIni, ncells = nc, nclust = 3, 
                        a = aa, gammapiOffset = offs, B = 1, seed = seed, 
                        fileName = ff)

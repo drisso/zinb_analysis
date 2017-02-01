@@ -1,7 +1,3 @@
-# setwd('~/Documents/BRAIN/gitrepo/zinb_analysis/sims')
-# Comment: I commented out the line above to make it work in all local copies
-# The setwd() should be taken care of by the .Rproj file
-
 library(cluster)
 library(zinb)
 library(EDASeq)
@@ -198,76 +194,6 @@ for (k in 1){
   }
 }
 
-##############
-# ZIFA
-##############
-wrapRzifa <- function(Y, block = F){
-  # wrapper R function for ZIFA.
-  # md5 hashing and temporary files are used not to re-run zifa 
-  # if it has already be run on this computer.
-  d = digest(Y, "md5")
-  tmp = paste0(tempdir(), '/', d)
-  write.csv(Y, paste0(tmp, '.csv'))
-  
-  if (!file.exists(paste0(tmp, '_zifa.csv'))){
-    print('run ZIFA')
-    bb = ifelse(block, '-b ', '')
-    cmd = sprintf('python ../real_data/run_zifa.py %s%s.csv %s_zifa.csv', bb, tmp, tmp)
-    system(cmd)
-  }
-  read.csv(sprintf("%s_zifa.csv", tmp), header=FALSE)
-}
-
-ds = 'Allen'
-for (k in 1:2){
-  for (i in c(25, 45)){
-    pref = sprintf('./datasets/sim%s_var%s_z%s', ds, k, i)
-    load(paste0(pref, '.rda'))
-    
-    zifa = lapply(1:10, function(i){
-      Y = t(simData[[i]]$counts)
-      Y = Y[rowSums(Y) != 0, ]
-      Y = log1p(Y)
-      wrapRzifa(Y)
-    })
-    save(zifa, file = paste0(pref, '_zifa.rda'))
-    
-    zifaTC = lapply(1:10, function(i){
-      Y = t(simData[[i]]$counts)
-      Y = Y[rowSums(Y) != 0, ]
-      mult = sum(Y) / (ncol(Y) * nrow(Y))
-      fact = colSums(Y)
-      Y = mult * (t(Y) / fact)
-      Y = log1p(t(Y))
-      wrapRzifa(Y)
-    })
-    save(zifaTC, file = paste0(pref, '_zifaTC.rda'))
-    
-    zifaFQ = lapply(1:10, function(i){
-      print(i)
-      Y = t(simData[[i]]$counts)
-      Y = Y[rowSums(Y) != 0, ]
-      fq <- betweenLaneNormalization(Y, which="full")
-      Y = log1p(fq)
-      wrapRzifa(Y)
-    })
-    save(zifaFQ, file = paste0(pref, '_zifaFQ.rda'))
-    
-    zifaTMM = lapply(1:10, function(i){
-      print(i)
-      counts = t(simData[[i]]$counts)
-      counts = counts[rowSums(counts) != 0, ]
-      y = DGEList(counts)
-      y = calcNormFactors(y, method="TMM")
-      tmm = t(t(counts) / (y$samples$lib.size * y$samples$norm.factors))
-      Y = log1p(tmm)
-      wrapRzifa(Y)
-    })
-    save(zifaTMM, file = paste0(pref, '_zifaTMM.rda'))
-  }
-}
-
-
 
 ############################
 # dim. red. and Silhouette
@@ -299,7 +225,6 @@ eval_data <- function(fittedSim, simData, simModel, zifa, zifaTC, zifaTMM, zifaF
   dtrue <- as.matrix(dist(true_W))
   biotrue <- as.numeric(factor(bio))
   dest[[1]] <- dtrue
-  #diff[[1]] <- eval_diff(dtrue, dest[[1]])
   corr[[1]] <- eval_cor(dtrue, dest[[1]])
   sil[[1]] <- eval_sil(biotrue, dest[[1]])
   
@@ -327,7 +252,6 @@ eval_data <- function(fittedSim, simData, simModel, zifa, zifaTC, zifaTMM, zifaF
   fact = colSums(counts)
   tc = mult * (t(counts) / fact)
   pcatc <- prcomp(log1p(tc))
-  #plot(pcatmm$x,col=bio)
   dest[[m]] <- as.matrix(dist(pcatc$x[,1:2]))
   corr[[m]] <- eval_cor(dtrue, dest[[m]])
   sil[[m]] <- eval_sil(biotrue, dest[[m]])
@@ -338,7 +262,6 @@ eval_data <- function(fittedSim, simData, simModel, zifa, zifaTC, zifaTMM, zifaF
   y = calcNormFactors(y, method="TMM")
   tmm <- t(counts) / (y$samples$lib.size * y$samples$norm.factors)
   pcatmm <- prcomp(log1p(tmm))
-  #plot(pcatmm$x,col=bio)
   dest[[m]] <- as.matrix(dist(pcatmm$x[,1:2]))
   corr[[m]] <- eval_cor(dtrue, dest[[m]])
   sil[[m]] <- eval_sil(biotrue, dest[[m]])
@@ -389,11 +312,10 @@ eval_data <- function(fittedSim, simData, simModel, zifa, zifaTC, zifaTMM, zifaF
   return(retval)
 }
 
-setwd('~/Documents/BRAIN/gitrepo/zinb_analysis/sims/datasets/data/data')
-for (nc in c(1000)){
+for (nc in c(100)){
   for (aa in c(1, .85)){
-    for (offs in c(-3.5, 0)){
-      pp = sprintf('simAllen_%s_a%s_offs%s_seed9128', nc, aa, offs)
+    for (offs in c(3.5)){
+      pp = sprintf('sims/datasets/simAllen_%s_a%s_offs%s_seed9128', nc, aa, offs)
       load(paste0(pp, '.rda'))
       load(paste0(pp, '_fitted.rda'))
       load(paste0(pp, '_zifa.rda'))
