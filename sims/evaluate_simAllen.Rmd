@@ -20,8 +20,6 @@ library(reshape)
 library(EDASeq)
 library(edgeR)
 library(dplyr)
-cols <- brewer.pal(8, "Set1")
-cols2 <- c(brewer.pal(8, "Set2"), brewer.pal(8, "Set3"), brewer.pal(8, "Set1"))
 ```
 
 # Description of the simulations
@@ -44,24 +42,58 @@ See bias, variance, and MSE in separate Rmd files (simAllen_estimates_25.Rmd, si
 
 # Impact on dimensionality reduction
 ```{r corr}
+par(mar=c(10.1,4.1,4.1,2.1))
 ds = 'Allen'
-for (nc in c(100)){
+for (nc in c(100, 1000)){
   for (offs in c(-3.5, 0, 3.5)){
     for (aa in c(1, .85)){
-      pref = sprintf('datasets/sim%s_%s_a%s_offs%s_seed9128',
-                     ds, nc, aa, offs)
-      load(paste0(pref, '_dist.rda'))
-      corr <- lapply(1:13, function(i) rowMeans(sapply(res, function(x) x[[i]])))
+      pref = sprintf('sim%s_%s_a%s_offs%s_seed9128', ds, nc, aa, offs)
+      load(paste0('datasets/', pref, '_dist.rda'))
+      corr <- lapply(1:15, function(i) rowMeans(sapply(res, function(x) x[[i]])))
       corr = do.call(cbind, corr)
       corr = data.frame(corr, stringsAsFactors = F)
-      colnames(corr) <- c("true W", paste0("zinb k=", 1:4), 
-                            "PCA (k=2)", "PCA TC (k=2)", "PCA TMM (k=2)",
-                            "PCA FQ (k=2)", 'ZIFA (k=2)', 'ZIFA TC (k=2)', 
-                            'ZIFA TMM (k=2)', 'ZIFA FQ (k=2)')
-      main = paste0("Correlation between true and estimated sample distances in W\n", nc, " cells, offset ", offs, ", clustering ", aa)
-      boxplot(corr, main = main, border = c(3, 1, 2, rep(1,10)), xlab = "",
+      colnames(corr) <- c("true W", paste0("zinb k=", 1:4), "PCA", "PCA TC",
+                          "PCA TMM", "PCA DESeq2", "PCA FQ", 'ZIFA', 'ZIFA TC', 
+                          'ZIFA TMM', 'ZIFA DESeq2', 'ZIFA FQ')
+      offs = ifelse(offs == -3.5, 25, ifelse(offs == 0, 45, 75))
+      aa = ifelse(aa == 1, 1, 2)
+      main = paste0("Correlation between true and estimated sample distances in W\n", nc, " cells, zero fraction ", offs, "%, clustering ", aa)
+      boxplot(corr, main = main, border = c(3, 1, 2, rep(1,12)), xlab = "",
               ylab = "Correlation", las = 2)
       abline(h = 1, lty = 2)
+      abline(v = 5.5, lty = 2)
+      abline(v = 1.5, lty = 2)
+      abline(v = 10.5, lty = 2)
+    }
+  }
+}
+```
+
+```{r corrSave,include=FALSE}
+par(mar=c(10.1,4.1,4.1,2.1))
+ds = 'Allen'
+for (nc in c(1000)){
+  for (offs in c(-3.5, 0, 3.5)){
+    for (aa in c(.85)){
+      pref = sprintf('sim%s_%s_a%s_offs%s_seed9128', ds, nc, aa, offs)
+      load(paste0('datasets/', pref, '_dist.rda'))
+      corr <- lapply(1:15, function(i) rowMeans(sapply(res, function(x) x[[i]])))
+      corr = do.call(cbind, corr)
+      corr = data.frame(corr, stringsAsFactors = F)
+      colnames(corr) <- c("true W", paste0("zinb k=", 1:4), "PCA", "PCA TC",
+                          "PCA TMM", "PCA DESeq2", "PCA FQ", 'ZIFA', 'ZIFA TC', 
+                          'ZIFA TMM', 'ZIFA DESeq2', 'ZIFA FQ')
+      offs = ifelse(offs == -3.5, 25, ifelse(offs == 0, 45, 75))
+      main = paste0("zero fraction ", offs)
+      pref = paste0('simAllen',offs)
+      pdf(paste0('../paper/6680489mtyrjx/', pref, '.pdf'), width = 14)
+      boxplot(corr, main = main, border = c(3, 1, 2, rep(1,12)), xlab = "",
+              ylab = "Correlation", las = 2)
+      abline(h = 1, lty = 2)
+      abline(v = 5.5, lty = 2)
+      abline(v = 1.5, lty = 2)
+      abline(v = 10.5, lty = 2)
+      dev.off()
     }
   }
 }
@@ -70,29 +102,27 @@ for (nc in c(100)){
 
 
 ```{r corrSummary}
-corr = lapply(c(100), function(nc){
+corr = lapply(c(100, 1000), function(nc){
   lapply(c(1, .85), function(aa){
     lapply(c(-3.5, 0, 3.5), function(offs){
       pp = sprintf('datasets/simAllen_%s_a%s_offs%s_seed9128', nc, aa, offs)
       load(paste0(pp, '_dist.rda'))
-      cc <- lapply(1:13, function(i) rowMeans(sapply(res, function(x) x[[i]])))
+      cc <- lapply(1:15, function(i) rowMeans(sapply(res, function(x) x[[i]])))
       do.call(cbind, cc)
     })
   })
 })
 corr = do.call(rbind, do.call(rbind, do.call(rbind, corr)))
 corr = data.frame(corr, stringsAsFactors = F)
-colnames(corr) <- c("true W", paste0("zinb k=", 1:4), "PCA (k=2)",
-                    "PCA TC (k=2)", "PCA TMM (k=2)", "PCA FQ (k=2)",
-                    'ZIFA (k=2)', 'ZIFA TC (k=2)', 'ZIFA TMM (k=2)',
-                    'ZIFA FQ (k=2)')
+colnames(corr) <- c("true W", paste0("zinb k=", 1:4), "PCA", "PCA TC",
+                          "PCA TMM", "PCA DESeq2", "PCA FQ", 'ZIFA', 'ZIFA TC', 
+                          'ZIFA TMM', 'ZIFA DESeq2', 'ZIFA FQ')
 
-corr$pzero = rep(rep(c(.25,.45,.75), each = 100), 2)
-               #rep(rep(c(.25,.45,.75), each = 1000), 2))
-corr$var = rep(paste('Clustering', 1:2), each = 300)
-          #   rep(paste('Clustering', 1:2), each = 3000))
-corr$nc = rep('100', 600)
-#, rep('1000', 6000))
+corr$pzero = c(rep(rep(c(.25,.45,.75), each = 100), 2),
+               rep(rep(c(.25,.45,.75), each = 1000), 2))
+corr$var = c(rep(paste('Clustering', 1:2), each = 300),
+             rep(paste('Clustering', 1:2), each = 3000))
+corr$nc = c(rep('100', 600), rep('1000', 6000))
 corrMolten = melt(corr, id.vars = c('pzero', 'var', 'nc'))
 corrSum = corrMolten %>% group_by(pzero, var, variable, nc) %>%
   summarize(mean = mean(value), sd = sd(value)) %>% ungroup() %>%
@@ -106,48 +136,93 @@ allen = ggplot(c1, aes(x = pzero, y = mean, col = variable, group = variable)) +
   theme_bw() + xlab('Zero Fraction') + facet_grid(nc ~ var) +
   ylab('Correlation between true and estimated sample distances in W')
 allen
-#ggsave(filename="paper/6680489mtyrjx/allen_correlations.pdf", plot = allen,
-#       width = 5, height = 5)
+ggsave(filename="../paper/6680489mtyrjx/allen_correlations.pdf", plot = allen,
+       width = 5, height = 5)
 ```
 
 ## Silhouette width
 ```{r sil}
-for (nc in c(100)){
-  for (offs in c(-3.5, 0)){
+for (nc in c(100, 1000)){
+  for (offs in c(-3.5, 0, 3.5)){
     for (aa in c(1, .85)){
       pref = sprintf('datasets/sim%s_%s_a%s_offs%s_seed9128',
                      ds, nc, aa, offs)
       load(paste0(pref, '_dist.rda'))
-      sil <- lapply(14:length(res[[1]]), function(i){
+      sil <- lapply(16:length(res[[1]]), function(i){
         rowMeans(sapply(res, function(x) x[[i]]))
       })
       sil = do.call(cbind, sil)
       sil = data.frame(sil,stringsAsFactors = F)
-      colnames(sil) <- c("true W", paste0("zinb k=", 1:4), 
-                            "PCA (k=2)", "PCA TC (k=2)", "PCA TMM (k=2)",
-                            "PCA FQ (k=2)", 'ZIFA (k=2)', 'ZIFA TC (k=2)', 
-                            'ZIFA TMM (k=2)', 'ZIFA FQ (k=2)')
+      colnames(sil) <- c("true W", paste0("zinb k=", 1:4), "PCA", "PCA TC",
+                          "PCA TMM", "PCA DESeq2", "PCA FQ", 'ZIFA', 'ZIFA TC', 
+                          'ZIFA TMM', 'ZIFA DESeq2', 'ZIFA FQ')
       main = paste0("Silhouette width of true labels\n", nc, " cells, offset ", offs, ", clustering ", aa)
       boxplot(sil, main = main, border=c(3, 1, 2, rep(1,10)), xlab="", 
               ylab="Silhouette width", las=2)
       boxplot(sil - sil[, 1], main = paste0("Difference of ", main),
-              border = c(3, 1, 2, rep(1,10)), xlab = "", las = 2,
+              border = c(3, 1, 2, rep(1,12)), xlab = "", las = 2,
               ylab = "Silhouette width - True Silhouette width")
       abline(h = 0, lty = 2)
     }
   }
 }
+```
 
+
+```{r silSummary}
+sil = lapply(c(100, 1000), function(nc){
+  lapply(c(1, .85), function(aa){
+    lapply(c(-3.5, 0, 3.5), function(offs){
+      pp = sprintf('datasets/simAllen_%s_a%s_offs%s_seed9128', nc, aa, offs)
+      load(paste0(pp, '_dist.rda'))
+      ss <- lapply(16:length(res[[1]]), function(i){
+        rowMeans(sapply(res, function(x) x[[i]]))
+      })
+      do.call(cbind, ss)
+    })
+  })
+})
+sil = do.call(rbind, do.call(rbind, do.call(rbind, sil)))
+sil = data.frame(sil, stringsAsFactors = F)
+colnames(sil) <- c("true W", paste0("zinb k=", 1:4), "PCA", "PCA TC",
+                          "PCA TMM", "PCA DESeq2", "PCA FQ", 'ZIFA', 'ZIFA TC', 
+                          'ZIFA TMM', 'ZIFA DESeq2', 'ZIFA FQ')
+sil = sil - sil[,1]
+sil$pzero = c(rep(rep(c(.25,.45,.75), each = 100), 2),
+               rep(rep(c(.25,.45,.75), each = 1000), 2))
+sil$var = c(rep(paste('Clustering', 1:2), each = 300),
+             rep(paste('Clustering', 1:2), each = 3000))
+sil$nc = c(rep('100', 600), rep('1000', 6000))
+silMolten = melt(sil, id.vars = c('pzero', 'var', 'nc'))
+silSum = silMolten %>% group_by(pzero, var, variable, nc) %>%
+  summarize(mean = mean(value), sd = sd(value)) %>% ungroup() %>%
+  as.data.frame()
+silSum$pzero = factor(silSum$pzero)
+
+c1 = silSum[silSum$variable != 'true W',]
+c1$method = sapply(strsplit(as.vector(c1$variable), ' '), '[[', 1)
+allen = ggplot(c1, aes(x = pzero, y = mean, col = variable, group = variable)) +
+  geom_point() + geom_line() + labs(col='') + 
+  theme_bw() + xlab('Zero Fraction') + facet_grid(nc ~ var) +
+  ylab('Silhouette width - True Silhouette width') + 
+  geom_hline(yintercept = 0, col = 'gray')
+allen
+ggsave(filename="../paper/6680489mtyrjx/allen_silhouette.pdf", plot = allen,
+       width = 5, height = 5)
 ```
 
 For one simulated dataset with the right parameters (Vintercept, genewise dispersion, K= 2).
 ```{r pca25}
-load("./datasets/simAllen_var2_z25.rda")
-load("./datasets/simAllen_var2_z25_zifaFQ.rda")
-load("./datasets/simAllen_var2_z25_fitted.rda")
+par(mfrow = c(3,4))
+pref = "datasets/simAllen_100_a1_offs-3.5_seed9128"
+load(paste0(pref, ".rda"))
+load(paste0(pref, "_zifaFQ.rda"))
+load(paste0(pref, "_fitted.rda"))
 biotrue = factor(bio)
-fit = fittedSim[[2]][[1]][[2]][[4]]
-fq <- betweenLaneNormalization(t(simData[[1]]$counts), which="full")
+fit = fittedSim[[2]][[1]]
+counts = t(simData[[1]]$counts)
+counts = counts[rowSums(counts) != 0, ]
+fq <- betweenLaneNormalization(counts, which="full")
 pca <- prcomp(t(log1p(fq)))
 par(mfrow=c(3,4))
 plot(simModel@W, col = biotrue, main = 'True W\nfZero = 0.25', 
@@ -157,33 +232,43 @@ plot(fit@W, col = biotrue, main = 'estimated ZINB W\nfZero = 0.25',
 plot(pca$x, col = biotrue, main = 'PCA FQ\nfZero = 0.25')
 plot(zifaFQ[[1]], col = biotrue, main = 'ZIFA FQ\nfZero = 0.25')
 
-load("./datasets/simAllen_var2_z45.rda")
-load("./datasets/simAllen_var2_z45_zifaFQ.rda")
-load("./datasets/simAllen_var2_z45_fitted.rda")
+pref = "datasets/simAllen_100_a1_offs0_seed9128"
+load(paste0(pref, ".rda"))
+load(paste0(pref, "_zifaTC.rda"))
+load(paste0(pref, "_fitted.rda"))
 biotrue = factor(bio)
-fit = fittedSim[[2]][[1]][[2]][[4]]
-fq <- betweenLaneNormalization(t(simData[[1]]$counts), which="full")
-pca <- prcomp(t(log1p(fq)))
+fit = fittedSim[[2]][[1]]
+counts = t(simData[[1]]$counts)
+counts = counts[rowSums(counts) != 0, ]
+mult = sum(counts) / (ncol(counts) * nrow(counts))
+fact = colSums(counts)
+tc = mult * (t(counts) / fact)
+pca <- prcomp(log1p(tc))
 plot(simModel@W, col = biotrue, main = 'True W\nfZero = 0.45', 
      xlab = 'W1', ylab = 'W2')
 plot(fit@W, col = biotrue, main = 'estimated ZINB W\nfZero = 0.45', 
      xlab = 'W1', ylab = 'W2')
-plot(pca$x, col = biotrue, main = 'PCA FQ\nfZero = 0.45')
-plot(zifaFQ[[1]], col = biotrue, main = 'ZIFA FQ\nfZero = 0.45')
+plot(pca$x, col = biotrue, main = 'PCA TC\nfZero = 0.45')
+plot(zifaTC[[1]], col = biotrue, main = 'ZIFA TC\nfZero = 0.45')
 
-load("./datasets/simAllen_var2_z75.rda")
-load("./datasets/simAllen_var2_z75_zifaFQ.rda")
-load("./datasets/simAllen_var2_z75_fitted.rda")
+pref = "datasets/simAllen_100_a1_offs3.5_seed9128"
+load(paste0(pref, ".rda"))
+load(paste0(pref, "_zifaTC.rda"))
+load(paste0(pref, "_fitted.rda"))
 biotrue = factor(bio)
-fit = fittedSim[[2]][[1]][[2]][[4]]
-fq <- betweenLaneNormalization(t(simData[[1]]$counts), which="full")
-pca <- prcomp(t(log1p(fq)))
+fit = fittedSim[[2]][[1]]
+counts = t(simData[[1]]$counts)
+counts = counts[rowSums(counts) != 0, ]
+mult = sum(counts) / (ncol(counts) * nrow(counts))
+fact = colSums(counts)
+tc = mult * (t(counts) / fact)
+pca <- prcomp(log1p(tc))
 plot(simModel@W, col = biotrue, main = 'True W\nfZero = 0.75', 
      xlab = 'W1', ylab = 'W2')
 plot(fit@W, col = biotrue, main = 'estimated ZINB W\nfZero = 0.75', 
      xlab = 'W1', ylab = 'W2')
-plot(pca$x, col = biotrue, main = 'PCA FQ\nfZero = 0.75')
-plot(zifaFQ[[1]], col = biotrue, main = 'ZIFA FQ\nfZero = 0.75')
+plot(pca$x, col = biotrue, main = 'PCA TC\nfZero = 0.75')
+plot(zifaTC[[1]], col = biotrue, main = 'ZIFA TC\nfZero = 0.75')
 ```
 
 ## Model fit

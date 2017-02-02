@@ -21,7 +21,7 @@ library(DESeq2)
 computeBiasList <- function(prefix, K = 1:4, Vintercept = 1:2,
                             commondispersion = 1:2){
   load(paste0(prefix, '.rda'))
-  load(paste0(prefix, '_fitted.rda'))
+  load(paste0(prefix, '_fittedAll.rda'))
   
   biasList = lapply(K, function(k){
     tmp <- lapply(Vintercept, function(Vint){
@@ -82,7 +82,7 @@ computeBiasList <- function(prefix, K = 1:4, Vintercept = 1:2,
 computeVarianceList <- function(prefix, K = 1:4, Vintercept = 1:2,
                                 commondispersion = 1:2){
   load(paste0(prefix, '.rda'))
-  load(paste0(prefix, '_fitted.rda'))
+  load(paste0(prefix, '_fittedAll.rda'))
   n = length(simData)
   varianceList <- lapply(K, function(k){
     tmp <- lapply(Vintercept, function(Vint){
@@ -164,14 +164,14 @@ for (k in 1){
   for (i in c(25, 45, 75)){
     print(k)
     print(i)
-    biasList = computeBiasList(sprintf('./datasets/sim%s_var%s_z%s', ds, k, i))
+    biasList = computeBiasList('sims/datasets/simAllen_100_a1_offs0_seed9128')
     plotbias <- unlist(unlist(unlist(biasList, recursive=FALSE), recursive=FALSE), recursive=FALSE)
     bias = lapply(seq_along(plotbias), function(i){
       nn = strsplit(names(plotbias)[i], '\\.')[[1]]
       data.frame(bias = as.vector(plotbias[[i]]), K=nn[1], V=nn[2], disp=nn[3], param=nn[4])
     })
     bias = data.frame(do.call(rbind, bias), stringsAsFactors = F)
-    save(bias, file = sprintf('./datasets/sim%s_var%s_z%s', ds, k, i))
+    save(bias, file = 'sims/datasets/simAllen_100_a1_offs0_seed9128_bias.rda')
   }
 }
 
@@ -215,7 +215,7 @@ eval_sil <- function(labels, dest) {
 }
 
 ## comments: there is no guarantee on the order of the W's
-eval_data <- function(fittedSim, simData, simModel, zifa, zifaTC, zifaTMM, zifaFQ,
+eval_data <- function(fittedSim, simData, simModel, zifa, zifaTC, zifaTMM, zifaDeseq2, zifaFQ,
                       k = 1:4, Vintercept = 1, commondisp = 2, sim = 1) {
   # ini
   dest = corr = sil = list()
@@ -267,14 +267,17 @@ eval_data <- function(fittedSim, simData, simModel, zifa, zifaTC, zifaTMM, zifaF
   sil[[m]] <- eval_sil(biotrue, dest[[m]])
   
   ## PCA DESeq2
-  #  m = m + 1
-  #  se = SummarizedExperiment(list(counts), colData = DataFrame(rep(1, ncol(counts))))
-  #  dds = DESeqDataSet(se, design = ~ 1 )
-  #  dds = estimateSizeFactors(dds)
-  #  pcadeseq2 <- prcomp(log1p(t(counts(dds, normalized=TRUE))))
-  #  dest[[m]] <- as.matrix(dist(pcadeseq2$x[,1:2]))
-  #  corr[[m]] <- eval_cor(dtrue, dest[[m]])
-  #  sil[[m]] <- eval_sil(biotrue, dest[[m]]) 
+  m = m + 1
+  condition = factor(rep(1, ncol(counts)))
+  cc = counts
+  print(max(counts))
+  cc[which(cc > 1000000000)] = max(cc[which(cc < 1000000000)])
+  dds = DESeqDataSetFromMatrix(cc, DataFrame(condition), ~ 1)
+  dds = estimateSizeFactors(dds)
+  pcadeseq2 <- prcomp(log1p(t(counts(dds, normalized=TRUE))))
+  dest[[m]] <- as.matrix(dist(pcadeseq2$x[,1:2]))
+  corr[[m]] <- eval_cor(dtrue, dest[[m]])
+  sil[[m]] <- eval_sil(biotrue, dest[[m]]) 
   
   ## PCA FQ
   m = m + 1
@@ -302,19 +305,25 @@ eval_data <- function(fittedSim, simData, simModel, zifa, zifaTC, zifaTMM, zifaF
   corr[[m]] <- eval_cor(dtrue, dest[[m]])
   sil[[m]] <- eval_sil(biotrue, dest[[m]])
   
+  ## ZIFA DESeq2
+  m = m + 1
+  dest[[m]] <- as.matrix(dist(zifaDeseq2[[sim]]))
+  corr[[m]] <- eval_cor(dtrue, dest[[m]])
+  sil[[m]] <- eval_sil(biotrue, dest[[m]])
+  
   ## ZIFA FQ
   m = m + 1
   dest[[m]] <- as.matrix(dist(zifaFQ[[sim]]))
   corr[[m]] <- eval_cor(dtrue, dest[[m]])
   sil[[m]] <- eval_sil(biotrue, dest[[m]])
-
+  
   retval <- c(corr, lapply(1:m, function(i) sil[[i]][, 3]))
   return(retval)
 }
 
-for (nc in c(100)){
+for (nc in c(1000)){
   for (aa in c(1, .85)){
-    for (offs in c(3.5)){
+    for (offs in c(-3.5, 0, 3.5)){
       pp = sprintf('sims/datasets/simAllen_%s_a%s_offs%s_seed9128', nc, aa, offs)
       load(paste0(pp, '.rda'))
       load(paste0(pp, '_fitted.rda'))
@@ -322,9 +331,10 @@ for (nc in c(100)){
       load(paste0(pp, '_zifaTC.rda'))
       load(paste0(pp, '_zifaTMM.rda'))
       load(paste0(pp, '_zifaFQ.rda'))
+      load(paste0(pp, '_zifaDeseq2.rda'))
       res <- mclapply(1:10, function(i){
-        eval_data(fittedSim, simData, simModel, zifa, zifaTC, zifaTMM, zifaFQ,
-                  sim = i, k = 1:4)
+        eval_data(fittedSim, simData, simModel, zifa, zifaTC, zifaTMM, 
+                  zifaDeseq2, zifaFQ, sim = i, k = 1:4)
       })
       save(res, file = paste0(pp, '_dist.rda'))
     }

@@ -414,7 +414,7 @@ sim = lapply(1:2, function(k){
     simData = lapply(seq_len(B), function(j){
       zinbSim(simModel, seed = j*i*k)
     })
-    fileName = sprintf("./datasets/simAllen_var%s_z%s.rda",
+    fileName = sprintf("datasets/simAllen_var%s_z%s.rda",
                        k, names(gammaOffset[i]))
     save(bio, simModel, simData, file = fileName)  
     sapply(simData, function(x) x$zeroFraction)
@@ -434,7 +434,7 @@ Let's look at one simulated dataset for each zero fraction.
 par(mfrow=c(2, 3))
 for (k in 1:2){
   for (i in 1:3){
-    fileName = sprintf("./datasets/simAllen_var%s_z%s.rda",
+    fileName = sprintf("datasets/simAllen_var%s_z%s.rda",
                        k, names(gammaOffset[i]))
     load(fileName)
     counts = simData[[1]]$counts
@@ -450,7 +450,7 @@ for (k in 1:2){
 par(mfrow=c(2, 3))
 for (k in 1:2){
   for (i in 1:3){
-    fileName = sprintf("./datasets/simAllen_var%s_z%s.rda",
+    fileName = sprintf("datasets/simAllen_var%s_z%s.rda",
                        k, names(gammaOffset[i]))
     load(fileName)
     counts = simData[[1]]$counts

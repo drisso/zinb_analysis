@@ -11,7 +11,8 @@ makeZinbFit <- function(Xintercept = T, Vintercept = T, K = 2,
   V = matrix(Vint, ncol = 1, nrow = ngenes)
   
   buildZinb <- function(Y, ...){
-    zinbFit(Y, X = X, V = V, K = K, commondispersion = commondispersion, ...)
+    zinbFit(Y, X = X, V = V, K = K, commondispersion = commondispersion,
+            epsilon = ngenes, ...)
   }
   return(buildZinb)
 }
@@ -22,30 +23,32 @@ commondispersion = c(TRUE, FALSE)
 ncores = 20
 
 ds = 'Allen'
-for (j in 1){
-  for (l in c(25, 45, 75)){
-    fileName = sprintf('sim%s_var%s_z%s', ds, j, l)
-    load(paste0(fileName,".rda"))
+nc = 100
+for (aa in c(1, .85)){
+  for (offs in c(-3.5, 0, 3.5)){
+    pp = sprintf('simAllen_%s_a%s_offs%s_seed9128', nc, aa, offs)
+    load(paste0(pp,".rda"))
     fittedSim = lapply(K, function(k){
       lapply(Vintercept, function(Vint){
         lapply(commondispersion, function(commondisp){
           mclapply(1:length(simData), function(i){
             counts = t(simData[[i]]$counts)
             zeros = (rowSums(counts) == 0)
-            counts = counts[!zeros, ] 
+            if (sum(zeros) > 0){
+              mm =  matrix(0, ncol = ncol(counts), nrow = sum(zeros)) 
+              mm[sample(length(mm), sum(zeros))] = 1
+              counts[zeros, ] = mm
+            }
             myZinbFit = makeZinbFit(Xintercept = TRUE, Vintercept = Vint,
                                     K = k, commondispersion = commondisp,
                                     ngenes = nrow(counts), 
                                     ncells = ncol(counts))
-            ff = myZinbFit(counts, ncores = 2)
-            
-            
-            ff
+            myZinbFit(counts, ncores = 2)
           },mc.cores =  ncores)
         })
       })
     })
-    out = paste0(fileName, '_fitted.rda')
+    out = paste0(pp, '_fittedAll.rda')
     save(fittedSim, file = out)
   }
 }

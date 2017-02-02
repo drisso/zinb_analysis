@@ -78,6 +78,26 @@ for (nc in c(1000)){
         wrapRzifa(Y)
       })
       save(zifaTMM, file = paste0(pref, '_zifaTMM.rda'))
+      
+      print('zifa deseq2')
+      zifaDeseq2 = lapply(1:10, function(i){
+        print(i)
+        counts = t(simData[[i]]$counts)
+        counts = counts[rowSums(counts) != 0, ]
+        condition = factor(rep(1, ncol(counts)))
+        ## remove very high counts, otherwise DESeq2 creates an error
+        ## only one or two very high count per dataset in Allen simulations
+        counts[which(counts > 1000000000)] = max(counts[which(counts < 1000000000)])
+        dds = DESeqDataSetFromMatrix(counts, DataFrame(condition), ~ 1)
+        dds = estimateSizeFactors(dds)
+        Y = log1p(counts(dds, normalized=TRUE))
+        wrapRzifa(Y)
+      })
+      save(zifaDeseq2, file = paste0(pref, '_zifaDeseq2.rda'))
+      
     }, mc.cores = 2)
   }
 }
+
+
+
