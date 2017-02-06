@@ -59,7 +59,7 @@ well <- as.numeric(as.factor(metadata$well))
 ncells <- quality$cell_number
 concentration <- quality$concentration
 
-ercc_prop <- colSums(reads[grep("^ERCC", rownames(reads)),])/colSums(reads)
+ercc_prop <- colSums(umi[grep("^ERCC", rownames(umi)),])/colSums(umi)
 detection_rate <- colSums(dat>0)
 
 qc <- data.frame(ercc_prop, nmolecule, well, concentration, detection_rate)
