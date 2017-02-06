@@ -197,3 +197,10 @@ plot(zifa_deseq, pch=19, col=colorbatch[batch], main="ZIFA DESEQ")
 zifa_fq <- wrapRzifa(log1p(fq))
 plot(zifa_fq, pch=19, col=colorbatch[batch], main="ZIFA FQ")
 ```
+
+## ZINB
+
+```{r zinb}
+zinb <- zinbFit(raw, ncores = ncores, K = 2)
+plot(zinb@W, pch=19, col=colorbatch[batch], main="ZINB")
+```
