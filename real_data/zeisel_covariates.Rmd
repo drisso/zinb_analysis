@@ -66,6 +66,13 @@ colnames(counts) <- data[8, -(1:2)]
 filter <- rowSums(counts>10)>=10
 raw <- counts[filter,]
 
+totalcount = function (ei)
+{
+  sums = colSums(ei)
+  eo = t(t(ei)*mean(sums)/sums)
+  return(eo)
+}
+
 tc <- totalcount(raw)
 fq <- FQT_FN(raw)
 tmm <- TMM_FN(raw)
