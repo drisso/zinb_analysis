@@ -56,14 +56,13 @@ dat <- as.matrix(umi)
 
 nmolecule <- colSums(dat)
 well <- as.numeric(as.factor(metadata$well))
-nreads <- colSums(reads)
 ncells <- quality$cell_number
 concentration <- quality$concentration
 
 ercc_prop <- colSums(reads[grep("^ERCC", rownames(reads)),])/colSums(reads)
 detection_rate <- colSums(dat>0)
 
-qc <- data.frame(ercc_prop, nmolecule, nreads, well, concentration, detection_rate)
+qc <- data.frame(ercc_prop, nmolecule, well, concentration, detection_rate)
 ppq = scale(qc[,apply(qc,2,sd) > 0],center = TRUE,scale = TRUE)
 
 # Retain only detected transcripts
@@ -160,26 +159,15 @@ wrapRzifa <- function(Y, block = T){
 zifa_raw <- wrapRzifa(log1p(expr))
 plot(zifa_raw, pch=19, col=colorbatch[batch], main="ZIFA Raw")
 
-totalcount = function (ei)
-{
-  sums = colSums(ei)
-  eo = t(t(ei)*mean(sums)/sums)
-  return(eo)
-}
+zifa_tc <- wrapRzifa(log1p(tc))
+plot(zifa_tc, pch=19, col=colorbatch[batch], main="ZIFA TC")
 
-tc <- totalcount(expr)
-pc_tc <- fastpca(log1p(tc))
-plot(pc_tc, pch=19, col=colorbatch[batch], main="PCA TC")
+zifa_tmm <- wrapRzifa(log1p(tmm))
+plot(zifa_tmm, pch=19, col=colorbatch[batch], main="ZIFA TMM")
 
-tmm <- TMM_FN(expr)
-pc_tmm <- fastpca(log1p(tmm))
-plot(pc_tmm, pch=19, col=colorbatch[batch], main="PCA TMM")
+zifa_deseq <- wrapRzifa(log1p(deseq))
+plot(zifa_deseq, pch=19, col=colorbatch[batch], main="ZIFA DESEQ")
 
-deseq <- DESEQ_FN(expr)
-pc_deseq <- fastpca(log1p(deseq))
-plot(pc_deseq, pch=19, col=colorbatch[batch], main="PCA DESEQ")
-
-fq <- FQT_FN(expr)
-pc_fq <- fastpca(log1p(fq))
-plot(pc_fq, pch=19, col=colorbatch[batch], main="PCA FQ")
+zifa_fq <- wrapRzifa(log1p(fq))
+plot(zifa_fq, pch=19, col=colorbatch[batch], main="ZIFA FQ")
 ```
