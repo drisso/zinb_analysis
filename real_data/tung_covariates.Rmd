@@ -97,6 +97,8 @@ is_quality = rowSums(dat >= num_reads ) >= num_cells
 expr = goodDat[is_quality,]
 ```
 
+To speed up computations we consider only the top 1000 most variable genes.
+
 ## PCA
 
 ```{r pca}
@@ -108,7 +110,12 @@ fastpca <- function(expr) {
 
 colorbatch <- c(brewer.pal(4, "Purples")[-1], brewer.pal(4, "Oranges")[-1], brewer.pal(4, "Greens")[-1])
 
-pc_raw <- fastpca(log1p(expr))
+vars <- rowVars(log1p(expr))
+names(vars) <- rownames(expr)
+vars <- sort(vars, decreasing = TRUE)
+raw <- expr[names(vars)[1:1000],]
+
+pc_raw <- fastpca(log1p(raw))
 plot(pc_raw, pch=19, col=colorbatch[batch], main="PCA Raw")
 
 totalcount = function (ei)
@@ -119,18 +126,38 @@ totalcount = function (ei)
 }
 
 tc <- totalcount(expr)
+vars <- rowVars(log1p(tc))
+names(vars) <- rownames(expr)
+vars <- sort(vars, decreasing = TRUE)
+tc <- tc[names(vars)[1:1000],]
+
 pc_tc <- fastpca(log1p(tc))
 plot(pc_tc, pch=19, col=colorbatch[batch], main="PCA TC")
 
 tmm <- TMM_FN(expr)
+vars <- rowVars(log1p(tmm))
+names(vars) <- rownames(expr)
+vars <- sort(vars, decreasing = TRUE)
+tmm <- tmm[names(vars)[1:1000],]
+
 pc_tmm <- fastpca(log1p(tmm))
 plot(pc_tmm, pch=19, col=colorbatch[batch], main="PCA TMM")
 
 deseq <- DESEQ_FN(expr)
+vars <- rowVars(log1p(deseq))
+names(vars) <- rownames(expr)
+vars <- sort(vars, decreasing = TRUE)
+deseq <- deseq[names(vars)[1:1000],]
+
 pc_deseq <- fastpca(log1p(deseq))
 plot(pc_deseq, pch=19, col=colorbatch[batch], main="PCA DESEQ")
 
 fq <- FQT_FN(expr)
+vars <- rowVars(log1p(fq))
+names(vars) <- rownames(expr)
+vars <- sort(vars, decreasing = TRUE)
+fq <- fq[names(vars)[1:1000],]
+
 pc_fq <- fastpca(log1p(fq))
 plot(pc_fq, pch=19, col=colorbatch[batch], main="PCA FQ")
 ```
@@ -155,7 +182,7 @@ wrapRzifa <- function(Y, block = T){
   read.csv(sprintf("%s_zifa.csv", tmp), header=FALSE)
 }
 
-zifa_raw <- wrapRzifa(log1p(expr))
+zifa_raw <- wrapRzifa(log1p(raw))
 plot(zifa_raw, pch=19, col=colorbatch[batch], main="ZIFA Raw")
 
 zifa_tc <- wrapRzifa(log1p(tc))
