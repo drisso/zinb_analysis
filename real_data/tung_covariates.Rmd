@@ -1,0 +1,185 @@
+---
+title: 'Zeisel: covariates and batch effects'
+author: "Davide Risso"
+date: "11/17/2016"
+output:
+  html_document:
+    fig_height: 7
+    fig_width: 7
+    toc: yes
+    code_folding: hide
+    toc_float: yes
+---
+
+
+```{r options, echo=FALSE, results="hide",mesasge=FALSE, error=FALSE, include=FALSE, autodep=TRUE}
+knitr::opts_chunk$set(fig.align="center", cache=TRUE, error=FALSE, message=FALSE, warning=TRUE)
+library(SummarizedExperiment)
+library(scRNAseq)
+library(zinb)
+library(ggplot2)
+library(magrittr)
+library(matrixStats)
+library(Rtsne)
+library(scone)
+library(RColorBrewer)
+library(rARPACK)
+set.seed(8283)
+options(getClass.msg=FALSE) #get rid of annoying messages about cache until fixed internally in R
+
+ncores <- 3
+col1 <- brewer.pal(9, "Set1")
+col2 <- brewer.pal(8, "Set2")
+```
+
+We want to use this dataset to showcase the ability of ZINB to include covariates. One typical example being batch effects.
+
+```{r readin}
+url <- "https://raw.githubusercontent.com/jdblischak/singleCellSeq/gh-pages/data/molecules.txt"
+umi <- read.table(url, sep='\t', stringsAsFactors = FALSE, header=TRUE, row.names = 1)
+
+# Processed Alignment Metrics - Variation to be removed
+url <- "https://raw.githubusercontent.com/jdblischak/singleCellSeq/master/data/annotation.txt"
+metadata <- read.table(url, sep='\t', stringsAsFactors = FALSE, header=TRUE, row.names = 5)
+
+url <- "https://raw.githubusercontent.com/jdblischak/singleCellSeq/master/data/qc-ipsc.txt"
+quality <- read.table(url, sep='\t', stringsAsFactors = FALSE, header = TRUE)
+rownames(quality) <- rownames(metadata)
+
+bio <- as.factor(metadata$individual)
+batch <- as.factor(metadata$batch)
+
+ercc_umi <- umi[grep("^ERCC", rownames(umi)),]
+end_umi <- as.matrix(umi[grep("^ERCC", rownames(umi), invert = TRUE),])
+
+dat <- as.matrix(umi)
+
+nmolecule <- colSums(dat)
+well <- as.numeric(as.factor(metadata$well))
+nreads <- colSums(reads)
+ncells <- quality$cell_number
+concentration <- quality$concentration
+
+ercc_prop <- colSums(reads[grep("^ERCC", rownames(reads)),])/colSums(reads)
+detection_rate <- colSums(dat>0)
+
+qc <- data.frame(ercc_prop, nmolecule, nreads, well, concentration, detection_rate)
+ppq = scale(qc[,apply(qc,2,sd) > 0],center = TRUE,scale = TRUE)
+
+# Retain only detected transcripts
+dat = dat[which(rowSums(dat>0)>0),]
+
+# Initial Gene Filtering: Select "common" transcripts based on proportional criteria.
+num_reads = quantile(dat[dat > 0])[4]
+num_cells = 0.25*ncol(dat)
+is_common = rowSums(dat >= num_reads ) >= num_cells
+
+# Metric-based Filtering
+mfilt = metric_sample_filter(dat,
+                             nreads = nmolecule,
+                             hard_nreads = 2500, hard_auc = .65,
+                             gene_filter = is_common,
+                             zcut = 3, mixture = FALSE, suff_breadth = 0.8,
+                             plot = TRUE)
+
+mfilt = !apply(simplify2array(mfilt[!is.na(mfilt)]),1,any) # Simplify to a single logical
+table(ncells, mfilt)
+
+goodDat = dat[,mfilt]
+batch = droplevels(batch[mfilt])
+bio = droplevels(bio[mfilt])
+
+# Final Gene Filtering: Highly expressed in at least 5 cells
+num_reads = quantile(dat[dat > 0])[4]
+num_cells = 5
+is_quality = rowSums(dat >= num_reads ) >= num_cells
+
+# Expression Data
+expr = goodDat[is_quality,]
+```
+
+## PCA
+
+```{r pca}
+fastpca <- function(expr) {
+  svd_raw <- svds(scale(t(expr), center=TRUE, scale=TRUE), k=3, nu=3, nv=0)
+  pc_raw <- svd_raw$u %*% diag(svd_raw$d[1:3])
+  return(pc_raw)
+}
+
+colorbatch <- c(brewer.pal(4, "Purples")[-1], brewer.pal(4, "Oranges")[-1], brewer.pal(4, "Greens")[-1])
+
+pc_raw <- fastpca(log1p(expr))
+plot(pc_raw, pch=19, col=colorbatch[batch], main="PCA Raw")
+
+totalcount = function (ei)
+{
+  sums = colSums(ei)
+  eo = t(t(ei)*mean(sums)/sums)
+  return(eo)
+}
+
+tc <- totalcount(expr)
+pc_tc <- fastpca(log1p(tc))
+plot(pc_tc, pch=19, col=colorbatch[batch], main="PCA TC")
+
+tmm <- TMM_FN(expr)
+pc_tmm <- fastpca(log1p(tmm))
+plot(pc_tmm, pch=19, col=colorbatch[batch], main="PCA TMM")
+
+deseq <- DESEQ_FN(expr)
+pc_deseq <- fastpca(log1p(deseq))
+plot(pc_deseq, pch=19, col=colorbatch[batch], main="PCA DESEQ")
+
+fq <- FQT_FN(expr)
+pc_fq <- fastpca(log1p(fq))
+plot(pc_fq, pch=19, col=colorbatch[batch], main="PCA FQ")
+```
+
+## ZIFA
+
+```{r zifa}
+source("../sims/fitZifa.R")
+wrapRzifa <- function(Y, block = T){
+  # wrapper R function for ZIFA.
+  # md5 hashing and temporary files are used not to re-run zifa 
+  # if it has already be run on this computer.
+  d = digest(Y, "md5")
+  tmp = paste0(tempdir(), '/', d)
+  write.csv(Y, paste0(tmp, '.csv'))
+  
+  if (!file.exists(paste0(tmp, '_zifa.csv'))){
+    print('run ZIFA')
+    bb = ifelse(block, '-b ', '')
+    cmd = sprintf('python run_zifa.py %s%s.csv %s_zifa.csv', bb, tmp, tmp)
+    system(cmd)
+  }
+  read.csv(sprintf("%s_zifa.csv", tmp), header=FALSE)
+}
+
+zifa_raw <- wrapRzifa(log1p(expr))
+plot(zifa_raw, pch=19, col=colorbatch[batch], main="ZIFA Raw")
+
+totalcount = function (ei)
+{
+  sums = colSums(ei)
+  eo = t(t(ei)*mean(sums)/sums)
+  return(eo)
+}
+
+tc <- totalcount(expr)
+pc_tc <- fastpca(log1p(tc))
+plot(pc_tc, pch=19, col=colorbatch[batch], main="PCA TC")
+
+tmm <- TMM_FN(expr)
+pc_tmm <- fastpca(log1p(tmm))
+plot(pc_tmm, pch=19, col=colorbatch[batch], main="PCA TMM")
+
+deseq <- DESEQ_FN(expr)
+pc_deseq <- fastpca(log1p(deseq))
+plot(pc_deseq, pch=19, col=colorbatch[batch], main="PCA DESEQ")
+
+fq <- FQT_FN(expr)
+pc_fq <- fastpca(log1p(fq))
+plot(pc_fq, pch=19, col=colorbatch[batch], main="PCA FQ")
+```
