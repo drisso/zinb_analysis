@@ -138,7 +138,6 @@ plot(pc_fq, pch=19, col=colorbatch[batch], main="PCA FQ")
 ## ZIFA
 
 ```{r zifa}
-source("../sims/fitZifa.R")
 wrapRzifa <- function(Y, block = T){
   # wrapper R function for ZIFA.
   # md5 hashing and temporary files are used not to re-run zifa 
