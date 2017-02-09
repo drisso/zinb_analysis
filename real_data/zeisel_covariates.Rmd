@@ -69,6 +69,8 @@ rownames(counts) <- data[12:NROW(data),1]
 colnames(counts) <- data[8, -(1:2)]
 ```
 
+# Comparison of methods
+
 ```{r normalization}
 filter <- rowSums(counts>10)>=10
 raw <- counts[filter,]
@@ -154,9 +156,9 @@ zinb <- zinbFit(raw, ncores = ncores, K = 2)
 plot(zinb@W, pch=19, col=colMerged, main="ZINB")
 ```
 
-## Sample-level covariates
+# Sample-level covariates
 
-### PCA
+## PCA
 
 Here, we look at PCA (using TC normalization) to see which covariates influence the data.
 
@@ -260,6 +262,44 @@ boxplot(zinb@W[,2]~batch, col=colPal1, ylab="PC2", xlab="Batch")
 boxplot(zinb@W[,1]~position, col=colPal2, ylab="PC1", xlab="Position")
 boxplot(zinb@W[,2]~position, col=colPal2, ylab="PC2", xlab="Position")
 ```
+
+## Add batches in ZINB model
+
+```{r zinb_batch}
+zinb_batch <- zinbFit(raw, ncores = ncores, K = 2, X=model.matrix(~batch))
+plot(zinb_batch@W, pch=19, col=colMerged, main="ZINB")
+```
+
+```{r zinb_batch_cov}
+plot(zinb_batch@W, col=colBatch, pch=20, main="Colored by batch")
+
+plot(zinb_batch@W, col=colPos, pch=20, main="Colored by position")
+
+df <- data.frame(W1=zinb_batch@W[,1], W2=zinb_batch@W[,2], nmolecule=nmolecule, diameter=diameter, coverage=coverage, detection_rate=detection_rate) 
+
+df %>% ggplot(aes(W1, W2)) + geom_point(aes(color=nmolecule)) + scale_colour_gradient(low="blue", high="yellow") + theme_classic()
+
+df %>% ggplot(aes(W1, W2)) + geom_point(aes(color=diameter)) + scale_colour_gradient(low="blue", high="yellow") + theme_classic()
+
+df %>% ggplot(aes(W1, W2)) + geom_point(aes(color=coverage)) + scale_colour_gradient(low="blue", high="yellow") + theme_classic()
+
+df %>% ggplot(aes(W1, W2)) + geom_point(aes(color=detection_rate)) + scale_colour_gradient(low="blue", high="yellow") + theme_classic()
+
+pairs(df, col=colMerged, pch=19)
+
+cors <- sapply(1:2, function(i) cor(zinb_batch@W[,i], df[,3:6]))
+colnames(cors) <- paste("PC", 1:NCOL(cors), sep="")
+rownames(cors) <- paste("QC", 1:NROW(cors), sep="")
+barplot(abs(cors), beside = TRUE, col=col1[1:4], border=col1[1:4], ylim=c(0, 1), space=c(0, 2), main="Absolute correlation with QC features")
+legend("topright", colnames(df)[3:6], fill=col1, border=col1, cex=1)
+
+boxplot(zinb_batch@W[,1]~batch, col=colPal1, ylab="PC1", xlab="Batch")
+boxplot(zinb_batch@W[,2]~batch, col=colPal1, ylab="PC2", xlab="Batch")
+
+boxplot(zinb_batch@W[,1]~position, col=colPal2, ylab="PC1", xlab="Position")
+boxplot(zinb_batch@W[,2]~position, col=colPal2, ylab="PC2", xlab="Position")
+```
+
 
 # Gene-level covariates
 
