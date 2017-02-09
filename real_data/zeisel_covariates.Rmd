@@ -161,6 +161,9 @@ plot(zinb@W, pch=19, col=colMerged, main="ZINB")
 Here, we look at PCA (using TC normalization) to see which covariates influence the data.
 
 ```{r pca_cov}
+detection_rate <- colSums(raw>0)
+coverage <- colSums(raw)
+
 colPal1 <- colorRampPalette(c("blue", "yellow"))(nlevels(batch)) 
 colBatch <- colPal1[batch]
 plot(pc_tc, col=colBatch, pch=20, main="Colored by batch")
