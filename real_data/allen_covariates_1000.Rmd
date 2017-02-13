@@ -87,16 +87,26 @@ pc_tmm <- fastpca(log1p(mostvar(tmm)))
 pc_deseq <- fastpca(log1p(mostvar(deseq)))
 
 col1 <- brewer.pal(9, "Set1")
-col2 <- brewer.pal(8, "Set2")
+col2 <- c(brewer.pal(8, "Set2"), brewer.pal(8, "Set3"), brewer.pal(8, "Set1"))
 
 level1 <- as.factor(colData(allen_core)$driver_1_s)
+level2 <- as.factor(colData(allen_core)$Primary.Type)
+
 colMerged <- col1[level1]
+colCl <- col2[level2]
+
 plot(pc_raw, col=colMerged, pch=20, main="PCA RAW")
 legend("bottomright", levels(level1), fill=col1)
 
+plot(pc_raw, col=colCl, pch=20, main="PCA RAW")
+legend("bottomright", levels(level2), fill=col2)
+
 plot(pc_tc, col=colMerged, pch=20, main="PCA TC")
+plot(pc_tc, col=colCl, pch=20, main="PCA TC")
 plot(pc_tmm, col=colMerged, pch=20, main="PCA TMM")
+plot(pc_tmm, col=colCl, pch=20, main="PCA TMM")
 plot(pc_fq, col=colMerged, pch=20, main="PCA FQ")
+plot(pc_fq, col=colCl, pch=20, main="PCA FQ")
 ```
 
 ## ZIFA
@@ -121,15 +131,19 @@ wrapRzifa <- function(Y, block = T){
 
 zifa_raw <- wrapRzifa(log1p(mostvar(raw)))
 plot(zifa_raw, pch=19, col=colMerged, main="ZIFA Raw")
+plot(zifa_raw, pch=19, col=colCl, main="ZIFA Raw")
 
 zifa_tc <- wrapRzifa(log1p(mostvar(tc)))
 plot(zifa_tc, pch=19, col=colMerged, main="ZIFA TC")
+plot(zifa_tc, pch=19, col=colCl, main="ZIFA TC")
 
 zifa_tmm <- wrapRzifa(log1p(mostvar(tmm)))
 plot(zifa_tmm, pch=19, col=colMerged, main="ZIFA TMM")
+plot(zifa_tmm, pch=19, col=colCl, main="ZIFA TMM")
 
 zifa_fq <- wrapRzifa(log1p(mostvar(fq)))
 plot(zifa_fq, pch=19, col=colMerged, main="ZIFA FQ")
+plot(zifa_fq, pch=19, col=colCl, main="ZIFA FQ")
 ```
 
 ## ZINB
@@ -137,6 +151,7 @@ plot(zifa_fq, pch=19, col=colMerged, main="ZIFA FQ")
 ```{r zinb}
 zinb <- zinbFit(mostvar(raw), ncores = ncores, K = 2)
 plot(zinb@W, pch=19, col=colMerged, main="ZINB")
+plot(zinb@W, pch=19, col=colCl, main="ZINB")
 ```
 
 # Sample-level covariates
