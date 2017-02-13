@@ -166,13 +166,13 @@ df %>% ggplot(aes(Z1, Z2)) + geom_point(aes(color=coverage)) + scale_colour_grad
 
 df %>% ggplot(aes(Z1, Z2)) + geom_point(aes(color=detection_rate)) + scale_colour_gradient(low="blue", high="yellow") + theme_classic()
 
-pairs(df, col=colMerged, pch=19)
+pairs(df[,1:4], col=colMerged, pch=19)
 
 cors <- sapply(1:2, function(i) cor(zifa_tc[,i], df[,3:19]))
 colnames(cors) <- paste("PC", 1:NCOL(cors), sep="")
 rownames(cors) <- paste("QC", 1:NROW(cors), sep="")
 barplot(abs(cors), beside = TRUE, col=rainbow(17), border=rainbow(17), ylim=c(0, 1), space=c(0, 2), main="Absolute correlation with QC features")
-legend("topright", colnames(df)[3:19], fill=rainbow(17), border=rainbow(17), cex=1)
+legend("topright", colnames(df)[3:19], fill=rainbow(17), border=rainbow(17), cex=.5)
 ```
 
 ## ZINB
@@ -184,24 +184,24 @@ df %>% ggplot(aes(W1, W2)) + geom_point(aes(color=coverage)) + scale_colour_grad
 
 df %>% ggplot(aes(W1, W2)) + geom_point(aes(color=detection_rate)) + scale_colour_gradient(low="blue", high="yellow") + theme_classic()
 
-pairs(df, col=colMerged, pch=19)
+pairs(df[,1:4], col=colMerged, pch=19)
 
 cors <- sapply(1:2, function(i) cor(zinb@W[,i], df[,3:19]))
 colnames(cors) <- paste("PC", 1:NCOL(cors), sep="")
 rownames(cors) <- paste("QC", 1:NROW(cors), sep="")
 barplot(abs(cors), beside = TRUE, col=rainbow(17), border=rainbow(17), ylim=c(0, 1), space=c(0, 2), main="Absolute correlation with QC features")
-legend("topright", colnames(df)[3:19], fill=rainbow(17), border=rainbow(17), cex=1)
+legend("topright", colnames(df)[3:19], fill=rainbow(17), border=rainbow(17), cex=.5)
 ```
 
 ## Add QC features in ZINB model
 
-```{r zinb_batch, eval=FALSE}
+```{r zinb_batch}
 qcpca <- prcomp(as.matrix(colData(allen_core)[,1:15]), center=TRUE, scale=TRUE)
 zinb_batch <- zinbFit(raw, ncores = ncores, K = 2, X=qcpca$x[,1:2])
 plot(zinb_batch@W, pch=19, col=colMerged, main="ZINB")
 ```
 
-```{r zinb_batch_cov, eval=FALSE}
+```{r zinb_batch_cov}
 plot(zinb_batch@W, col=colBatch, pch=20, main="Colored by batch")
 
 plot(zinb_batch@W, col=colPos, pch=20, main="Colored by position")
@@ -216,13 +216,13 @@ df %>% ggplot(aes(W1, W2)) + geom_point(aes(color=coverage)) + scale_colour_grad
 
 df %>% ggplot(aes(W1, W2)) + geom_point(aes(color=detection_rate)) + scale_colour_gradient(low="blue", high="yellow") + theme_classic()
 
-pairs(df, col=colMerged, pch=19)
+pairs(df[,1:4], col=colMerged, pch=19)
 
 cors <- sapply(1:2, function(i) cor(zinb_batch@W[,i], df[,3:19]))
 colnames(cors) <- paste("PC", 1:NCOL(cors), sep="")
 rownames(cors) <- paste("QC", 1:NROW(cors), sep="")
 barplot(abs(cors), beside = TRUE, col=rainbow(17), border=rainbow(17), ylim=c(0, 1), space=c(0, 2), main="Absolute correlation with QC features")
-legend("topright", colnames(df)[3:19], fill=rainbow(17), border=rainbow(17), cex=1)
+legend("topright", colnames(df)[3:19], fill=rainbow(17), border=rainbow(17), cex=.5)
 ```
 
 
