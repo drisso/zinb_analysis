@@ -202,15 +202,9 @@ plot(zinb_batch@W, pch=19, col=colMerged, main="ZINB")
 ```
 
 ```{r zinb_batch_cov}
-plot(zinb_batch@W, col=colBatch, pch=20, main="Colored by batch")
+plot(zinb_batch@W, col=colMerged, pch=20, main="Colored by batch")
 
-plot(zinb_batch@W, col=colPos, pch=20, main="Colored by position")
-
-df <- data.frame(W1=zinb_batch@W[,1], W2=zinb_batch@W[,2], nmolecule=nmolecule, diameter=diameter, coverage=coverage, detection_rate=detection_rate) 
-
-df %>% ggplot(aes(W1, W2)) + geom_point(aes(color=nmolecule)) + scale_colour_gradient(low="blue", high="yellow") + theme_classic()
-
-df %>% ggplot(aes(W1, W2)) + geom_point(aes(color=diameter)) + scale_colour_gradient(low="blue", high="yellow") + theme_classic()
+df <- cbind(data.frame(W1=zinb_batch@W[,1], W2=zinb_batch@W[,2], coverage=coverage, detection_rate=detection_rate), as.data.frame(colData(allen_core)[,1:15]))
 
 df %>% ggplot(aes(W1, W2)) + geom_point(aes(color=coverage)) + scale_colour_gradient(low="blue", high="yellow") + theme_classic()
 
@@ -224,7 +218,6 @@ rownames(cors) <- paste("QC", 1:NROW(cors), sep="")
 barplot(abs(cors), beside = TRUE, col=rainbow(17), border=rainbow(17), ylim=c(0, 1), space=c(0, 2), main="Absolute correlation with QC features")
 legend("topright", colnames(df)[3:19], fill=rainbow(17), border=rainbow(17), cex=.5)
 ```
-
 
 # Gene-level covariates
 
