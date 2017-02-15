@@ -128,7 +128,7 @@ plot(zifa_fq, pch=19, col=colMerged, main="ZIFA FQ")
 ## ZINB
 
 ```{r zinb}
-zinb <- zinbFit(raw, ncores = ncores, K = 2)
+zinb <- zinbFit(raw, ncores = ncores, K = 2, epsilon = 1e3)
 plot(zinb@W, pch=19, col=colMerged, main="ZINB")
 ```
 
@@ -197,7 +197,7 @@ legend("topright", colnames(df)[3:19], fill=rainbow(17), border=rainbow(17), cex
 
 ```{r zinb_batch}
 qcpca <- prcomp(as.matrix(colData(allen_core)[,1:15]), center=TRUE, scale=TRUE)
-zinb_batch <- zinbFit(raw, ncores = ncores, K = 2, X=qcpca$x[,1:2])
+zinb_batch <- zinbFit(raw, ncores = ncores, K = 2, X=qcpca$x[,1:2], epsilon=1e3)
 plot(zinb_batch@W, pch=19, col=colMerged, main="ZINB")
 ```
 
