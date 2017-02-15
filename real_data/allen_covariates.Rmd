@@ -125,10 +125,15 @@ zifa_fq <- wrapRzifa(log1p(fq))
 plot(zifa_fq, pch=19, col=colMerged, main="ZIFA FQ")
 ```
 
+```{r zifa_deseq}
+zifa_deseq <- wrapRzifa(log1p(deseq))
+plot(zifa_deseq, pch=19, col=colMerged, main="ZIFA FQ")
+```
+
 ## ZINB
 
 ```{r zinb}
-zinb <- zinbFit(raw, ncores = ncores, K = 2, epsilon = 1e3)
+zinb <- zinbFit(raw, ncores = ncores, K = 2, epsilon = 1e4)
 plot(zinb@W, pch=19, col=colMerged, main="ZINB")
 ```
 
@@ -226,4 +231,9 @@ counts <- counts[bm[,1],]
 gene_info = getGeneLengthAndGCContent(as.character(bm[,2]), "mm10", mode="org.db")
 rownames(gene_info) = bm[,1]
 gene_info = na.omit(gene_info)
+```
+
+
+```{r write_out}
+save(zinb, zinb_batch, zifa_fq, zifa_tmm, zifa_tc, zifa_raw, pc_deseq, pc_tmm, pc_fq, pc_tc, pc_raw, file="allen_covariates.rda")
 ```
