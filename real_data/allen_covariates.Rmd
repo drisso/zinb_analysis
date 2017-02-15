@@ -234,6 +234,6 @@ gene_info = na.omit(gene_info)
 ```
 
 
-```{r write_out}
+```{r write_out, dependson=c("zinb", "zifa", "pca")}
 save(zinb, zinb_batch, zifa_fq, zifa_tmm, zifa_tc, zifa_raw, pc_deseq, pc_tmm, pc_fq, pc_tc, pc_raw, file="allen_covariates.rda")
 ```
