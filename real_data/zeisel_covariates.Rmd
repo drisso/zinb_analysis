@@ -309,3 +309,7 @@ gene_info = getGeneLengthAndGCContent(as.character(bm[,2]), "mm10", mode="org.db
 rownames(gene_info) = bm[,1]
 gene_info = na.omit(gene_info)
 ```
+
+```{r write_out}
+save(zinb, zinb_batch, zifa_fq, zifa_tmm, zifa_tc, zifa_raw, pc_tmm, pc_fq, pc_tc, pc_raw, file="zeisel_covariates.rda")
+```
