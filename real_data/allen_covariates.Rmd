@@ -133,7 +133,7 @@ plot(zifa_deseq, pch=19, col=colMerged, main="ZIFA FQ")
 ## ZINB
 
 ```{r zinb}
-zinb <- zinbFit(raw, ncores = ncores, K = 2, epsilon = 1e4)
+zinb <- zinbFit(raw, ncores = ncores, K = 2, epsilon = 1e5)
 plot(zinb@W, pch=19, col=colMerged, main="ZINB")
 ```
 
