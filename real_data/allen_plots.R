@@ -1,6 +1,9 @@
 library(cowplot)
 library(scRNAseq)
-load("allen_covariates.rda")
+library(RColorBrewer)
+library(magrittr)
+library(ggplot2)
+load("allen_covariates_1000.rda")
 
 data("allen")
 allen_core <- allen[grep("^ERCC-", rownames(allen), invert = TRUE),
@@ -15,6 +18,14 @@ qc <- cbind(detection_rate, as.data.frame(colData(allen_core)[,1:15]))
 
 layer <- as.factor(colData(allen_core)$driver_1_s)
 cluster <- as.factor(colData(allen_core)$Primary.Type)
+cluster2 <- as.character(cluster)
+cluster2[cluster2 %in% c("Pvalb Tacr3", "Sst Myh8")] <- NA
+cluster2[grep("^L4", cluster2)] <- "L4"
+cluster2[grep("^L6", cluster2)] <- "L6a"
+cluster2[grep("^L5a", cluster2)] <- "L5a"
+cluster2[cluster2 == "L5 Ucma"] <- "L5a"
+cluster2[grep("^L5b", cluster2)] <- "L5b"
+cluster2 <- as.factor(cluster2)
 
 col1 <- brewer.pal(9, "Set1")
 col2 <- c(brewer.pal(8, "Set2"), brewer.pal(8, "Set3"), brewer.pal(8, "Set1"))
@@ -34,23 +45,6 @@ p1 <- plot_grid(panel1_pca + theme(legend.position = "none"),
 
 legend <- get_legend(panel1_pca)
 upper <- plot_grid(p1, legend, rel_widths = c(3, .6))
-
-load("allen_covariates_1000.rda")
-
-data.frame(Dim1=pc_tc[,1], Dim2=pc_tc[,2]) %>%
-  ggplot(aes(Dim1, Dim2, colour=layer)) + geom_point() -> panel1_pca
-data.frame(Dim1=zifa_tc[,1], Dim2=zifa_tc[,2]) %>%
-  ggplot(aes(Dim1, Dim2, colour=layer)) + geom_point() -> panel1_zifa
-data.frame(Dim1=zinb@W[,1], Dim2=zinb@W[,2]) %>%
-  ggplot(aes(Dim1, Dim2, colour=layer)) + geom_point() -> panel1_zinb
-
-p1 <- plot_grid(panel1_pca + theme(legend.position = "none"),
-                panel1_zifa + theme(legend.position = "none"),
-                panel1_zinb + theme(legend.position = "none"),
-                labels=c("A", "B", "C"), align = "h", ncol=3)
-
-legend <- get_legend(panel1_pca)
-upper <- plot_grid(p1, legend, rel_widths = c(3, 1))
 
 cors <- lapply(1:2, function(i) abs(cor(pc_tc[,i], qc)))
 cors <- unlist(cors)
@@ -83,14 +77,14 @@ lower <- plot_grid(p2, legend2, rel_widths = c(3, 1))
 
 plot_grid(upper, lower, ncol=1, nrow=2)
 
-## Alternatively (too crowded -- move upper to supplementary?)
+## Alternatively
 
 data.frame(Dim1=pc_tc[,1], Dim2=pc_tc[,2]) %>%
-  ggplot(aes(Dim1, Dim2, shape=layer, color=cluster)) + geom_point() + scale_color_manual(values=col2) -> panel1_pca
+  ggplot(aes(Dim1, Dim2, shape=layer, color=cluster2)) + geom_point() + scale_color_manual(values=col2) -> panel1_pca
 data.frame(Dim1=zifa_tc[,1], Dim2=zifa_tc[,2]) %>%
-  ggplot(aes(Dim1, Dim2, shape=layer, color=cluster)) + geom_point() + scale_color_manual(values=col2) -> panel1_zifa
+  ggplot(aes(Dim1, Dim2, shape=layer, color=cluster2)) + geom_point() + scale_color_manual(values=col2) -> panel1_zifa
 data.frame(Dim1=zinb@W[,1], Dim2=zinb@W[,2]) %>%
-  ggplot(aes(Dim1, Dim2, shape=layer, color=cluster)) + geom_point() + scale_color_manual(values=col2) -> panel1_zinb
+  ggplot(aes(Dim1, Dim2, shape=layer, color=cluster2)) + geom_point() + scale_color_manual(values=col2) -> panel1_zinb
 
 p1 <- plot_grid(panel1_pca + theme(legend.position = "none"),
                 panel1_zifa + theme(legend.position = "none"),
@@ -102,36 +96,39 @@ upper <- plot_grid(p1, legend, rel_widths = c(3, 1))
 
 plot_grid(upper, lower, ncol=1, nrow=2)
 
+# ### t-sne
+#
+# library(Rtsne)
+# tsne_pca <- Rtsne(pc_tc[,1:2], pca=FALSE)
+# plot(tsne_pca$Y, col=col2[cluster], pch=19)
+# tsne_zifa <- Rtsne(zifa_tc[,1:2], pca=FALSE)
+# plot(tsne_zifa$Y, col=col2[cluster], pch=19)
+# tsne_zinb <- Rtsne(zinb@W[,1:2], pca=FALSE)
+# plot(tsne_zinb$Y, col=col2[cluster], pch=19)
+
 ### Silhouette
 
 library(cluster)
-d <- dist(zinb@W)
-ss <- silhouette(as.numeric(cluster), d)
-plot(ss, border=col2[sort(as.numeric(cluster), decreasing = TRUE)], main="ZINB")
-pamres <- pam(d, k=4)
-s <- silhouette(pamres, d)
-mean(s[,3])
-tapply(s[,3], s[,1], mean)
-plot(s, border=collayer[as.numeric(rownames(s))], main="ZINB")
 
-d <- dist(pc_tc[,1:2])
-ss <- silhouette(as.numeric(cluster), d)
-plot(ss, border=col2[sort(as.numeric(cluster), decreasing = TRUE)], main="PCA")
-mean(ss[,3])
-hist(ss[,3])
-pamres <- pam(d, k=4)
-s <- silhouette(pamres, d)
-mean(s[,3])
-tapply(s[,3], s[,1], mean)
-plot(s, border=collayer[as.numeric(rownames(s))], main="PCA")
+methods <- list(pc_raw[,1:2], pc_tc[,1:2], pc_tmm[,1:2], pc_fq[,1:2],
+                zifa_raw, zifa_tc, zifa_tmm, zifa_fq,
+                zinb@W)
+names(methods) <- c(paste0("PCA_", c("RAW", "TC", "TMM", "FQ")),
+                    paste0("ZIFA_", c("RAW", "TC", "TMM", "FQ")),
+                    "ZINB")
+met_type <- as.factor(c(rep(c("PCA", "ZIFA"), each=4), "ZINB"))
 
-d <- dist(zifa_tc)
-ss <- silhouette(as.numeric(cluster), d)
-plot(ss, border=col2[sort(as.numeric(cluster), decreasing = TRUE)], main="ZIFA")
-mean(ss[,3])
-hist(ss[,3])
-pamres <- pam(d, k=4)
-s <- silhouette(pamres, d)
-mean(s[,3])
-tapply(s[,3], s[,1], mean)
-plot(s, border=collayer[as.numeric(rownames(s))], main="ZIFA")
+sil_cl <- sapply(seq_along(methods), function(i) {
+  d <- dist(methods[[i]])
+  ss <- silhouette(as.numeric(cluster), d)
+  mean(ss[,3])
+})
+
+sil_lay <- sapply(seq_along(methods), function(i) {
+  d <- dist(methods[[i]][!is.na(cluster2),])
+  ss <- silhouette(as.numeric(cluster2)[!is.na(cluster2)], d)
+  mean(ss[,3])
+})
+
+barplot(sil_cl, col=col1[met_type], horiz = TRUE, names.arg = names(methods), las=2)
+barplot(sil_lay, col=col1[met_type], horiz = TRUE, names.arg = names(methods), las=2)
