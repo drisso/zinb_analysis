@@ -32,7 +32,7 @@ library(DESeq2)
 set.seed(8283)
 options(getClass.msg=FALSE) #get rid of annoying messages about cache until fixed internally in R
 
-ncores <- 11
+ncores <- detectCores() - 1
 ```
 
 Here, I will explore the relation between the expression values and some covariates provided with the data.
@@ -73,18 +73,16 @@ fastpca <- function(expr, scale=FALSE) {
   return(pc_raw)
 }
 
-mostvar <- function(expr, num=1000) {
-  vars <- rowVars(log1p(expr))
-  names(vars) <- rownames(expr)
-  vars <- sort(vars, decreasing = TRUE)
-  expr[names(vars)[seq_len(num)],]
-}
+vars <- rowVars(log1p(tc))
+names(vars) <- rownames(tc)
+vars <- sort(vars, decreasing = TRUE)
+vargenes <- names(vars)[1:1000]
 
-pc_raw <- fastpca(log1p(mostvar(raw)))
-pc_tc <- fastpca(log1p(mostvar(tc)))
-pc_fq <- fastpca(log1p(mostvar(fq)))
-pc_tmm <- fastpca(log1p(mostvar(tmm)))
-pc_deseq <- fastpca(log1p(mostvar(deseq)))
+pc_raw <- fastpca(log1p(raw[vargenes,]))
+pc_tc <- fastpca(log1p(tc[vargenes,]))
+pc_fq <- fastpca(log1p(fq[vargenes,]))
+pc_tmm <- fastpca(log1p(tmm[vargenes,]))
+pc_deseq <- fastpca(log1p(deseq[vargenes,]))
 
 col1 <- brewer.pal(9, "Set1")
 col2 <- c(brewer.pal(8, "Set2"), brewer.pal(8, "Set3"), brewer.pal(8, "Set1"))
@@ -129,19 +127,19 @@ wrapRzifa <- function(Y, block = T){
   read.csv(sprintf("%s_zifa.csv", tmp), header=FALSE)
 }
 
-zifa_raw <- wrapRzifa(log1p(mostvar(raw)))
+zifa_raw <- wrapRzifa(log1p(raw[vargenes,]))
 plot(zifa_raw, pch=19, col=colMerged, main="ZIFA Raw")
 plot(zifa_raw, pch=19, col=colCl, main="ZIFA Raw")
 
-zifa_tc <- wrapRzifa(log1p(mostvar(tc)))
+zifa_tc <- wrapRzifa(log1p(tc[vargenes,]))
 plot(zifa_tc, pch=19, col=colMerged, main="ZIFA TC")
 plot(zifa_tc, pch=19, col=colCl, main="ZIFA TC")
 
-zifa_tmm <- wrapRzifa(log1p(mostvar(tmm)))
+zifa_tmm <- wrapRzifa(log1p(tmm[vargenes,]))
 plot(zifa_tmm, pch=19, col=colMerged, main="ZIFA TMM")
 plot(zifa_tmm, pch=19, col=colCl, main="ZIFA TMM")
 
-zifa_fq <- wrapRzifa(log1p(mostvar(fq)))
+zifa_fq <- wrapRzifa(log1p(fq[vargenes,]))
 plot(zifa_fq, pch=19, col=colMerged, main="ZIFA FQ")
 plot(zifa_fq, pch=19, col=colCl, main="ZIFA FQ")
 ```
@@ -149,7 +147,7 @@ plot(zifa_fq, pch=19, col=colCl, main="ZIFA FQ")
 ## ZINB
 
 ```{r zinb}
-zinb <- zinbFit(mostvar(raw), ncores = ncores, K = 2)
+zinb <- zinbFit(raw[vargenes,], ncores = ncores, K = 2)
 plot(zinb@W, pch=19, col=colMerged, main="ZINB")
 plot(zinb@W, pch=19, col=colCl, main="ZINB")
 ```
@@ -219,7 +217,7 @@ legend("topright", colnames(df)[3:19], fill=rainbow(17), border=rainbow(17), cex
 
 ```{r zinb_batch}
 qcpca <- prcomp(as.matrix(colData(allen_core)[,1:15]), center=TRUE, scale=TRUE)
-zinb_batch <- zinbFit(mostvar(raw), ncores = ncores, K = 2, X=qcpca$x[,1:2])
+zinb_batch <- zinbFit(raw[vargenes,], ncores = ncores, K = 2, X=qcpca$x[,1:2])
 plot(zinb_batch@W, pch=19, col=colMerged, main="ZINB")
 ```
 
@@ -241,6 +239,107 @@ barplot(abs(cors), beside = TRUE, col=rainbow(17), border=rainbow(17), ylim=c(0,
 legend("topright", colnames(df)[3:19], fill=rainbow(17), border=rainbow(17), cex=.5)
 ```
 
+## Add layers in ZINB model
+
+```{r zinb_bio}
+cluster2 <- as.character(level2)
+cluster2[cluster2 %in% c("Pvalb Tacr3", "Sst Myh8")] <- "Other"
+cluster2[grep("^L4", cluster2)] <- "L4"
+cluster2[grep("^L6", cluster2)] <- "L6a"
+cluster2[grep("^L5a", cluster2)] <- "L5a"
+cluster2[cluster2 == "L5 Ucma"] <- "L5a"
+cluster2[grep("^L5b", cluster2)] <- "L5b"
+cluster2 <- as.factor(cluster2)
+
+zinb_bio <- zinbFit(raw[vargenes,], ncores = ncores, K = 2, X=model.matrix(~cluster2), epsilon=1e3)
+plot(zinb_bio@W, pch=19, col=colMerged, main="ZINB")
+```
+
+```{r zinb_bio_cov, dependson="zinb_bio"}
+plot(zinb_bio@W, col=col2[level2], pch=20, main="Colored by layer")
+legend("bottomright", levels(level2), fill=col2, cex=.5)
+
+df <- cbind(data.frame(W1=zinb_bio@W[,1], W2=zinb_bio@W[,2], coverage=coverage, detection_rate=detection_rate), as.data.frame(colData(allen_core)[,1:15]))
+
+df %>% ggplot(aes(W1, W2)) + geom_point(aes(color=coverage)) + scale_colour_gradient(low="blue", high="yellow") + theme_classic()
+
+df %>% ggplot(aes(W1, W2)) + geom_point(aes(color=detection_rate)) + scale_colour_gradient(low="blue", high="yellow") + theme_classic()
+
+pairs(df[,1:4], col=colMerged, pch=19)
+
+cors <- sapply(1:2, function(i) cor(zinb_bio@W[,i], df[,3:19]))
+colnames(cors) <- paste("PC", 1:NCOL(cors), sep="")
+rownames(cors) <- paste("QC", 1:NROW(cors), sep="")
+barplot(abs(cors), beside = TRUE, col=rainbow(17), border=rainbow(17), ylim=c(0, 1), space=c(0, 2), main="Absolute correlation with QC features")
+legend("topright", colnames(df)[3:19], fill=rainbow(17), border=rainbow(17), cex=.5)
+```
+
+```{r zinb_outliers, dependson="zinb_bio"}
+outliers <- which(zinb_bio@W[,1]>2)
+plot(zinb_bio@W, col="grey", pch=19)
+points(zinb_bio@W[outliers,], col="red", pch=19)
+
+qc <- as.matrix(colData(allen_core)[,1:15])
+
+col_out <- rep("grey", nrow(qc))
+col_out[outliers] <- "red"
+
+plot(qc[,c(1, 4)], col=col_out, pch=19)
+
+library(cluster)
+pamres <- pam(zinb_bio@W[-outliers,], k=2)
+table(pamres$clustering)
+
+plot(zinb_bio@W[-outliers,], col=col1[pamres$clustering], pch=19)
+```
+
+```{r zinb_check_batch}
+metadata <- read.csv("../../scone_analysis/data/allen_metadata.csv", stringsAsFactors = FALSE)
+ids <- read.table("../../scone_analysis/data/allen_ids.txt", stringsAsFactors = FALSE, header = TRUE)
+
+ids <- ids[match(colnames(raw), ids[,1]),]
+batch_info <- metadata[,c("collection_date", "short_name", "notes")]
+batch <- factor(batch_info[match(ids[,2], batch_info[,2]),1],
+                levels=c("7/8/2013", "11/22/2013", "11/25/2013", "12/12/2013",
+                         "1/9/2014", "1/31/2014", "2/10/2014", "3/27/2014",
+                         "4/23/2014", "8/18/2014", "11/20/2014",
+                         "11/25/2014", "2/11/2015", "2/18/2015"))
+notes <- as.factor(batch_info[match(ids[,2], batch_info[,2]),3])
+table(batch[-outliers], pamres$clustering)
+
+plot(zinb_bio@W[-outliers,], col=col1[batch[-outliers]], pch=19)
+
+boxplot(zinb_bio@W[,1]~batch, las=2)
+boxplot(zinb_bio@W[-outliers,1]~batch[-outliers], las=2)
+```
+
+## Add batches in ZINB model
+
+```{r zinb_batch2, dependson="zinb_check_batch"}
+zinb_batch <- zinbFit(raw[vargenes,], ncores = ncores, K = 2, X=model.matrix(~batch), epsilon=1e4)
+plot(zinb_batch@W, pch=19, col=colMerged, main="ZINB")
+plot(zinb_batch@W, pch=19, col=colCl, main="ZINB")
+```
+
+```{r zinb_batch2_cov, dependson="zinb_batch2"}
+plot(zinb@W, col=col1[batch], pch=19, main="Colored by batch")
+
+df <- cbind(data.frame(W1=zinb_batch@W[,1], W2=zinb_batch@W[,2], coverage=coverage, detection_rate=detection_rate), as.data.frame(colData(allen_core)[,1:15]))
+
+df %>% ggplot(aes(W1, W2)) + geom_point(aes(color=coverage)) + scale_colour_gradient(low="blue", high="yellow") + theme_classic()
+
+df %>% ggplot(aes(W1, W2)) + geom_point(aes(color=detection_rate)) + scale_colour_gradient(low="blue", high="yellow") + theme_classic()
+
+pairs(df[,1:4], col=colMerged, pch=19)
+
+cors <- sapply(1:2, function(i) cor(zinb_batch@W[,i], df[,3:19]))
+colnames(cors) <- paste("PC", 1:NCOL(cors), sep="")
+rownames(cors) <- paste("QC", 1:NROW(cors), sep="")
+barplot(abs(cors), beside = TRUE, col=rainbow(17), border=rainbow(17), ylim=c(0, 1), space=c(0, 2), main="Absolute correlation with QC features")
+legend("topright", colnames(df)[3:19], fill=rainbow(17), border=rainbow(17), cex=.5)
+
+```
+
 # Gene-level covariates
 
 ```{r gc_content, eval=FALSE}
@@ -250,7 +349,7 @@ rownames(gene_info) = bm[,1]
 gene_info = na.omit(gene_info)
 ```
 
-```{r write_out, dependson=c("zinb", "zifa", "pca")}
-save(zinb, zinb_batch, zifa_fq, zifa_tmm, zifa_tc, zifa_raw, pc_deseq, pc_tmm, pc_fq, pc_tc, pc_raw,
+```{r write_out, dependson=c("zinb", "zifa", "pca", "zinb_batch2", "zinb_bio")}
+save(zinb, zinb_batch, zinb_bio, zifa_fq, zifa_tmm, zifa_tc, zifa_raw, pc_deseq, pc_tmm, pc_fq, pc_tc, pc_raw, 
 file="allen_covariates_1000.rda")
 ```

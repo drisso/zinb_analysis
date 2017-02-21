@@ -19,7 +19,7 @@ qc <- cbind(detection_rate, as.data.frame(colData(allen_core)[,1:15]))
 layer <- as.factor(colData(allen_core)$driver_1_s)
 cluster <- as.factor(colData(allen_core)$Primary.Type)
 cluster2 <- as.character(cluster)
-cluster2[cluster2 %in% c("Pvalb Tacr3", "Sst Myh8")] <- NA
+cluster2[cluster2 %in% c("Pvalb Tacr3", "Sst Myh8")] <- "Other"
 cluster2[grep("^L4", cluster2)] <- "L4"
 cluster2[grep("^L6", cluster2)] <- "L6a"
 cluster2[grep("^L5a", cluster2)] <- "L5a"
@@ -137,12 +137,29 @@ sil_cl <- sapply(seq_along(methods), function(i) {
 })
 
 sil_lay <- sapply(seq_along(methods), function(i) {
-  d <- dist(methods[[i]][!is.na(cluster2),])
-  ss <- silhouette(as.numeric(cluster2)[!is.na(cluster2)], d)
+  d <- dist(methods[[i]])
+  ss <- silhouette(as.numeric(cluster2), d)
   mean(ss[,3])
 })
 
 pdf("allen_sil.pdf")
-barplot(sil_cl, col=col1[met_type], horiz = TRUE, names.arg = names(methods), las=2, main="by cluster")
 barplot(sil_lay, col=col1[met_type], horiz = TRUE, names.arg = names(methods), las=2, main="by layer")
 dev.off()
+
+bars <- data.frame(AverageSilhouette=sil_lay, Method=names(methods), Type=met_type)
+
+bars %>%
+  ggplot(aes(Method, AverageSilhouette, group=Type, fill=Type)) +
+  geom_bar(stat="identity", position='dodge') +
+  scale_fill_manual(values=col1) + coord_flip() +
+  theme(legend.position = "none") -> sil
+
+sil2 <- plot_grid(sil, NULL, NULL, ncol=3, nrow=1, labels="G")
+fig1_tris <- plot_grid(upper, lower, sil2, ncol=1, nrow=3)
+fig1_tris
+
+save_plot("allen_fig1tris.pdf", fig1_tris,
+          ncol = 3,
+          nrow = 3,
+          base_aspect_ratio = 1.3
+)
