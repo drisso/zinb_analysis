@@ -66,8 +66,9 @@ genenames<- gsub("'", '', genenames)
 geneupper <- str_to_upper(genenames)
 
 library(limma)
-design <- model.matrix(~as.factor(cl))
-fit <- lmFit(raw, design)
+cl_sub <- cl[cross=="LT_old"]
+design <- model.matrix(~as.factor(cl_sub))
+fit <- lmFit(raw[,cross=="LT_old"], design)
 fit <- eBayes(fit)
 interesting_genes <- genenames[as.numeric(rownames(topTable(fit, coef=2, n=100)))]
 
@@ -102,3 +103,15 @@ names(pvals) <- names(msigdb_idx)
 adjp <- p.adjust(pvals, method = "BH")
 print(head(sort(pvals)))
 
+library(scone)
+data("cellcycle_genes")
+
+rownames(raw) <- str_to_upper(genenames[as.numeric(rownames(raw))])
+intersect(cellcycle_genes[,1], rownames(raw))
+cc_idx <- which(rownames(raw) %in% cellcycle_genes[,1])
+phase <- cellcycle_genes[match(rownames(raw)[cc_idx], cellcycle_genes[,1]),2]
+
+library(gplots)
+heatmap.2(as.matrix(raw[cc_idx, cross=="LT_old"]), trace="none", ColSideColors = col1[cl_sub])
+heatmap.2(as.matrix(raw[str_to_upper(interesting_genes), cross=="LT_old"]), trace="none", ColSideColors = col1[cl_sub])
+heatmap.2(as.matrix(raw[cc_idx, cross=="LT_old"]), trace="none", ColSideColors = col1[cl_sub], RowSideColors = col2[as.factor(phase)])
