@@ -20,13 +20,11 @@ library(reshape)
 library(EDASeq)
 library(edgeR)
 theme_set(theme_bw())
-cols <- brewer.pal(8, "Set1")
-cols2 <- c(brewer.pal(8, "Set2"), brewer.pal(8, "Set3"), brewer.pal(8, "Set1"))
 ```
 
 ```{r load}
-load("./datasets/simAllen50.rda")
-load("./datasets/simAllen50_fitted.rda")
+load("datasets/simZeisel_100_a0.85_offs3.5_seed9128.rda")
+load("datasets/simZeisel_100_a0.85_offs3.5_seed9128_fittedAll.rda")
 ```
 
 # Results
@@ -46,7 +44,7 @@ pairs(fit[[4]]@W, pch=19, col=biotrue, main="K=4")
 ## Estimates
 ### Bias
 ```{r bias}
-load("./datasets/simAllen50_bias.rda")
+load("datasets/simZeisel_100_a0.85_offs3.5_seed9128_bias.rda")
 K <- 1:4
 ggplot(bias[bias$param == 'beta_mu', ], aes(x = K, y = bias)) + 
   geom_boxplot() + ggtitle('beta_mu') + facet_grid(disp ~ V) + 
@@ -155,7 +153,7 @@ ggplot(bias[bias$param == 'pi', ], aes(x = K, y = bias)) +
 
 ### Variance
 ```{r variance}
-load("./datasets/simAllen50_variance.rda")
+load("./datasets/simZeisel_100_a0.85_offs3.5_seed9128_variance.rda")
 K <- 1:4
 ggplot(variance[variance$param == 'beta_mu', ], aes(x = K, y = variance)) + 
   geom_boxplot() + ggtitle('beta_mu') + facet_grid(disp ~ V) + 
@@ -326,3 +324,127 @@ ggplot(mse[mse$param == 'pi', ], aes(x = K, y = mse)) +
   facet_grid(disp ~ V) + coord_cartesian(ylim = c(0,2000)) +
   geom_hline(yintercept = 0, col = 'red')
 ```
+
+
+```{r savePaper}
+pref = "datasets/simZeisel_100_a0.85_offs3.5_seed9128"
+load(paste0(pref, "_bias.rda"))
+load(paste0(pref, "_variance.rda"))
+load(paste0(pref, "_fittedAll.rda"))
+load(paste0(pref, ".rda"))
+K <- 1:4
+mse = bias
+colnames(mse)[1] = c('mse')
+mse$mse = bias$bias^2 + variance$variance
+```
+
+```{r bias_mu}
+# Bias
+bias_mu = ggplot(bias[bias$param == 'mu', ], aes(x = K, y = bias)) + 
+  geom_boxplot() + ggtitle('') + facet_grid(disp ~ V) + 
+  ylab(expression(paste('Bias ', mu))) + 
+  geom_hline(yintercept = 0, col = 'red')
+bias_mu
+ggsave(filename="../paper/6680489mtyrjx/biasMu.png", plot = bias_mu,
+       device = 'png')
+```
+
+```{r bias_mu_noOut}
+bias_mu_noOut = ggplot(bias[bias$param == 'mu', ], aes(x = K, y = bias)) + 
+  geom_boxplot(outlier.shape = NA) +
+  ggtitle('') + ylab(expression(paste('Bias ', mu, ', no outlier'))) + 
+  facet_grid(disp ~ V) + 
+  geom_hline(yintercept = 0, col = 'red') + coord_cartesian(ylim = c(-1,1.5))
+bias_mu_noOut
+ggsave(filename="../paper/6680489mtyrjx/biasMuNo.png", plot = bias_mu_noOut,
+       device = 'png')
+```
+
+```{r bias_pi}
+bias_pi = ggplot(bias[bias$param == 'pi', ], aes(x = K, y = bias)) + 
+  geom_boxplot() + ggtitle('') + facet_grid(disp ~ V) + 
+  ylab(expression(paste('Bias ', pi))) + 
+  geom_hline(yintercept = 0, col = 'red')
+bias_pi
+ggsave(filename="../paper/6680489mtyrjx/biasPi.png", plot = bias_pi,
+       device = 'png')
+```
+
+```{r bias_pi_noOut}
+bias_pi_noOut = ggplot(bias[bias$param == 'pi', ], aes(x = K, y = bias)) + 
+  geom_boxplot(outlier.shape = NA) + 
+  ggtitle('') + ylab(expression(paste('Bias ', pi, ', no outlier'))) + 
+  facet_grid(disp ~ V) + 
+  geom_hline(yintercept = 0, col = 'red') + coord_cartesian(ylim = c(-6,5))
+bias_pi_noOut
+ggsave(filename="../paper/6680489mtyrjx/biasPiNo.png", plot = bias_pi_noOut,
+       device = 'png')
+```
+
+```{r mse_mu}
+mse_mu = ggplot(mse[mse$param == 'mu', ], aes(x = K, y = mse)) + 
+  geom_boxplot() + ggtitle('') + facet_grid(disp ~ V) + 
+  ylab(expression(paste('MSE ', mu))) + 
+  geom_hline(yintercept = 0, col = 'red')
+mse_mu
+ggsave(filename="../paper/6680489mtyrjx/mseMu.png", plot = mse_mu,
+       device = 'png')
+```
+
+```{r mse_mu_noOut}
+mse_mu_noOut = ggplot(mse[mse$param == 'mu', ], aes(x = K, y = mse)) + 
+  geom_boxplot(outlier.shape = NA) + ggtitle('') +
+   ylab(expression(paste('MSE ', mu, ', no outlier'))) + 
+  facet_grid(disp ~ V) + coord_cartesian(ylim = c(0,4)) +
+  geom_hline(yintercept = 0, col = 'red')
+mse_mu_noOut
+ggsave(filename="../paper/6680489mtyrjx/mseMuNo.png", plot = mse_mu_noOut,
+       device = 'png')
+```
+
+```{r mse_pi}
+mse_pi = ggplot(mse[mse$param == 'pi', ], aes(x = K, y = mse)) + 
+  geom_boxplot() + ggtitle('') + facet_grid(disp ~ V) + 
+  ylab(expression(paste('MSE ', pi))) + 
+  geom_hline(yintercept = 0, col = 'red')
+mse_pi
+ggsave(filename="../paper/6680489mtyrjx/msePi.png", plot = mse_pi,
+       device = 'png')
+```
+
+```{r mse_pi_noOut}
+mse_pi_noOut = ggplot(mse[mse$param == 'pi', ], aes(x = K, y = mse)) + 
+  geom_boxplot(outlier.shape = NA) + ggtitle('') +
+  ylab(expression(paste('MSE ', pi, ', no outlier'))) + 
+  facet_grid(disp ~ V) + coord_cartesian(ylim = c(0,50)) +
+  geom_hline(yintercept = 0, col = 'red')
+mse_pi_noOut
+ggsave(filename="../paper/6680489mtyrjx/msePiNo.png", plot = mse_pi_noOut,
+       device = 'png')
+```
+
+```{r meandiff}
+trueMu = getLogMu(simModel)
+truePi = getLogitPi(simModel)
+fit = fittedSim[[2]][[1]][[2]][[1]]
+fittedMu = simModel@X %*% fit@beta_mu + t(simModel@V %*% fit@gamma_mu) + simModel@W %*% fit@alpha_mu
+fittedPi = simModel@X %*% fit@beta_pi + t(simModel@V %*% fit@gamma_pi) + simModel@W %*% fit@alpha_pi
+```
+
+```{r plotMDmu}
+meanMu = as.vector(.5*(trueMu + fittedMu))
+diffMu = as.vector(fittedMu - trueMu)
+meanPi = as.vector(.5*(truePi + fittedPi))
+diffPi = as.vector(fittedPi - truePi)
+
+#pdf('../paper/6680489mtyrjx/mdMu.pdf', width = 10)
+smoothScatter(meanMu, diffMu, xlab = 'Mean', ylab = 'Difference')
+abline(h = 0, col = 'gray')
+#dev.off()
+
+#pdf('../paper/6680489mtyrjx/mdPi.pdf', width = 10)
+smoothScatter(meanPi, diffPi, xlab = 'Mean', ylab = 'Difference')
+abline(h = 0, col = 'gray')
+#dev.off()
+```
+

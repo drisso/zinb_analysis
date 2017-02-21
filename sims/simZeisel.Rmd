@@ -32,7 +32,7 @@ set.seed(9687)
 
 # ZINB fit to get true parameters
 ```{r datain}
-data <- read.table("~/Documents/BRAIN/gitrepo/zinb_analysis/sims/datasets/expression_mRNA_17-Aug-2014.txt", sep='\t', stringsAsFactors = FALSE, comment.char = '%')
+data <- read.table("datasets/expression_mRNA_17-Aug-2014.txt", sep='\t', stringsAsFactors = FALSE, comment.char = '%')
 
 level1 <- as.factor(as.matrix(data)[9,-(1:2)])
 tissue <- as.factor(as.matrix(data)[1,-(1:2)])

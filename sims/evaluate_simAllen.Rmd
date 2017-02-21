@@ -22,6 +22,7 @@ library(edgeR)
 library(dplyr)
 ```
 
+
 # Description of the simulations
 
 Here we simulate from the true model, with the following parameters.
@@ -43,7 +44,7 @@ See bias, variance, and MSE in separate Rmd files (simAllen_estimates_25.Rmd, si
 # Impact on dimensionality reduction
 ```{r corr}
 par(mar=c(10.1,4.1,4.1,2.1))
-ds = 'Allen'
+ds = 'Zeisel'
 for (nc in c(100, 1000)){
   for (offs in c(-3.5, 0, 3.5)){
     for (aa in c(1, .85)){
@@ -72,9 +73,9 @@ for (nc in c(100, 1000)){
 ```{r corrSave,include=FALSE}
 par(mar=c(10.1,4.1,4.1,2.1))
 ds = 'Allen'
-for (nc in c(1000)){
+for (nc in c(100, 1000)){
   for (offs in c(-3.5, 0, 3.5)){
-    for (aa in c(.85)){
+    for (aa in c(1, .85)){
       pref = sprintf('sim%s_%s_a%s_offs%s_seed9128', ds, nc, aa, offs)
       load(paste0('datasets/', pref, '_dist.rda'))
       corr <- lapply(1:15, function(i) rowMeans(sapply(res, function(x) x[[i]])))
@@ -100,45 +101,6 @@ for (nc in c(1000)){
 ```
 
 
-
-```{r corrSummary}
-corr = lapply(c(100, 1000), function(nc){
-  lapply(c(1, .85), function(aa){
-    lapply(c(-3.5, 0, 3.5), function(offs){
-      pp = sprintf('datasets/simAllen_%s_a%s_offs%s_seed9128', nc, aa, offs)
-      load(paste0(pp, '_dist.rda'))
-      cc <- lapply(1:15, function(i) rowMeans(sapply(res, function(x) x[[i]])))
-      do.call(cbind, cc)
-    })
-  })
-})
-corr = do.call(rbind, do.call(rbind, do.call(rbind, corr)))
-corr = data.frame(corr, stringsAsFactors = F)
-colnames(corr) <- c("true W", paste0("zinb k=", 1:4), "PCA", "PCA TC",
-                          "PCA TMM", "PCA DESeq2", "PCA FQ", 'ZIFA', 'ZIFA TC', 
-                          'ZIFA TMM', 'ZIFA DESeq2', 'ZIFA FQ')
-
-corr$pzero = c(rep(rep(c(.25,.45,.75), each = 100), 2),
-               rep(rep(c(.25,.45,.75), each = 1000), 2))
-corr$var = c(rep(paste('Clustering', 1:2), each = 300),
-             rep(paste('Clustering', 1:2), each = 3000))
-corr$nc = c(rep('100', 600), rep('1000', 6000))
-corrMolten = melt(corr, id.vars = c('pzero', 'var', 'nc'))
-corrSum = corrMolten %>% group_by(pzero, var, variable, nc) %>%
-  summarize(mean = mean(value), sd = sd(value)) %>% ungroup() %>%
-  as.data.frame()
-corrSum$pzero = factor(corrSum$pzero)
-
-c1 = corrSum[corrSum$variable != 'true W',]
-c1$method = sapply(strsplit(as.vector(c1$variable), ' '), '[[', 1)
-allen = ggplot(c1, aes(x = pzero, y = mean, col = variable, group = variable)) +
-  geom_point() + geom_line() + labs(col='') + 
-  theme_bw() + xlab('Zero Fraction') + facet_grid(nc ~ var) +
-  ylab('Correlation between true and estimated sample distances in W')
-allen
-ggsave(filename="../paper/6680489mtyrjx/allen_correlations.pdf", plot = allen,
-       width = 5, height = 5)
-```
 
 ## Silhouette width
 ```{r sil}
@@ -169,13 +131,13 @@ for (nc in c(100, 1000)){
 ```
 
 
-```{r silSummary}
+```{r avs}
 sil = lapply(c(100, 1000), function(nc){
   lapply(c(1, .85), function(aa){
     lapply(c(-3.5, 0, 3.5), function(offs){
-      pp = sprintf('datasets/simAllen_%s_a%s_offs%s_seed9128', nc, aa, offs)
+      pp = sprintf('datasets/simZeisel_%s_a%s_offs%s_seed9128', nc, aa, offs)
       load(paste0(pp, '_dist.rda'))
-      ss <- lapply(16:length(res[[1]]), function(i){
+      ss <- lapply(14:length(res[[1]]), function(i){
         rowMeans(sapply(res, function(x) x[[i]]))
       })
       do.call(cbind, ss)
@@ -185,8 +147,8 @@ sil = lapply(c(100, 1000), function(nc){
 sil = do.call(rbind, do.call(rbind, do.call(rbind, sil)))
 sil = data.frame(sil, stringsAsFactors = F)
 colnames(sil) <- c("true W", paste0("zinb k=", 1:4), "PCA", "PCA TC",
-                          "PCA TMM", "PCA DESeq2", "PCA FQ", 'ZIFA', 'ZIFA TC', 
-                          'ZIFA TMM', 'ZIFA DESeq2', 'ZIFA FQ')
+                          "PCA TMM","PCA FQ", 'ZIFA', 'ZIFA TC', 
+                          'ZIFA TMM', 'ZIFA FQ')
 sil = sil - sil[,1]
 sil$pzero = c(rep(rep(c(.25,.45,.75), each = 100), 2),
                rep(rep(c(.25,.45,.75), each = 1000), 2))
@@ -207,7 +169,7 @@ allen = ggplot(c1, aes(x = pzero, y = mean, col = variable, group = variable)) +
   ylab('Silhouette width - True Silhouette width') + 
   geom_hline(yintercept = 0, col = 'gray')
 allen
-ggsave(filename="../paper/6680489mtyrjx/allen_silhouette.pdf", plot = allen,
+ggsave(filename="../paper/6680489mtyrjx/zeisel_silhouette.pdf", plot = allen,
        width = 5, height = 5)
 ```
 
