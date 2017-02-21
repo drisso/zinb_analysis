@@ -52,6 +52,7 @@ plot(pc_cpm, pch=19, col=col1[day], main="PCA")
 cor(pc_cpm[,1], detection_rate)
 cor(pc_cpm[,2], detection_rate)
 
+library(zinb)
 zinb <- zinbFit(as.matrix(raw), ncores = 7, K = 2, epsilon=1e3)
 plot(zinb@W, pch=19, col=col1[day], main="ZINB")
 cor(zinb@W[,1], detection_rate)

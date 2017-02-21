@@ -75,7 +75,13 @@ p2 <- plot_grid(panel2_pca + theme(legend.position = "none"),
 legend2 <- get_legend(panel2_pca)
 lower <- plot_grid(p2, legend2, rel_widths = c(3, 1))
 
-plot_grid(upper, lower, ncol=1, nrow=2)
+fig1 <- plot_grid(upper, lower, ncol=1, nrow=2)
+
+save_plot("allen_fig1.pdf", fig1,
+          ncol = 3,
+          nrow = 3,
+          base_aspect_ratio = 1.3
+)
 
 ## Alternatively
 
@@ -94,7 +100,13 @@ p1 <- plot_grid(panel1_pca + theme(legend.position = "none"),
 legend <- get_legend(panel1_pca)
 upper <- plot_grid(p1, legend, rel_widths = c(3, 1))
 
-plot_grid(upper, lower, ncol=1, nrow=2)
+fig1_bis <- plot_grid(upper, lower, ncol=1, nrow=2)
+
+save_plot("allen_fig1bis.pdf", fig1_bis,
+          ncol = 3,
+          nrow = 3,
+          base_aspect_ratio = 1.3
+)
 
 # ### t-sne
 #
@@ -130,5 +142,7 @@ sil_lay <- sapply(seq_along(methods), function(i) {
   mean(ss[,3])
 })
 
-barplot(sil_cl, col=col1[met_type], horiz = TRUE, names.arg = names(methods), las=2)
-barplot(sil_lay, col=col1[met_type], horiz = TRUE, names.arg = names(methods), las=2)
+pdf("allen_sil.pdf")
+barplot(sil_cl, col=col1[met_type], horiz = TRUE, names.arg = names(methods), las=2, main="by cluster")
+barplot(sil_lay, col=col1[met_type], horiz = TRUE, names.arg = names(methods), las=2, main="by layer")
+dev.off()

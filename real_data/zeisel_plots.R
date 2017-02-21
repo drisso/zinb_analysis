@@ -1,4 +1,7 @@
 library(cowplot)
+library(RColorBrewer)
+library(magrittr)
+library(ggplot2)
 
 load("zeisel_covariates.rda")
 
@@ -70,23 +73,55 @@ p2 <- plot_grid(panel2_pca + theme(legend.position = "none"),
 legend2 <- get_legend(panel2_pca)
 lower <- plot_grid(p2, legend2, rel_widths = c(3, .6))
 
-plot_grid(upper, lower, ncol=1, nrow=2)
+fig1 <- plot_grid(upper, lower, ncol=1, nrow=2)
+
+save_plot("zeisel_fig1.pdf", fig1,
+          ncol = 3,
+          nrow = 3,
+          base_aspect_ratio = 1.3
+)
 
 library(cluster)
-d <- dist(zinb@W)
-s <- silhouette(as.numeric(level1), d)
-mean(s[,3])
-tapply(s[,3], s[,1], mean)
-plot(s, border=col2[sort(as.numeric(level1), decreasing = TRUE)], main="ZINB")
+# d <- dist(zinb@W)
+# s <- silhouette(as.numeric(level1), d)
+# mean(s[,3])
+# tapply(s[,3], s[,1], mean)
+# plot(s, border=col2[sort(as.numeric(level1), decreasing = TRUE)], main="ZINB")
+#
+# d <- dist(pc_tc[,1:2])
+# s <- silhouette(as.numeric(level1), d)
+# mean(s[,3])
+# tapply(s[,3], s[,1], mean)
+# plot(s, border=col2[sort(as.numeric(level1), decreasing = TRUE)], main="PCA")
+#
+# d <- dist(zifa_tc)
+# s <- silhouette(as.numeric(level1), d)
+# mean(s[,3])
+# tapply(s[,3], s[,1], mean)
+# plot(s, border=col2[sort(as.numeric(level1), decreasing = TRUE)], main="ZIFA")
 
-d <- dist(pc_tc[,1:2])
-s <- silhouette(as.numeric(level1), d)
-mean(s[,3])
-tapply(s[,3], s[,1], mean)
-plot(s, border=col2[sort(as.numeric(level1), decreasing = TRUE)], main="PCA")
+methods <- list(pc_raw[,1:2], pc_tc[,1:2], pc_tmm[,1:2], pc_fq[,1:2],
+                zifa_raw, zifa_tc, zifa_tmm, zifa_fq,
+                zinb@W)
+names(methods) <- c(paste0("PCA_", c("RAW", "TC", "TMM", "FQ")),
+                    paste0("ZIFA_", c("RAW", "TC", "TMM", "FQ")),
+                    "ZINB")
+met_type <- as.factor(c(rep(c("PCA", "ZIFA"), each=4), "ZINB"))
 
-d <- dist(zifa_tc)
-s <- silhouette(as.numeric(level1), d)
-mean(s[,3])
-tapply(s[,3], s[,1], mean)
-plot(s, border=col2[sort(as.numeric(level1), decreasing = TRUE)], main="ZIFA")
+sil_cl <- sapply(seq_along(methods), function(i) {
+  d <- dist(methods[[i]])
+  ss <- silhouette(as.numeric(level1), d)
+  mean(ss[,3])
+})
+
+pdf("zeisel_sil.pdf")
+barplot(sil_cl, col=col1[met_type], horiz = TRUE, names.arg = names(methods), las=2, main="Average silhouette width")
+dev.off()
+
+cors <- sapply(seq_along(methods), function(i) {
+  max(abs(cor(methods[[i]][,1], detection_rate)), abs(cor(methods[[i]][,2], detection_rate)))
+})
+
+pdf("zeisel_sil.pdf")
+barplot(cors, col=col1[met_type], horiz = TRUE, names.arg = names(methods), las=2, main="Absolute correlation with Detection Rate")
+dev.off()
