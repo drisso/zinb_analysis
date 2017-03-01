@@ -7,7 +7,8 @@ load("allen_covariates_1000.rda")
 
 data("allen")
 allen_core <- allen[grep("^ERCC-", rownames(allen), invert = TRUE),
-                    which(colData(allen)$Core.Type=="Core")]
+                    which(colData(allen)$Core.Type=="Core" &
+                            !(colData(allen)$Primary.Type %in% c("Pvalb Tacr3", "Sst Myh8")))]
 
 filter <- rowSums(assay(allen_core)>10)>=10
 raw <- assay(allen_core)[filter,]
@@ -19,11 +20,10 @@ qc <- cbind(detection_rate, as.data.frame(colData(allen_core)[,1:15]))
 layer <- as.factor(colData(allen_core)$driver_1_s)
 cluster <- as.factor(colData(allen_core)$Primary.Type)
 cluster2 <- as.character(cluster)
-cluster2[cluster2 %in% c("Pvalb Tacr3", "Sst Myh8")] <- "Other"
 cluster2[grep("^L4", cluster2)] <- "L4"
 cluster2[grep("^L6", cluster2)] <- "L6a"
 cluster2[grep("^L5a", cluster2)] <- "L5a"
-cluster2[cluster2 == "L5 Ucma"] <- "L5a"
+cluster2[cluster2 == "L5 Ucma"] <- "L5"
 cluster2[grep("^L5b", cluster2)] <- "L5b"
 cluster2 <- as.factor(cluster2)
 
@@ -41,7 +41,7 @@ data.frame(Dim1=zinb@W[,1], Dim2=zinb@W[,2]) %>%
 p1 <- plot_grid(panel1_pca + theme(legend.position = "none"),
                 panel1_zifa + theme(legend.position = "none"),
                 panel1_zinb + theme(legend.position = "none"),
-                labels=c("A", "B", "C"), align = "h", ncol=3)
+                labels=c("A", "C", "E"), align = "h", ncol=3)
 
 legend <- get_legend(panel1_pca)
 upper <- plot_grid(p1, legend, rel_widths = c(3, .6))
@@ -70,7 +70,7 @@ bars %>%
 p2 <- plot_grid(panel2_pca + theme(legend.position = "none"),
                 panel2_zifa + theme(legend.position = "none"),
                 panel2_zinb + theme(legend.position = "none"),
-                labels=c("D", "E", "F"), align = "h", ncol=3)
+                labels=c("B", "D", "F"), align = "h", ncol=3)
 
 legend2 <- get_legend(panel2_pca)
 lower <- plot_grid(p2, legend2, rel_widths = c(3, 1))
@@ -95,7 +95,7 @@ data.frame(Dim1=zinb@W[,1], Dim2=zinb@W[,2]) %>%
 p1 <- plot_grid(panel1_pca + theme(legend.position = "none"),
                 panel1_zifa + theme(legend.position = "none"),
                 panel1_zinb + theme(legend.position = "none"),
-                labels=c("A", "B", "C"), align = "h", ncol=3)
+                labels=c("A", "C", "E"), align = "h", ncol=3)
 
 legend <- get_legend(panel1_pca)
 upper <- plot_grid(p1, legend, rel_widths = c(3, 1))
@@ -142,10 +142,6 @@ sil_lay <- sapply(seq_along(methods), function(i) {
   mean(ss[,3])
 })
 
-pdf("allen_sil.pdf")
-barplot(sil_lay, col=col1[met_type], horiz = TRUE, names.arg = names(methods), las=2, main="by layer")
-dev.off()
-
 bars <- data.frame(AverageSilhouette=sil_lay, Method=names(methods), Type=met_type)
 
 bars %>%
@@ -163,3 +159,41 @@ save_plot("allen_fig1tris.pdf", fig1_tris,
           nrow = 3,
           base_aspect_ratio = 1.3
 )
+
+methods_sub <- methods[c(2, 6, 9)]
+sil_pc <- lapply(seq_along(methods_sub), function(i) {
+  d <- dist(methods_sub[[i]])
+  ss <- silhouette(as.numeric(cluster2), d)
+  sss <-  summary(ss)
+  sss$clus.avg.widths
+})
+
+bars <- data.frame(AverageSilhouette=unlist(sil_pc),
+                   Method=rep(c("PCA", "ZIFA", "ZINB"), each=nlevels(cluster2)),
+                   Cluster=rep(levels(cluster2), length(methods_sub)))
+
+library(dplyr)
+bars %>%
+  mutate(ClusterByMethod = paste0(Cluster, " ", Method)) %>%
+  ggplot(aes(ClusterByMethod, AverageSilhouette, fill=Cluster)) +
+  geom_bar(stat="identity", position='dodge') +
+  scale_fill_manual(values=col2) + coord_flip() +
+  theme(legend.position = "none") -> sil
+
+p1 <- plot_grid(panel1_pca + theme(legend.position = "none"),
+                panel1_zifa + theme(legend.position = "none"),
+                panel1_zinb + theme(legend.position = "none"),
+                labels=c("A", "C", "E"), align = "h", ncol=3)
+
+upper <- plot_grid(p1, sil, labels=c("", "G"), rel_widths = c(3, 1))
+
+fig1_4 <- plot_grid(upper, lower, ncol=1, nrow=2)
+fig1_4
+
+save_plot("allen_fig1_v4.pdf", fig1_4,
+          ncol = 3,
+          nrow = 3,
+          base_aspect_ratio = 1.3
+)
+
+save_plot("allen_supp_sil.pdf", sil)

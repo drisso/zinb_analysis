@@ -60,9 +60,6 @@ col2 <- c(brewer.pal(8, "Set2"), brewer.pal(8, "Set3"), brewer.pal(8, "Set1"))
 
 detection_rate <- colSums(all.counts>0)
 coverage <- colSums(all.counts)
-qc <- cbind(detection_rate, coverage)
-head(qc)
-
 ```
 
 # Comparison of methods
@@ -163,6 +160,21 @@ zinb_batch <- zinbFit(raw[vargenes,], ncores = ncores, K = 2, X=model.matrix(~Ba
 plot(zinb_batch@W, pch=19, col=colMerged, main="ZINB")
 ```
 
+```{r zinb_qc}
+library(scater)
+rownames(targets) <- colnames(all.counts)
+sceset <- newSCESet(countData = all.counts, phenoData = AnnotatedDataFrame(targets))
+
+keep_feature <- rowSums(exprs(sceset) > 0) > 0
+sceset <- sceset[keep_feature,]
+
+sceset <- calculateQCMetrics(sceset)
+qc <- pData(sceset)[,c(4, 7, 10, 14:17)]
+qcpca <- prcomp(qc, scale. = TRUE, center = TRUE)
+zinb_qc <- zinbFit(raw[vargenes,], ncores = ncores, K = 2, X=model.matrix(~qcpca$x[,1:2]), epsilon=1e3)
+plot(zinb_qc@W, pch=19, col=colMerged, main="ZINB")
+```
+
 # Gene-level covariates
 
 ```{r gc_content, eval=FALSE}
@@ -172,6 +184,6 @@ rownames(gene_info) = bm[,1]
 gene_info = na.omit(gene_info)
 ```
 
-```{r write_out, dependson=c("zinb", "zifa", "pca", "zinb_batch")}
-save(zinb, zinb_batch, zifa_fq, zifa_tmm, zifa_tc, zifa_raw, pc_tmm, pc_fq, pc_tc, pc_raw, file="espresso_covariates.rda")
+```{r write_out, dependson=c("zinb", "zifa", "pca", "zinb_batch", "zinb_qc")}
+save(zinb, zinb_batch, zinb_qc, zifa_fq, zifa_tmm, zifa_tc, zifa_raw, pc_tmm, pc_fq, pc_tc, pc_raw, file="espresso_covariates.rda")
 ```

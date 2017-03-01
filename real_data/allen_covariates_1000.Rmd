@@ -40,7 +40,8 @@ Here, I will explore the relation between the expression values and some covaria
 ```{r datain}
 data("allen")
 allen_core <- allen[grep("^ERCC-", rownames(allen), invert = TRUE),
-                    which(colData(allen)$Core.Type=="Core")]
+                    which(colData(allen)$Core.Type=="Core" &
+                            !(colData(allen)$Primary.Type %in% c("Pvalb Tacr3", "Sst Myh8")))]
 
 filter <- rowSums(assay(allen_core)>10)>=10
 ```

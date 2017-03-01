@@ -89,6 +89,62 @@ print(cor(df, method="spearman"))
 
 Even after full-quantile normalization, there is some residual correlation between PC2 and detection rate.
 
+```{r pca_tosave}
+library(scone)
+library(rARPACK)
+fastpca <- function(expr, scale=FALSE) {
+  svd_raw <- svds(scale(t(expr), center=TRUE, scale=scale), k=3, nu=3, nv=0)
+  pc_raw <- svd_raw$u %*% diag(svd_raw$d[1:3])
+  return(pc_raw)
+}
+
+raw <- as.matrix(counts)
+totalcount = function (ei)
+{
+  sums = colSums(ei)
+  eo = t(t(ei)*mean(sums)/sums)
+  return(eo)
+}
+
+tc <- totalcount(raw)
+fq <- FQT_FN(raw)
+tmm <- TMM_FN(raw)
+
+vargenes <- rownames(core)
+
+pc_raw <- fastpca(log1p(raw[vargenes,]))
+pc_tc <- fastpca(log1p(tc[vargenes,]))
+pc_fq <- fastpca(log1p(fq[vargenes,]))
+pc_tmm <- fastpca(log1p(tmm[vargenes,]))
+```
+
+```{r zifa}
+wrapRzifa <- function(Y, block = TRUE, k=2){
+  # wrapper R function for ZIFA.
+  # md5 hashing and temporary files are used not to re-run zifa 
+  # if it has already be run on this computer.
+  d = digest(Y, "md5")
+  tmp = paste0(tempdir(), '/', d)
+  write.csv(Y, paste0(tmp, '.csv'))
+  
+  if (!file.exists(paste0(tmp, "_", k, '_zifa.csv'))){
+    print('run ZIFA')
+    bb = ifelse(block, '-b ', '')
+    cmd = sprintf('python run_zifa.py -d %d %s%s.csv %s_%d_zifa.csv', k, bb, tmp, tmp, k)
+    system(cmd)
+  }
+  read.csv(sprintf("%s_%d_zifa.csv", tmp, k), header=FALSE)
+}
+
+zifa_raw <- wrapRzifa(log1p(raw[vargenes,]), k=3)
+
+zifa_tc <- wrapRzifa(log1p(tc[vargenes,]), k=3)
+
+zifa_tmm <- wrapRzifa(log1p(tmm[vargenes,]), k=3)
+
+zifa_fq <- wrapRzifa(log1p(fq[vargenes,]), k=3)
+```
+
 ## ZINB
 
 ```{r zinb}
@@ -140,3 +196,6 @@ print(system.time(zinb_4 <- zinbFit(core, ncores = 3, K = 4)))
 pairs(zinb_4@W, col=colMerged, pch=19, main="ZINB")
 ```
 
+```{r save, dependson="zifa"}
+save(zinb_3, zinb_4, zinb_Vall, pc_tmm, pc_fq, pc_tc, pc_raw, zifa_fq, zifa_tmm, zifa_tc, zifa_raw, file="olfactory.rda")
+```
