@@ -263,12 +263,24 @@ sil_batch <- lapply(seq_along(methods_sub), function(i) {
 
 bars <- data.frame(AverageSilhouette=unlist(sil_batch),
                    Method=rep(names(methods_sub), each=nlevels(batch)),
-                   Cluster=factor(rep(levels(condition), length(methods_sub)),
-                                  levels=levels(condition)))
+                   Cluster=factor(rep(paste0("Batch", levels(batch)), length(methods_sub)),
+                                  levels=paste0("Batch", levels(batch))))
 
 bars %>%
   dplyr::mutate(ClusterByMethod = paste0(Cluster, " ", Method)) %>%
   ggplot(aes(ClusterByMethod, AverageSilhouette, fill=Cluster)) +
   geom_bar(stat="identity", position='dodge') +
-  scale_fill_manual(values=col1) + coord_flip() +
-  theme(legend.position = "none", axis.text = element_text(size=8)) -> sil
+  scale_fill_manual(values=col2) + coord_flip() +
+  theme(legend.position = "none", axis.text = element_text(size=8)) -> sil2
+
+fig2_bis <- plot_grid(panel1_zinb + theme(legend.position = "none"),
+                  panel2_zinb,
+                  sil, sil2,
+                  labels=c("A", "B", "C", "D"), ncol=2, nrow=2, rel_widths = c(1, 1.25, 1, 1))
+fig2_bis
+
+save_plot("espresso_fig2bis.pdf", fig2_bis,
+          ncol = 2,
+          nrow = 2,
+          base_aspect_ratio = 1.3
+)
