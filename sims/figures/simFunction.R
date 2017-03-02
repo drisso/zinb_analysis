@@ -1,4 +1,4 @@
-simulateW <- function(zinb, ncells = 100, nclust = 3, a = 1, colIni = 1){
+simulateW <- function(zinb, ncells = 100, nclust = 3, ratioSSW_SSB = 1, colIni = 1){
   par(mfrow = c(2,2))
   # zinbW
   xlim = c(min(zinb@W[,1]) - 1, max(zinb@W[,1]) + 1) 
@@ -13,6 +13,7 @@ simulateW <- function(zinb, ncells = 100, nclust = 3, a = 1, colIni = 1){
   
   # multivar gaussian
   clust = sample(mclustW$classification, ncells, replace = TRUE)
+  stopifnot(length(unique(clust)) == nclust)
   # a = b = 1
   simW1 = lapply(clust, function(i){
     mvrnorm(n = 1, mu = mclustW$parameters$mean[, i], 
@@ -20,36 +21,42 @@ simulateW <- function(zinb, ncells = 100, nclust = 3, a = 1, colIni = 1){
   })
   simW1 = do.call(rbind, simW1)
   plot(simW1, col = clust,
-       main = paste0('multivar gauss sim\nncells=', ncells, ', a=1'),
+       main = paste0('multivar gauss sim\nncells=', ncells, ', scaleRatioSSW_SSB = 1'),
        xlab = 'W1', ylab = 'W2', xlim = xlim, ylim = ylim)
   
-  b2 = computeB2(mclustW, a)
-  b2 = matrix(c(b2[1], 1, 1, b2[2]), ncol = 2, nrow = 2)
-  simW2 = lapply(clust, function(i){
-    mvrnorm(n = 1, mu = mclustW$parameters$mean[, i] * a, 
-            Sigma = mclustW$parameters$variance$sigma[,, i] * b2)
-  })
-  simW2 = do.call(rbind, simW2)
+  simW2 = computeNewW(simW1, clust, ratioSSW_SSB)
   plot(simW2, col = clust,
-       main = paste0('multivar gauss sim\nncells=', ncells, ', a=' , a),
+       main = paste0('multivar gauss sim\nncells=', ncells, ', scaleRatioSSW_SSB =' , ratioSSW_SSB),
        xlab = 'W1', ylab = 'W2', xlim = xlim, ylim = ylim)
   par(mfrow = c(1, 1))
   
   return(list(simW = simW2, bio = clust))
 }
 
-computeB2 = function(mclustW, a = 1){
-  N = nrow(mclustW$data)
-  Vtot = apply(mclustW$data, 2, var)
+computeNewW = function(W, labels, ratioSSW_SSB = 1){
+  Vtot = apply(W, 2, var)
+  W_bar = apply(W, 2, mean)
+  N = nrow(W)
   
-  Vinter = (a * mclustW$parameters$mean - apply(mclustW$data, 2, mean))^2
-  nk = as.vector(table(mclustW$classification))
-  Vinter = as.vector(Vinter %*% nk)
+  cc = table(labels)
+  ccNames = names(cc)
+  nk = as.vector(cc)
+  W_bar_c = sapply(as.numeric(ccNames), function(i){
+    apply(W[labels == i, ], 2, mean)
+  })
+  colnames(W_bar_c) = ccNames
+  SS_between = colSums(nk*t((W_bar_c - W_bar)^2))
   
-  mk = sapply(mclustW$classification, function(i) mclustW$parameters$mean[,i])
-  Vintra = apply((mclustW$data - t(mk))^2, 2, sum)
-  
-  ( 1 / Vintra ) * ( (N-1) * Vtot - Vinter )
+  SS_within = rowSums(sapply(seq_len(N), function(i){
+    (W[i, ] - W_bar_c[, as.character(labels[i])])^2
+  }))
+
+  b2 = ratioSSW_SSB
+  a = sqrt( ( (N-1) * Vtot ) / ( SS_between + b2 * SS_within ) )
+  W_start = sapply(seq_len(N), function(i){
+    (1 - a) * W_bar +  W_bar_c[, as.character(labels[i])] * a * (1 - sqrt(b2)) +  a * sqrt(b2) * W[i,]
+  })
+  t(W_start)
 }
 
 simulateGamma <- function(zinb, ncells = 100, gammapiOffset = 0, colIni = 1,
@@ -83,12 +90,10 @@ simulateGamma <- function(zinb, ncells = 100, gammapiOffset = 0, colIni = 1,
 }
 
 zinbSimWrapper <- function(core, colIni, ncells = 100, ngenes = 1000, nclust = 3, 
-                           a = 1, gammapiOffset = 0, B = 1, ncores = NULL,
-                           seed = NULL, fileName = 'zinbSim.rda'){
-  
-  if (!is.null(seed)) set.seed(seed)
-  
+                           ratioSSW_SSB = 1, gammapiOffset = 0, B = 1, ncores = NULL,
+                           fileName = 'zinbSim.rda'){
   # sample ngenes 
+  set.seed(9128)
   if (ngenes > nrow(core)) repl = T else repl = F
   core = core[sample(1:nrow(core), ngenes, repl = repl),]
   
@@ -107,7 +112,7 @@ zinbSimWrapper <- function(core, colIni, ncells = 100, ngenes = 1000, nclust = 3
   }
   
   # sim W
-  w = simulateW(zinb, ncells, nclust, a, colIni)
+  w = simulateW(zinb, ncells, nclust, ratioSSW_SSB, colIni)
   simW = w$simW
   bio = w$bio
   
@@ -133,7 +138,7 @@ zinbSimWrapper <- function(core, colIni, ncells = 100, ngenes = 1000, nclust = 3
   save(bio, simModel, simData, file = fileName)
 }
 
-########################################################
+###############################################################################
 library(scRNAseq)
 library(zinb)
 library(mclust)
@@ -154,26 +159,16 @@ bioIni =  as.factor(colData(postfilter)$driver_1_s)
 core = assay(postfilter)
 colIni = cols[bioIni]
 
-simAllen = T
-if (simAllen){
-  for (nc in c(100, 1000, 10000)){
-    for (aa in c(1, 0.85)){
-      for (offs in c(-3.5, 0, 3.5)){
-        ff = sprintf('sims/datasets/simAllen_%s_a%s_offs%s.rda', nc, aa, offs)
-        zinbSimWrapper(core = core, colIni = colIni, ncells = nc, nclust = 3, 
-                       a = aa, gammapiOffset = offs, B = 10, seed = seed, 
-                       fileName = ff)
-        load(ff)
-        keep = lapply(1:length(simData), function(i){
-          counts = t(simData[[i]]$counts)
-          keep = (rowSums(counts) != 0)
-        })
-        keep = Reduce('+', keep) == 10
-        for (i in 1:length(simData)){
-          simData[[i]]$counts = simData[[i]]$counts[,keep] 
-        }
-        save(bio, simModel, simData, keep, file = ff)
-      }
+
+###########################################################################
+## Correlation and Silhouette plot
+for (nc in c(100, 1000)){
+  for (b2 in c(1, 5, 50)){
+    for (offs in c(0, 2, 5)){
+      ff = sprintf('sims/figures/corr_silh/simAllen_nc%s_ratio%s_offs%s.rda', nc, b2, offs)
+      zinbSimWrapper(core = core, colIni = colIni, ncells = nc, nclust = 3, 
+                     ratioSSW_SSB = b2, gammapiOffset = offs, B = 10, 
+                     fileName = ff)
     }
   }
 }
@@ -182,7 +177,6 @@ if (simAllen){
 ##########
 ## ZEISEL
 ##########
-#sims/datasets/
 data <- read.table("sims/datasets/expression_mRNA_17-Aug-2014.txt", sep='\t',
                    stringsAsFactors = FALSE, comment.char = '%')
 counts <- as.matrix(data[12:NROW(data),-(1:2)])
@@ -199,66 +193,73 @@ counts <- counts[filterGenes, ]
 col <- brewer.pal(8, "Set2")
 colIni <- col[level1]
 
-
-meanDiff = F
-if (meanDiff){
-  nc = 1000
-  aa = 1
-  offs = 3.5
-  ff = sprintf('sims/figures/meanDiff/simZeisel_%s_a%s_offs%s.rda', nc, aa, offs)
-  
-  ## simulate
-  zinbSimWrapper(core = counts, colIni = colIni, ncells = nc, nclust = 3, 
-                 a = aa, gammapiOffset = offs, B = 1, fileName = ff)
-  
-  # remove genes with only zeros in at least one of the B simulated ds
-  load(ff)
-  counts = t(simData$counts)
-  keep = rowSums(counts) > 0
-  simData$counts = simData$counts[,keep] 
-  save(bio, simModel, simData, keep, file = ff)
-
-  # fit
-  fittedSim = zinbFit(t(simData$counts), K = 2, commondispersion = FALSE,
-                   epsilon = 150, ncores = 2)
-  save(fittedSim, file = gsub('.rda', '_fitted.rda', ff))
-}
-
-corrSilh_Zeisel = F
-if (simZeisel){
-  for (nc in c(100, 1000, 10000)){
-    for (aa in c(1, 0.85)){
-      for (offs in c(-3.5, 0, 3.5)){
-        #sims/datasets/bias_mse_ncells/
-        ff = sprintf('simZeisel_%s_a%s_offs%s.rda', nc, aa, offs)
-        zinbSimWrapper(core = counts, colIni = colIni, ncells = nc, nclust = 3, 
-                       a = aa, gammapiOffset = offs, B = 10, seed = seed, 
-                       fileName = ff)
-        # remove genes with only zeros in at least one of the B simulated ds
-        load(ff)
-        keep = lapply(1:length(simData), function(i){
-          counts = t(simData[[i]]$counts)
-          keep = (rowSums(counts) != 0)
-        })
-        keep = Reduce('+', keep) == 10
-        for (i in 1:length(simData)){
-          simData[[i]]$counts = simData[[i]]$counts[,keep] 
-        }
-        save(bio, simModel, simData, keep, file = ff)
-      }
+###################################################################
+## Correlation and Silhouette plots
+###################################
+for (nc in c(100, 1000)){
+  for (b2 in c(1, 5, 10)){
+    for (offs in c(-1.5, 0.5, 2)){
+      ff = sprintf('sims/figures/corr_silh/simZeisel_nc%s_ratio%s_offs%s.rda', nc, b2, offs)
+      zinbSimWrapper(core = counts, colIni = colIni, ncells = nc, nclust = 3, 
+                     ratioSSW_SSB = b2, gammapiOffset = offs, B = 10, 
+                     fileName = ff)
     }
   }
 }
 
-time_Zeisel = F
-if (simZeisel){
-  aa = 1
-  offs = 3.5
-  for (nc in c(50, 100, 500, 1000, 5000, 10000)){
-    ff = sprintf('sims/figures/cpuTime/simZeisel_%s_a%s_offs%s.rda', nc, aa, offs)
-    zinbSimWrapper(core = counts, colIni = colIni, ncells = nc, nclust = 3, 
-                   a = aa, gammapiOffset = offs, B = 10, seed = seed, 
-                   fileName = ff)
+
+
+#######################################################################
+# Mean-Difference plot
+######################
+nc = 1000
+b2 = 1
+offs = 2
+ff = sprintf('sims/figures/meanDiff/simZeisel_nc%s_ratio%s_offs%s.rda', nc, b2, offs)
+
+## simulate
+zinbSimWrapper(core = counts, colIni = colIni, ncells = nc, nclust = 3, 
+               ratioSSW_SSB = b2, gammapiOffset = offs, B = 1, ncores = 2,
+               fileName = ff)
+
+# remove genes with only zeros and keep track of removed genes for mean diff
+load(ff)
+counts = t(simData$counts)
+keep = rowSums(counts) > 0
+simData$counts = simData$counts[,keep] 
+save(bio, simModel, simData, keep, file = ff)
+
+# fit
+fittedSim = zinbFit(t(simData$counts), K = 2, commondispersion = FALSE,
+                    epsilon = 250, ncores = 2)
+save(fittedSim, file = gsub('.rda', '_fitted.rda', ff))
+
+
+
+
+#######################################################################
+# bias_mse_allParam + bias_mse_ncells + cpuTime
+################
+b2 = 1
+offs = 2
+for (nc in c(50, 100, 500, 1000, 5000, 10000)){
+  ff = sprintf('sims/figures/bias_mse_cputime/simZeisel_nc%s_ratio%s_offs%s.rda', nc, b2, offs)
+  zinbSimWrapper(core = counts, colIni = colIni, ncells = nc, nclust = 3, 
+                 ratioSSW_SSB = b2, gammapiOffset = offs, B = 10,
+                 fileName = ff, ncores = 2)
+  
+  # remove genes with only zeros in at least one of the B simulated ds
+  load(ff)
+  keep = lapply(1:length(simData), function(i){
+    counts = t(simData[[i]]$counts)
+    rowSums(counts) != 0
+  })
+  keep = Reduce('+', keep) == 10
+  for (i in 1:length(simData)){
+    simData[[i]]$counts = simData[[i]]$counts[,keep] 
   }
+  save(bio, simModel, simData, keep, file = ff)
 }
+
+
 
