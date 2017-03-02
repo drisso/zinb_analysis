@@ -21,7 +21,7 @@ cluster2 <- colData(allen_core)$Primary.Type
 cluster2[grep("^L4", cluster2)] <- "L4"
 cluster2[grep("^L6", cluster2)] <- "L6a"
 cluster2[grep("^L5a", cluster2)] <- "L5a"
-cluster2[cluster2 == "L5 Ucma"] <- "L5a"
+cluster2[cluster2 == "L5 Ucma"] <- "L5"
 cluster2[grep("^L5b", cluster2)] <- "L5b"
 cluster2 <- as.factor(cluster2)
 
@@ -185,7 +185,7 @@ bars %>%
   dplyr::mutate(ClusterByMethod = paste0(Cluster, " ", Method)) %>%
   ggplot(aes(ClusterByMethod, AverageSilhouette, fill=Cluster)) +
   geom_bar(stat="identity", position='dodge') +
-  scale_fill_manual(values=col1) + coord_flip() +
+  scale_fill_manual(values=col1[c(2, 3, 1)]) + coord_flip() +
   theme(legend.position = "none", axis.text = element_text(size=8)) -> sil_espresso_pc
 
 ## Patel
