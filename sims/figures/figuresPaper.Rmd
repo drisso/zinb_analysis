@@ -21,45 +21,124 @@ library(EDASeq)
 library(edgeR)
 library(dplyr)
 library(DESeq2)
+library(cowplot)
 mycol = c(brewer.pal(11,"RdYlGn")[c(8:11, 1:4)], brewer.pal(11,"RdYlBu")[8:11])
 ```
 
-# Robustness
+# Bias and MSE
 ```{r savePaper}
-pref = "datasets/bias_mse_allParam/simZeisel_100_a1_offs0_seed9128"
-load(paste0(pref, "_fittedAll.rda"))
-pref = "datasets/corr_silh/simZeisel_100_a1_offs0_seed9128"
-load(paste0(pref, "_bias.rda"))
-load(paste0(pref, "_variance.rda"))
-load(paste0(pref, ".rda"))
-K <- 1:4
+computeBiasList <- function(fittedSim, simModel, keep){
+  biasList = lapply(1:4, function(k){
+    tmp <- lapply(1:2, function(Vint){
+      tmp <- lapply(1:2, function(commondisp){
+        
+        mm <- lapply(seq_along(simData), function(i) {
+          getLogMu(fittedSim[[k]][[Vint]][[commondisp]][[i]])
+        })
+        mu <- Reduce("+", mm)/length(mm)
+        
+        pp <- lapply(seq_along(simData), function(i) {
+          getPi(fittedSim[[k]][[Vint]][[commondisp]][[i]])
+        })
+        pi <- Reduce("+", pp)/length(pp)
+        
+        
+        return(list(mu=as.vector(mu - getLogMu(simModel)[,keep]),
+                    pi=as.vector(pi - getPi(simModel)[,keep])))
+      })
+      names(tmp) <- c("common_disp", "genewise_disp")
+      return(tmp)
+    })
+    names(tmp) <- c("V", "noV")
+    return(tmp)
+  })
+  names(biasList) <- paste0("K", 1:4)
+  biasList
+}
+
+computeVarianceList <- function(fittedSim, simModel, keep){
+  VarianceList = lapply(1:4, function(k){
+    tmp <- lapply(1:2, function(Vint){
+      tmp <- lapply(1:2, function(commondisp){
+        
+        mm <- lapply(seq_along(simData), function(i) {
+          (getLogMu(fittedSim[[k]][[Vint]][[commondisp]][[i]]) -
+            getLogMu(simModel)[,keep])^2
+        })
+        mu <- Reduce("+", mm)/(length(mm) - 1)
+        
+        pp <- lapply(seq_along(simData), function(i) {
+          (getPi(fittedSim[[k]][[Vint]][[commondisp]][[i]]) -
+             getPi(simModel)[,keep])^2
+        })
+        pi <- Reduce("+", pp)/(length(pp) - 1)
+        
+        
+        return(list(mu=as.vector(mu),
+                    pi=as.vector(pi)))
+      })
+      names(tmp) <- c("common_disp", "genewise_disp")
+      return(tmp)
+    })
+    names(tmp) <- c("V", "noV")
+    return(tmp)
+  })
+  names(VarianceList) <- paste0("K", 1:4)
+  VarianceList
+}
+
+load('bias_mse_cputime/simZeisel_nc1000_ratio1_offs2_fittedAll.rda')
+load('bias_mse_cputime/simZeisel_nc1000_ratio1_offs2.rda')
+# Bias
+biasList = computeBiasList(fittedSim, simModel, keep)
+plotbias <- unlist(unlist(unlist(biasList, recursive=FALSE), recursive=FALSE), recursive=FALSE)
+bias = lapply(seq_along(plotbias), function(i){
+  nn = strsplit(names(plotbias)[i], '\\.')[[1]]
+  data.frame(bias = as.vector(plotbias[[i]]), K=nn[1], V=nn[2], disp=nn[3], param=nn[4])
+})
+bias = data.frame(do.call(rbind, bias), stringsAsFactors = F)
+
+# Variance
+varianceList = computeVarianceList(fittedSim, simModel, keep)
+plotvariance <- unlist(unlist(unlist(varianceList, recursive=FALSE), recursive=FALSE), recursive=FALSE)
+variance = lapply(seq_along(plotvariance), function(i){
+  nn = strsplit(names(plotvariance)[i], '\\.')[[1]]
+  data.frame(variance = as.vector(plotvariance[[i]]), K=nn[1], V=nn[2], disp=nn[3], param=nn[4])
+})
+variance = data.frame(do.call(rbind, variance), stringsAsFactors = F)
+
+#mse
 mse = bias
-colnames(mse)[1] = c('mse')
-mse$mse = bias$bias^2 + variance$variance
+mse$bias = mse$bias^2 + variance$variance
+colnames(mse)[1] = 'mse'
 ```
 
-## Bias
+
 ```{r bias_mu}
 bias_mu = ggplot(bias[bias$param == 'mu', ], aes(x = K, y = bias)) + 
   geom_boxplot() + ggtitle('') + facet_grid(disp ~ V) + 
-  ylab(expression(paste('Bias ', mu))) + 
-  geom_hline(yintercept = 0, col = 'red')
+  ylab(expression(paste('Bias log(', mu, ')'))) + 
+  geom_hline(yintercept = 0, col = 'red') + 
+  background_grid(major = 'y', minor = "none") + 
+  panel_border()
 bias_mu
 ```
 
 ```{r bias_mu_noOut}
 bias_mu_noOut = ggplot(bias[bias$param == 'mu', ], aes(x = K, y = bias)) + 
   geom_boxplot(outlier.shape = NA) +
-  ggtitle('') + ylab(expression(paste('Bias ', mu, ', no outlier'))) + 
-  facet_grid(disp ~ V) + 
-  geom_hline(yintercept = 0, col = 'red') + coord_cartesian(ylim = c(-1,1.5))
+  ggtitle('') + ylab(expression(paste('Bias log(', mu, ')'))) + 
+  facet_grid(disp ~ V) + xlab('') + background_grid(major = 'y', minor = "none") + 
+  panel_border() +
+  geom_hline(yintercept = 0, col = 'red') + coord_cartesian(ylim = c(-2,2))
 bias_mu_noOut
 ```
 
 ```{r bias_pi}
 bias_pi = ggplot(bias[bias$param == 'pi', ], aes(x = K, y = bias)) + 
   geom_boxplot() + ggtitle('') + facet_grid(disp ~ V) + 
-  ylab(expression(paste('Bias ', pi))) + 
+  ylab(expression(paste('Bias ', pi))) + background_grid(major = 'y', minor = "none") + 
+  panel_border() +
   geom_hline(yintercept = 0, col = 'red')
 bias_pi
 ```
@@ -67,9 +146,10 @@ bias_pi
 ```{r bias_pi_noOut}
 bias_pi_noOut = ggplot(bias[bias$param == 'pi', ], aes(x = K, y = bias)) + 
   geom_boxplot(outlier.shape = NA) + 
-  ggtitle('') + ylab(expression(paste('Bias ', pi, ', no outlier'))) + 
-  facet_grid(disp ~ V) + 
-  geom_hline(yintercept = 0, col = 'red') + coord_cartesian(ylim = c(-6,5))
+  ggtitle('') + ylab(expression(paste('Bias ', pi))) + 
+  facet_grid(disp ~ V) + xlab('') + background_grid(major = 'y', minor = "none") + 
+  panel_border() +
+  geom_hline(yintercept = 0, col = 'red') + coord_cartesian(ylim = c(-.1,.1))
 bias_pi_noOut
 ```
 
@@ -77,7 +157,9 @@ bias_pi_noOut
 ```{r mse_mu}
 mse_mu = ggplot(mse[mse$param == 'mu', ], aes(x = K, y = mse)) + 
   geom_boxplot() + ggtitle('') + facet_grid(disp ~ V) + 
-  ylab(expression(paste('MSE ', mu))) + 
+  ylab(expression(paste('MSE log(', mu, ')'))) + 
+  background_grid(major = 'y', minor = "none") + 
+  panel_border() +
   geom_hline(yintercept = 0, col = 'red')
 mse_mu
 ```
@@ -85,8 +167,10 @@ mse_mu
 ```{r mse_mu_noOut}
 mse_mu_noOut = ggplot(mse[mse$param == 'mu', ], aes(x = K, y = mse)) + 
   geom_boxplot(outlier.shape = NA) + ggtitle('') +
-   ylab(expression(paste('MSE ', mu, ', no outlier'))) + 
+   ylab(expression(paste('MSE log(', mu, ')'))) + 
   facet_grid(disp ~ V) + coord_cartesian(ylim = c(0,4)) +
+  background_grid(major = 'y', minor = "none") + 
+  panel_border() +
   geom_hline(yintercept = 0, col = 'red')
 mse_mu_noOut
 ```
@@ -94,7 +178,9 @@ mse_mu_noOut
 ```{r mse_pi}
 mse_pi = ggplot(mse[mse$param == 'pi', ], aes(x = K, y = mse)) + 
   geom_boxplot() + ggtitle('') + facet_grid(disp ~ V) + 
-  ylab(expression(paste('MSE ', pi))) + 
+  ylab(expression(paste('MSE ', pi))) +
+  background_grid(major = 'y', minor = "none") + 
+  panel_border() +
   geom_hline(yintercept = 0, col = 'red')
 mse_pi
 ```
@@ -102,39 +188,76 @@ mse_pi
 ```{r mse_pi_noOut}
 mse_pi_noOut = ggplot(mse[mse$param == 'pi', ], aes(x = K, y = mse)) + 
   geom_boxplot(outlier.shape = NA) + ggtitle('') +
-  ylab(expression(paste('MSE ', pi, ', no outlier'))) + 
-  facet_grid(disp ~ V) + coord_cartesian(ylim = c(0,50)) +
+  ylab(expression(paste('MSE ', pi))) + 
+  background_grid(major = 'y', minor = "none") + 
+  panel_border() +
+  facet_grid(disp ~ V) + coord_cartesian(ylim = c(0,.025)) +
   geom_hline(yintercept = 0, col = 'red')
 mse_pi_noOut
 ```
 
-```{r save}
-save = T
-if (save){
-  ggsave(filename="../paper/6680489mtyrjx/biasMu.png", plot = bias_mu,
-       device = 'png')
-  ggsave(filename="../paper/6680489mtyrjx/biasMuNo.png", plot = bias_mu_noOut,
-       device = 'png')
-  ggsave(filename="../paper/6680489mtyrjx/biasPi.png", plot = bias_pi,
-       device = 'png')
-  ggsave(filename="../paper/6680489mtyrjx/biasPiNo.png", plot = bias_pi_noOut,
-       device = 'png')
-  ggsave(filename="../paper/6680489mtyrjx/mseMu.png", plot = mse_mu,
-       device = 'png')
-  ggsave(filename="../paper/6680489mtyrjx/mseMuNo.png", plot = mse_mu_noOut,
-       device = 'png')
-  ggsave(filename="../paper/6680489mtyrjx/msePi.png", plot = mse_pi,
-       device = 'png')
-  ggsave(filename="../paper/6680489mtyrjx/msePiNo.png", plot = mse_pi_noOut,
-       device = 'png')
-}
+## Variance
+```{r variance_mu}
+variance_mu = ggplot(variance[variance$param == 'mu', ], aes(x = K, y = variance)) + 
+  geom_boxplot() + ggtitle('') + facet_grid(disp ~ V) + 
+  ylab(expression(paste('variance log(', mu, ')'))) + 
+  background_grid(major = 'y', minor = "none") + 
+  panel_border() +
+  geom_hline(yintercept = 0, col = 'red')
+variance_mu
+
+variance_mu_noOut = ggplot(variance[variance$param == 'mu', ], aes(x = K, y = variance)) + 
+  geom_boxplot(outlier.shape = NA) + ggtitle('') +
+  ylab(expression(paste('variance log(', mu, '), no outlier'))) + 
+  facet_grid(disp ~ V) + coord_cartesian(ylim = c(0,4)) +
+  background_grid(major = 'y', minor = "none") + 
+  panel_border() +
+  geom_hline(yintercept = 0, col = 'red')
+variance_mu_noOut
+
+variance_pi = ggplot(variance[variance$param == 'pi', ], aes(x = K, y = variance)) + 
+  geom_boxplot() + ggtitle('') + facet_grid(disp ~ V) + 
+  ylab(expression(paste('variance ', pi))) +
+  background_grid(major = 'y', minor = "none") + 
+  panel_border() +
+  geom_hline(yintercept = 0, col = 'red')
+variance_pi
+
+variance_pi_noOut = ggplot(variance[variance$param == 'pi', ], aes(x = K, y = variance)) + 
+  geom_boxplot(outlier.shape = NA) + ggtitle('') +
+  ylab(expression(paste('variance ', pi, ', no outlier'))) + 
+  background_grid(major = 'y', minor = "none") + 
+  panel_border() +
+  facet_grid(disp ~ V) + coord_cartesian(ylim = c(0,.025)) +
+  geom_hline(yintercept = 0, col = 'red')
+variance_pi_noOut
 ```
 
+```{r variancePlot}
+p1 = plot_grid(bias_mu_noOut, bias_pi_noOut, mse_mu_noOut, mse_pi_noOut,
+               labels = c("A", "B", "C", "D"), ncol = 2, nrow = 2, align = "h")
+p1
+save_plot("paper/6680489mtyrjx/bias_mse_allParam.pdf",
+          p1, ncol = 2, nrow = 2, base_aspect_ratio = 1.3)
+
+p2 = plot_grid(bias_mu, bias_pi, mse_mu, mse_pi, align = "h",
+               labels = c("A", "B", "C", "D"), ncol = 2, nrow = 2)
+p2
+save_plot("paper/6680489mtyrjx/bias_mse_allParam_outliers.png",device = 'png',
+          p2, ncol = 2, nrow = 2, base_aspect_ratio = 1.3)
+
+p3 = plot_grid(variance_mu, variance_pi, variance_mu_noOut, variance_pi_noOut,
+               align = "h",
+               labels = c("A", "B", "C", "D"), ncol = 2, nrow = 2)
+p3
+save_plot("paper/6680489mtyrjx/variance_allParam.png",device ='png',
+          p3, ncol = 2, nrow = 2, base_aspect_ratio = 1.3)
+```
 
 ## Mean Difference
 ```{r meandiff}
-load('meanDiff/simZeisel_1000_a1_offs3.5.rda')
-load('meanDiff/simZeisel_1000_a1_offs3.5_fitted.rda')
+load('meanDiff/simZeisel_nc1000_ratio1_offs2_fitted.rda')
+load('meanDiff/simZeisel_nc1000_ratio1_offs2.rda')
 zz = fittedSim
 fittedMu = getLogMu(zz)
 fittedPi = getPi(zz)
@@ -145,9 +268,7 @@ meanMu = as.vector(.5*(trueMu + fittedMu))
 diffMu = as.vector(fittedMu - trueMu)
 meanPi = as.vector(.5*(truePi + fittedPi))
 diffPi = as.vector(fittedPi - truePi)
-```
 
-```{r plotMDmu}
 save = T
 if (!save){
   smoothScatter(meanMu, diffMu, xlab = 'Mean', ylab = 'Difference')
@@ -170,81 +291,52 @@ if (!save){
 }
 ```
 
-
-```{r detectErrors}
-diffPiMat = abs(fittedPi - truePi)
-plot(colSums(diffPiMat))
-abline(h= 100)
-bigErrors = which(colSums(diffPiMat) > 100)
-col = rep(FALSE, ncol(diffPiMat))
-col[bigErrors] = TRUE
-plot(.5*(zz@beta_pi[1,]+simModel@beta_pi[1, keep]),
-     zz@beta_pi[1,] - simModel@beta_pi[1, keep], col = as.numeric(col) + 1)
-plot(.5*(zz@alpha_pi[1,]+simModel@alpha_pi[1, keep]),
-    zz@alpha_pi[1,] - simModel@alpha_pi[1, keep], col = as.numeric(col) + 1)
-plot(zz@beta_pi[1,] - simModel@beta_pi[1, keep],
-     zz@alpha_pi[1,] - simModel@alpha_pi[1, keep],
-     col = as.numeric(col) + 1)
-
-# points that are dark on previous figures but with big errors 
-# are genes where big errors but not for as many cells as previous genes
-diffBeta = zz@beta_pi[1,] - simModel@beta_pi[1, keep]
-plot(diffPiMat[, which(diffBeta > 20 & diffBeta < 30)[1]])
-plot(diffPiMat[, which(diffBeta > 20 & diffBeta < 30)[2]])
-
-i = 992
-par(mfrow = c(1,3))
-plot(diffPiMat[, i], ylim = c(0,1), main = 'diff')
-plot(truePi[,i], ylim = c(0,1), main = 'true')
-plot(fittedPi[,i], ylim = c(0,1), main = 'fitted')
-```
-
 # Consistency
 ```{r consistency}
-computeBias <- function(fittedSim, keep, simModel){
+computeBias <- function(fittedSim, keep, simModel, simData){
+  keepCells = lapply(1:length(simData), function(i){
+    rowSums(simData[[i]]$counts) != 0
+  })
+  keepCells = Reduce('+', keepCells) == length(simData)
+  
+  simData = simData[sapply(fittedSim, function(x) class(x) != 'try-error')]
+  fittedSim = fittedSim[sapply(fittedSim, function(x) class(x) != 'try-error')]
+  
   tmp <- lapply(seq_along(fittedSim), function(i) {
-    getLogMu(fittedSim[[i]])
+    kk = rowSums(simData[[i]]$counts) != 0
+    getLogMu(fittedSim[[i]])[keepCells[kk], ]
   })
   logMuHat <- Reduce("+", tmp)/length(tmp)
   
   tmp <- lapply(seq_along(fittedSim), function(i) {
-    getMu(fittedSim[[i]])
-  })
-  muHat <- Reduce("+", tmp)/length(tmp)
-  
-  tmp <- lapply(seq_along(fittedSim), function(i) {
-    getLogitPi(fittedSim[[i]])
-  })
-  logitPiHat <- Reduce("+", tmp)/length(tmp)
-  
-  tmp <- lapply(seq_along(fittedSim), function(i) {
-    getPi(fittedSim[[i]])
+    kk = rowSums(simData[[i]]$counts) != 0
+    getPi(fittedSim[[i]])[keepCells[kk], ]
   })
   piHat <- Reduce("+", tmp)/length(tmp)
   
-  return(list(biasMu = as.vector(logMuHat - getLogMu(simModel)[,keep]),
-              biasPi = as.vector(piHat - getPi(simModel)[,keep])))
+  return(list(biasMu = as.vector(logMuHat - getLogMu(simModel)[keepCells,keep]),
+              biasPi = as.vector(piHat - getPi(simModel)[keepCells,keep])))
 }
 
-computeVariance <- function(fittedSim, keep, simModel){
+computeVariance <- function(fittedSim, keep, simModel, simData){
+  keepCells = lapply(1:length(simData), function(i){
+    rowSums(simData[[i]]$counts) != 0
+  })
+  keepCells = Reduce('+', keepCells) == length(simData)
+  
+  simData = simData[sapply(fittedSim, function(x) class(x) != 'try-error')]
+  fittedSim = fittedSim[sapply(fittedSim, function(x) class(x) != 'try-error')]
+
   n = length(simData)
   tmp <- lapply(seq_along(fittedSim), function(i) {
-    (getLogMu(fittedSim[[i]]) - getLogMu(simModel)[,keep])^2
+    kk = rowSums(simData[[i]]$counts) != 0
+    (getLogMu(fittedSim[[i]])[keepCells[kk], ] - getLogMu(simModel)[keepCells,keep])^2
   })
   logMuHat <- Reduce("+", tmp)/(n-1)
   
   tmp <- lapply(seq_along(fittedSim), function(i) {
-    (getMu(fittedSim[[i]]) - getMu(simModel)[,keep])^2
-  })
-  muHat <- Reduce("+", tmp)/(n-1)
-  
-  tmp <- lapply(seq_along(fittedSim), function(i) {
-    (getLogitPi(fittedSim[[i]]) - getLogitPi(simModel)[,keep])^2
-  })
-  logitPiHat <- Reduce("+", tmp)/(n-1)
-  
-  tmp <- lapply(seq_along(fittedSim), function(i) {
-    (getPi(fittedSim[[i]]) - getPi(simModel)[,keep])^2
+    kk = rowSums(simData[[i]]$counts) != 0
+    (getPi(fittedSim[[i]])[keepCells[kk], ] - getPi(simModel)[keepCells,keep])^2
   })
   piHat <- Reduce("+", tmp)/(n-1)
   
@@ -254,13 +346,11 @@ computeVariance <- function(fittedSim, keep, simModel){
 
 plotList = lapply(c(50, 100, 500, 1000, 5000, 10000), function(nc){
   print(nc)
-  pp = 'datasets/bias_mse_ncells/'
-  file = sprintf('simZeisel_%s_a1_offs3.5_seed9128', nc)
-  load(paste0(pp, file, '_fitted_no0.rda'))
-  load(paste0(pp, file, '.rda'))
-  fittedSim = fittedSim[c(1:2,4:7, 9:10)] #because error for 10000 cells and sim 3
-  biasvar = c(computeBias(fittedSim, keep, simModel),
-              computeVariance(fittedSim, keep, simModel))
+  file = sprintf('bias_mse_cputime/simZeisel_nc%s_ratio1_offs2', nc)
+  load(paste0(file, '_fitted.rda'))
+  load(paste0(file, '.rda'))
+  biasvar = c(computeBias(fittedSim, keep, simModel, simData),
+              computeVariance(fittedSim, keep, simModel, simData))
   biasvar$mseMu = biasvar$biasMu^2 + biasvar$varianceMu
   biasvar$msePi = biasvar$biasPi^2 + biasvar$variancePi
   biasvar = do.call(cbind, biasvar)
@@ -276,39 +366,62 @@ gg = gsub('([[:upper:]])', ' \\1', plotMolten$variable)
 plotMolten$param = sapply(strsplit(gg, ' '), '[[', 2)
 plotMolten$method = sapply(strsplit(gg, ' '), '[[', 1)
 plotMolten$nc = factor(plotMolten$nc)
-bias_mse_ncells= ggplot(plotMolten, aes(x = nc, y = value)) + geom_boxplot() +
+plotMolten$param = factor(plotMolten$param)
+levels(plotMolten$param) = c('log(mu)', 'pi')
+bias_mse_ncells= ggplot(plotMolten[plotMolten$method != 'variance', ],
+                        aes(x = nc, y = value)) + geom_boxplot() +
   facet_grid(param ~ method, scale = 'free') + 
   xlab('Number of cells') + ylab('') +
-  geom_hline(yintercept = 0, col = 'gray')
+  geom_hline(yintercept = 0, col = 'gray') +
+  background_grid(major = 'y', minor = "none") + 
+  panel_border()
 bias_mse_ncells
-ggsave(filename="../paper/6680489mtyrjx/bias_mse_ncells.png", plot =bias_mse_ncells,
+ggsave(filename="../../paper/6680489mtyrjx/bias_mse_ncells.png",
+       plot =bias_mse_ncells,
+       device = 'png')
+
+var_ncells= ggplot(plotMolten[plotMolten$method == 'variance', ],
+                        aes(x = nc, y = value)) + geom_boxplot() +
+  facet_grid(param ~ method, scale = 'free') + 
+  xlab('Number of cells') + ylab('') +
+  geom_hline(yintercept = 0, col = 'gray') +
+  background_grid(major = 'y', minor = "none") + 
+  panel_border()
+var_ncells
+ggsave(filename="../../paper/6680489mtyrjx/variance_ncells.png",
+       plot = var_ncells,width = 6, height = 6,
        device = 'png')
 ```
 
 
 # Speed
 ```{r time}
-load('datasets/cpuTime/cpuTime.rda')
+load('bias_mse_cputime/cpuTime.rda')
 elapse = lapply(1:length(cpuTime), function(nc){
+  print(nc)
   sapply(1:length(cpuTime[[1]]), function(i){
+    print(i)
     cpuTime[[nc]][[i]][[3]]
   })
 })
-mean = sapply(elapse, mean)
-sd = sapply(elapse, sd)
+mean = sapply(elapse, median)
+sd = sapply(elapse, quantile)
+sd = sd[3, ] - sd[2,]
 nc = c(50, 100, 500, 1000, 5000, 10000)
 dfTime = data.frame(mean = mean, sd = sd, nc = nc)
 pd <- position_dodge(0.1)
-cpu = ggplot(dfTime, aes(x = factor(nc), y = mean, group = 1)) +
+cpu = ggplot(dfTime, aes(x = nc, y = mean, group = 1)) +
   geom_errorbar(aes(ymin = mean - sd, ymax = mean + sd), width = .1, position = pd) +
-  geom_line(position=pd) +
-  geom_point(position=pd) +
-  xlab('Number of cells') + ylab('CPU time (sec.)')
+  geom_line(position=pd) + 
+  geom_point(position=pd) + background_grid(major = 'xy', minor = 'xy') + 
+  xlab('Number of cells') + ylab('CPU time (sec.)') +
+  coord_trans(y = "log10", x = 'log10') + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_y_continuous(breaks = c(25, 50, 100, 250, 500, 1000, 2000)) +
+  scale_x_continuous(breaks = nc)
 cpu
-ggsave(filename="../paper/6680489mtyrjx/cpu.png", plot = cpu, device = 'png')
+ggsave(filename="../../paper/6680489mtyrjx/cpu.png", plot = cpu, device = 'png')
 ```
-
-# Comparison to other methods
 
 ## Correlation
 ```{r corr}
@@ -322,7 +435,7 @@ eval_sil <- function(labels, dest) {
   return(sest)
 }
 
-eval_data <- function(counts, labels, fittedSim, simModel,
+eval_data <- function(counts, labels, fittedSim, simModel, pref, 
                       k = 1:4, sim = 1) {
   counts = counts[rowSums(counts) != 0, ]
   # ini
@@ -379,8 +492,13 @@ eval_data <- function(counts, labels, fittedSim, simModel,
   corr[[m]] <- eval_cor(dtrue, dest[[m]])
   sil[[m]] <- eval_sil(biotrue, dest[[m]])
   
-  ZIFA = F
+  ZIFA = T
   if (ZIFA){
+    load(paste0(pref, '_zifa.rda'))
+    load(paste0(pref, '_zifaFQ.rda'))
+    load(paste0(pref, '_zifaTC.rda'))
+    load(paste0(pref, '_zifaTMM.rda'))
+    
     ## ZIFA
     m = m + 1
     dest[[m]] <- as.matrix(dist(zifa[[sim]]))
@@ -406,14 +524,21 @@ eval_data <- function(counts, labels, fittedSim, simModel,
     sil[[m]] <- eval_sil(biotrue, dest[[m]])
   }
   
-  retval <- c(corr, lapply(1:m, function(i) sil[[i]][, 3] - sil[[1]][,3]))
+  retval <- c(corr, lapply(1:m, function(i) sil[[i]][, 3]))
   return(retval)
 }
 
-res = lapply(c('Zeisel'), function(ds){
+res = lapply(c('Zeisel', 'Allen'), function(ds){
+  if (ds == 'Allen'){
+    B2 = c(1, 5, 50)
+    OFFS = c(0, 2, 5)
+  } else{
+    B2 = c(1, 5, 10)
+    OFFS = c(-1.5, 0.5, 2)
+  }
   lapply(c(100, 1000), function(nc){
-    lapply(c(1, 5, 10), function(b2){
-      lapply(c(-1.5, 0.5, 2), function(offs){
+    lapply(B2, function(b2){
+      lapply(OFFS, function(offs){
         print(ds)
         print(nc)
         print(b2)
@@ -422,7 +547,7 @@ res = lapply(c('Zeisel'), function(ds){
         load(paste0(ff, '.rda'))
         load(paste0(ff, '_fitted.rda'))
         res <- lapply(1:10, function(j){
-          eval_data(t(simData[[j]]$counts), bio, fittedSim, simModel,   
+          eval_data(t(simData[[j]]$counts), bio, fittedSim, simModel, ff,
                     sim = j, k = 1:4)
         })
         ss <- lapply(1:length(res[[1]]), function(i){
@@ -430,7 +555,11 @@ res = lapply(c('Zeisel'), function(ds){
         })
         ss = do.call(cbind, ss)
         ss = data.frame(ss)
-        ss$zfrac = ifelse(offs == -1.5, 40, ifelse(offs == 2, 80, 60))
+        if (ds == 'Allen'){
+          ss$zfrac = ifelse(offs == 0, 40, ifelse(offs == 2, 60, 80))
+        }else{
+          ss$zfrac = ifelse(offs == -1.5, 40, ifelse(offs == 0.5, 60, 80))
+        }
         ss$nc = nc
         ss$clustering = b2
         ss$ds = ds
@@ -442,150 +571,178 @@ res = lapply(c('Zeisel'), function(ds){
 resDF = do.call(rbind, do.call(rbind, do.call(rbind, do.call(rbind, res))))
 resDF = data.frame(resDF, stringsAsFactors = F)
 colnames(resDF) <- c(rep(c('trueW', paste0("zinb k=", 1:4), "PCA", "PCA TC",
-                          "PCA TMM", "PCA FQ"), 2), 'zfrac', 'nc', 'clustering',
+                          "PCA TMM", "PCA FQ", "ZIFA", "ZIFA TC",
+                          "ZIFA TMM", "ZIFA FQ"), 2), 'zfrac', 'nc', 'clustering',
                      'ds')
-colnames(resDF)[1:9] = paste('corr', colnames(resDF)[1:9], sep = '_')
+colnames(resDF)[1:13] = paste('corr', colnames(resDF)[1:13], sep = '_')
 resMolten = melt(resDF, id.vars = c('zfrac', 'nc', 'clustering', 'ds'))
 resSum = resMolten %>% group_by(zfrac, nc, clustering, ds, variable) %>%
   summarize(mean = mean(value), sd = sd(value)) %>% ungroup() %>%
   as.data.frame()
 resSum$zfrac = factor(resSum$zfrac)
+resSum$nc = paste0('ncells = ', resSum$nc)
+resSum$clustering[resSum$clustering > 9] = 'No Clustering'
+resSum$clustering[resSum$clustering == '1'] = 'Original Clustering'
+resSum$clustering[resSum$clustering == '5'] = 'Harder Clustering'
+resSum$clustering = factor(resSum$clustering,
+                           levels = c('Original Clustering', 'Harder Clustering',
+                                      'No Clustering'))
 ```
 
 ```{r corrAll}
-resCorr = resSum[grepl('corr', resSum$variable) & 
-                   !grepl('trueW', resSum$variable), ]
+resCorr = resSum[grepl('corr', resSum$variable), ]
 resCorr$variable = factor(gsub('corr_', '', as.vector(resCorr$variable)),
-                          levels = c("zinb k=1", "zinb k=2", "zinb k=3",
+                          levels = c("trueW", "zinb k=1", "zinb k=2", "zinb k=3",
                                      "zinb k=4", "PCA", "PCA TC", "PCA TMM", 
-                                     "PCA FQ"))
-resAll = ggplot(resCorr,
+                                     "PCA FQ", "ZIFA", "ZIFA TC", "ZIFA TMM",
+                                     "ZIFA FQ"))
+corAllen = ggplot(resCorr[resCorr$ds == 'Allen', ],
                  aes(x = zfrac, y = mean, col = variable, group = variable)) +
   geom_point() + geom_line() + labs(col='') + 
   theme_bw() + xlab('Zero Fraction') + facet_grid(nc ~ clustering) +
-  ylab('Correlation between true and estimated sample distances in W') +
-  scale_color_manual(values=mycol)
-resAll
-ggsave(filename="../../paper/6680489mtyrjx/correlationZeisel.pdf", plot = resAll,
-       width = 8, height = 5)
+  ylab('Correlation') +
+  scale_color_manual(values=c('black', mycol))
+corAllen
+corZeisel = ggplot(resCorr[resCorr$ds == 'Zeisel', ],
+                 aes(x = zfrac, y = mean, col = variable, group = variable)) +
+  geom_point() + geom_line() + labs(col='') + 
+  theme_bw() + xlab('Zero Fraction') + facet_grid(nc ~ clustering) +
+  ylab('Correlation') +
+  scale_color_manual(values=c('black',mycol))
+corZeisel
 ```
 
 ```{r silALl}
 resSilh = resSum[!grepl('corr', resSum$variable), ]
-resAll = ggplot(resSilh,
+silAllen = ggplot(resSilh[resSilh$ds == 'Allen', ],
                  aes(x = zfrac, y = mean, col = variable, group = variable)) +
   geom_point() + geom_line() + labs(col='') + 
   theme_bw() + xlab('Zero Fraction') + facet_grid(nc ~ clustering) +
-  ylab('Silhouette width of true labels - True Silhouette width') +
-  scale_color_manual(values=mycol)
-resAll
-ggsave(filename="../../paper/6680489mtyrjx/silhouetteZeisel.pdf", plot = resAll,
-       width = 8, height = 5)
-```
-
-
-
-
-```{r corrSummary}
-datasets = c('Allen')
-corr = lapply(1:length(datasets), function(ds){
-  lapply(c(100, 1000), function(nc){
-    lapply(c(1, .85), function(aa){
-      lapply(c(-3.5, 0, 3.5), function(offs){
-        pp = sprintf('datasets/corr_silh/sim%s_%s_a%s_offs%s_seed9128',
-                     datasets[ds], nc, aa, offs)
-        load(paste0(pp, '_dist.rda'))
-        cc <- lapply(1:13, function(i) rowMeans(sapply(res, function(x) x[[i]])))
-        cc = do.call(cbind, cc)
-        cc = data.frame(cc)
-        cc$pzero = offs
-        cc$var = aa
-        cc$nc = nc
-        cc$ds = ds
-        cc
-      })
-    })
-  })
-})
-corr = do.call(rbind, do.call(rbind,do.call(rbind, do.call(rbind, corr))))
-corr = data.frame(corr, stringsAsFactors = F)
-colnames(corr) <- c("true W", paste0("zinb k=", 1:4), "PCA", "PCA TC",
-                          "PCA TMM", "PCA FQ", 'ZIFA', 'ZIFA TC', 
-                          'ZIFA TMM', 'ZIFA FQ',
-                    'pzero', 'var', 'nc', 'ds')
-corr$ds = datasets[corr$ds]
-corr$var = ifelse(corr$var == 0.85, 'Clustering 2', 'Clustering 1')
-corr$var = paste(corr$ds, corr$var, sep = ' : ')
-corr$pzero = ifelse(corr$pzero == -3.5, .25, ifelse(corr$pzero == 0, .50, .75))
-corrMolten = melt(corr[,1:(ncol(corr) - 1)], id.vars = c('pzero', 'var', 'nc'))
-corrSum = corrMolten %>% group_by(pzero, var, variable, nc) %>%
-  summarize(mean = mean(value), sd = sd(value)) %>% ungroup() %>%
-  as.data.frame()
-corrSum$pzero = factor(corrSum$pzero)
-
-corr = corrSum[corrSum$variable != 'true W',]
-corr$method = sapply(strsplit(as.vector(corr$variable), ' '), '[[', 1)
-corplot = ggplot(corr, aes(x = pzero, y =mean, col = variable, group = variable)) +
-  geom_point() + geom_line() + labs(col='') + 
-  theme_bw() + xlab('Zero Fraction') + facet_grid(nc ~ var) +
-  ylab('Correlation between true and estimated sample distances in W')
-corplot
-ggsave(filename="../paper/6680489mtyrjx/correlations.pdf", plot = corplot,
-       width = 5, height = 5)
-```
-
-## Silhouette
-```{r silSummary}
-datasets = c('Allen', 'Zeisel')
-sil = lapply(1:length(datasets), function(ds){
-  lapply(c(100, 1000), function(nc){
-    lapply(c(1, .85), function(aa){
-      lapply(c(-3.5, 0, 3.5), function(offs){
-        pp = sprintf('datasets/corr_silh/sim%s_%s_a%s_offs%s_seed9128',
-                     datasets[ds], nc, aa, offs)
-        load(paste0(pp, '_dist.rda'))
-        ss <- lapply(14:length(res[[1]]), function(i){
-          rowMeans(sapply(res, function(x) x[[i]]))
-        })
-        ss = do.call(cbind, ss)
-        ss = data.frame(ss)
-        ss = ss - ss[,1]
-        ss$pzero = offs
-        ss$var = aa
-        ss$nc = nc
-        ss$ds = ds
-        ss
-      })
-    })
-  })
-})
-sil = do.call(rbind, do.call(rbind,do.call(rbind, do.call(rbind, sil))))
-sil = data.frame(sil, stringsAsFactors = F)
-colnames(sil) <- c("true W", paste0("zinb k=", 1:4), "PCA", "PCA TC",
-                          "PCA TMM", "PCA FQ", 'ZIFA', 'ZIFA TC', 
-                          'ZIFA TMM', 'ZIFA FQ',
-                    'pzero', 'var', 'nc', 'ds')
-sil$ds = datasets[sil$ds]
-sil$var = ifelse(sil$var == 0.85, 'Clustering 2', 'Clustering 1')
-sil$var = paste(sil$ds, sil$var, sep = ' : ')
-sil$pzero = ifelse(sil$pzero == -3.5, .25, ifelse(sil$pzero == 0, .50, .75))
-silMolten = melt(sil[,1:(ncol(sil) - 1)], id.vars = c('pzero', 'var', 'nc'))
-silSum = silMolten %>% group_by(pzero, var, variable, nc) %>%
-  summarize(mean = mean(value), sd = sd(value)) %>% ungroup() %>%
-  as.data.frame()
-silSum$pzero = factor(silSum$pzero)
-
-c1 = silSum[silSum$variable != 'true W',]
-c1$method = sapply(strsplit(as.vector(c1$variable), ' '), '[[', 1)
-silplot = ggplot(c1, aes(x = pzero, y = mean, col = variable, group = variable)) +
-  geom_point() + geom_line() + labs(col='') + 
-  theme_bw() + xlab('Zero Fraction') + facet_grid(nc ~ var) +
-  ylab('Silhouette width - True Silhouette width') + 
+  ylab('Silhouette width') +
+  scale_color_manual(values=c('black', mycol), name = 'Methods') +
   geom_hline(yintercept = 0, col = 'gray')
-silplot
-ggsave(filename="../paper/6680489mtyrjx/silhouette.pdf", plot = silplot,
-       width = 5, height = 5)
+silAllen
+
+silZeisel = ggplot(resSilh[resSilh$ds == 'Zeisel', ],
+                 aes(x = zfrac, y = mean, col = variable, group = variable)) +
+  geom_point() + geom_line() + labs(col='') + 
+  theme_bw() + xlab('Zero Fraction') + facet_grid(nc ~ clustering) +
+  ylab('Silhouette width') +
+  scale_color_manual(values=c('black', mycol), name = 'Methods') +
+  geom_hline(yintercept = 0, col = 'gray') 
+silZeisel
 ```
+
+```{r cor_silPlot}
+p4 = plot_grid(corAllen + theme(legend.position = "none") + xlab('') +
+                 coord_cartesian(ylim = c(0, 1)) ,
+               silAllen + theme(legend.position = "none") +
+                 coord_cartesian(ylim = c(-.2, .6)) ,
+               corZeisel + theme(legend.position = "none") + xlab('') +
+                 coord_cartesian(ylim = c(0, 1)) ,
+               silZeisel + theme(legend.position = "none") +
+                 coord_cartesian(ylim = c(-.2, .6)) ,
+               align = "h", labels = c("A", "B", "C", "D"),
+               nrow = 2, ncol = 2)
+legend <- get_legend(silAllen)
+p4 <- plot_grid(p4, legend, rel_widths = c(3, .6))
+p4
+save_plot("../../paper/6680489mtyrjx/corrSilh.png", device = 'png',
+          p4, ncol = 2, nrow = 2, base_aspect_ratio = 1.3)
+```
+
+```{r }
+subset = resMolten[resMolten$nc == 1000 & resMolten$clustering == 5 &
+                     resMolten$zfrac == 80, ]
+c1 = ggplot(subset[subset$ds == 'Allen' & grepl('^corr', subset$variable), ],
+       aes(x = variable, y = value)) +
+  geom_boxplot(col = c('black', mycol)) + coord_cartesian(ylim = c(-.3, 1)) +
+  geom_hline(yintercept = 1) + xlab('Methods') + ylab('Correlation') +
+  theme(axis.text.x=element_blank()) + background_grid(major = 'y', minor = "none") 
+
+c2 = ggplot(subset[subset$ds == 'Zeisel' & grepl('^corr', subset$variable), ],
+       aes(x = variable, y = value)) +
+  geom_boxplot(col = c('black', mycol)) + coord_cartesian(ylim = c(-.3, 1)) +
+  geom_hline(yintercept = 1) + xlab('Methods') + ylab('Correlation') +
+  theme(axis.text.x=element_blank()) +
+  background_grid(major = 'y', minor = "none") 
+
+s1 = ggplot(subset[subset$ds == 'Allen' & !grepl('^corr', subset$variable), ],
+       aes(x = variable, y = value)) +
+  geom_boxplot(col = c('black', mycol)) + coord_cartesian(ylim = c(-.6, .6)) +
+  geom_hline(yintercept = 0) + xlab('Methods') + ylab('Silhouette width') +
+  background_grid(major = 'y', minor = "none") +
+  theme(axis.text.x=element_blank())
+  
+s2 = ggplot(subset[subset$ds == 'Zeisel' & !grepl('^corr', subset$variable), ],
+       aes(x = variable, y = value)) +
+  geom_boxplot(col = c('black', mycol)) + coord_cartesian(ylim = c(-.6, .6)) +
+  geom_hline(yintercept = 0) + xlab('Methods') + ylab('Silhouette width') +
+  background_grid(major = 'y', minor = "none") +
+  theme(axis.text.x=element_blank())
+
+cs = plot_grid(c1, s1, c2, s2,
+               align = "h", labels = c("A", "B", "C", "D"),
+               nrow = 2, ncol = 2)
+cs
+legend <- get_legend(silAllen)
+cs <- plot_grid(cs, legend, rel_widths = c(3, .6))
+cs
+save_plot("../../paper/6680489mtyrjx/corrSilh_boxplots.png", device = 'png',
+         cs, ncol = 2, nrow = 2, base_aspect_ratio = 1.3)
+```
+
+```{r points}
+ds = 'Allen'
+nc = 100
+b2 = 1
+offs = 0
+ff = sprintf('corr_silh/sim%s_nc%s_ratio%s_offs%s', ds, nc, b2, offs)
+load(paste0(ff, '.rda'))
+load(paste0(ff, '_fitted.rda'))
+j=1
+counts = t(simData[[j]]$counts)
+counts = counts[rowSums(counts) != 0, ]
+
+par(mfrow = c(3, 3))
+## TRUE
+true_W <- simModel@W
+plot(true_W, col = bio, xlab = 'W1', ylab = 'W2')
+
+## ZINB
+plot(fittedSim[[2]][[sim]]@W, col = bio, xlab = 'W1', ylab = 'W2')
+
+## PCA
+pca <- prcomp(log1p(t(counts)))
+plot(pca$x[,1:2], col = bio, xlab = 'W1', ylab = 'W2')
+
+mult = sum(counts) / (ncol(counts) * nrow(counts))
+fact = colSums(counts)
+tc = mult * (t(counts) / fact)
+pcatc <- prcomp(log1p(tc))
+plot(pcatc$x[,1:2], col = bio, xlab = 'W1', ylab = 'W2')
+
+y = DGEList(counts)
+y = calcNormFactors(y, method="TMM")
+tmm <- t(counts) / (y$samples$lib.size * y$samples$norm.factors)
+pcatmm <- prcomp(log1p(tmm))
+plot(pcatmm$x[,1:2], col = bio, xlab = 'W1', ylab = 'W2')
+
+fq <- betweenLaneNormalization(counts, which="full")
+pcafq <- prcomp(t(log1p(fq)))
+plot(pcafq$x[,1:2], col = bio, xlab = 'W1', ylab = 'W2')
+
+# ZIFA
+load(paste0(ff, '_zifa.rda'))
+load(paste0(ff, '_zifaFQ.rda'))
+load(paste0(ff, '_zifaTC.rda'))
+load(paste0(ff, '_zifaTMM.rda'))
+plot(zifa[[j]], col = bio, xlab = 'W1', ylab = 'W2')
+plot(zifaTC[[j]], col = bio, xlab = 'W1', ylab = 'W2')
+plot(zifaFQ[[j]], col = bio, xlab = 'W1', ylab = 'W2')
+plot(zifaTMM[[j]], col = bio, xlab = 'W1', ylab = 'W2')
+```
+
 
 ## Silhouette Lun2
 ```{r silSummary}
@@ -748,12 +905,15 @@ silSum = silMolten %>% group_by(zfrac, nc, variable) %>%
   summarize(mean = mean(value), sd = sd(value)) %>% ungroup() %>%
   as.data.frame()
 silSum$zfrac = factor(silSum$zfrac)
-silLun = ggplot(silSum,
+silPlot = silSum[!silSum$variable %in% c('zinb k=1', 'zinb k=3','zinb k=4'), ]
+silPlot$variable = droplevels(silPlot$variable)
+levels(silPlot$variable)[1] = 'ZINB'
+silLun = ggplot(silPlot,
                  aes(x = zfrac, y = mean, col = variable, group = variable)) +
   geom_point() + geom_line() + labs(col='') + 
   theme_bw() + xlab('Zero Fraction') + facet_grid( ~ nc) +
   ylab('Silhouette width of true labels') +
-  scale_color_manual(values=mycol)
+  scale_color_manual(values=mycol[c(2,5:length(mycol))])
 silLun
 ggsave(filename="../../paper/6680489mtyrjx/silhouetteLun.pdf", plot = silLun,
        width = 8, height = 5)

@@ -1,7 +1,7 @@
 library(zinb)
 library(EDASeq)
 
-COUNT_GEN <- readRDS("function.rds")
+COUNT_GEN <- readRDS("sims/figures/lunSims/function.rds")
 ngenes <- 1000
 B <- 10
 
