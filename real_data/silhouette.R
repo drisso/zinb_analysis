@@ -8,7 +8,8 @@ library(dplyr)
 
 col1 <- brewer.pal(9, "Set1")
 col2 <- c(brewer.pal(8, "Set2"), brewer.pal(8, "Set3"), brewer.pal(8, "Set1"))
-
+mycol <- c(brewer.pal(11,"RdYlGn")[c(8:11, 1:4)], brewer.pal(11,"RdYlBu")[8:11])
+colsil <- mycol[c(5:12, 2, 3)]
 ## Allen
 
 load("allen_covariates_1000.rda")
@@ -39,12 +40,17 @@ sil_lay <- sapply(seq_along(methods), function(i) {
   mean(ss[,3])
 })
 
-bars <- data.frame(AverageSilhouette=sil_lay, Method=names(methods), Type=met_type)
+bars <- data.frame(AverageSilhouette=sil_lay,
+                   Method=factor(names(methods),
+                                 levels=c("PCA_RAW", "PCA_TC", "PCA_TMM", "PCA_FQ",
+                                          "ZIFA_RAW", "ZIFA_TC", "ZIFA_TMM", "ZIFA_FQ",
+                                          "ZINB")),
+                   Type=met_type)
 
 bars %>%
-  ggplot(aes(Method, AverageSilhouette, group=Type, fill=Type)) +
+  ggplot(aes(Method, AverageSilhouette, group=Type, fill=Method)) +
   geom_bar(stat="identity", position='dodge') +
-  scale_fill_manual(values=col1) + coord_flip() +
+  scale_fill_manual(values=colsil) + coord_flip() +
   theme(legend.position = "none") -> sil_allen
 
 methods_sub <- methods[c(2, 6, 9)]
@@ -103,12 +109,16 @@ sil_cl <- sapply(seq_along(methods), function(i) {
   mean(ss[,3])
 })
 
-bars <- data.frame(AverageSilhouette=sil_cl, Method=names(methods), Type=met_type)
+bars <- data.frame(AverageSilhouette=sil_cl,
+                   Method=factor(names(methods),
+                                 levels=c("PCA_RAW", "PCA_TC", "PCA_TMM", "PCA_FQ",
+                                          "ZIFA_RAW", "ZIFA_TC", "ZIFA_TMM", "ZIFA_FQ",
+                                          "ZINB")), Type=met_type)
 
 bars %>%
-  ggplot(aes(Method, AverageSilhouette, group=Type, fill=Type)) +
+  ggplot(aes(Method, AverageSilhouette, group=Type, fill=Method)) +
   geom_bar(stat="identity", position='dodge') +
-  scale_fill_manual(values=col1) + coord_flip() +
+  scale_fill_manual(values=colsil) + coord_flip() +
   theme(legend.position = "none") -> sil_zeisel
 
 methods_sub <- methods[c(2, 6, 9)]
@@ -159,12 +169,16 @@ sil_cl <- sapply(seq_along(methods), function(i) {
   mean(ss[,3])
 })
 
-bars <- data.frame(AverageSilhouette=sil_cl, Method=names(methods), Type=met_type)
+bars <- data.frame(AverageSilhouette=sil_cl,
+                   Method=factor(names(methods),
+                                 levels=c("PCA_RAW", "PCA_TC", "PCA_TMM", "PCA_FQ",
+                                          "ZIFA_RAW", "ZIFA_TC", "ZIFA_TMM", "ZIFA_FQ",
+                                          "ZINB", "ZINB_BATCH")), Type=met_type)
 
 bars %>%
-  ggplot(aes(Method, AverageSilhouette, group=Type, fill=Type)) +
+  ggplot(aes(Method, AverageSilhouette, group=Type, fill=Method)) +
   geom_bar(stat="identity", position='dodge') +
-  scale_fill_manual(values=col1) + coord_flip() +
+  scale_fill_manual(values=colsil) + coord_flip() +
   theme(legend.position = "none") -> sil_espresso
 
 methods_sub <- methods[c(2, 6, 9)]
@@ -222,12 +236,16 @@ sil_cl <- sapply(seq_along(methods), function(i) {
   mean(ss[,3])
 })
 
-bars <- data.frame(AverageSilhouette=sil_cl, Method=names(methods), Type=met_type)
+bars <- data.frame(AverageSilhouette=sil_cl,
+                   Method=factor(names(methods),
+                                 levels=c("PCA_RAW", "PCA_TC", "PCA_TMM", "PCA_FQ",
+                                          "ZIFA_RAW", "ZIFA_TC", "ZIFA_TMM", "ZIFA_FQ",
+                                          "ZINB")), Type=met_type)
 
 bars %>%
-  ggplot(aes(Method, AverageSilhouette, group=Type, fill=Type)) +
+  ggplot(aes(Method, AverageSilhouette, group=Type, fill=Method)) +
   geom_bar(stat="identity", position='dodge') +
-  scale_fill_manual(values=col1) + coord_flip() +
+  scale_fill_manual(values=colsil) + coord_flip() +
   theme(legend.position = "none") -> sil_patel
 
 methods_sub <- methods[c(2, 6, 9)]
