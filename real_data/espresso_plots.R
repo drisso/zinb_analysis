@@ -284,3 +284,68 @@ save_plot("espresso_fig2bis.pdf", fig2_bis,
           nrow = 2,
           base_aspect_ratio = 1.3
 )
+
+## goodness-of-fit
+library(matrixStats)
+totalcount = function (ei)
+{
+  sums = colSums(ei)
+  eo = t(t(ei)*mean(sums)/sums)
+  return(eo)
+}
+
+#-------------------- Functions
+myExp <- function(x, eps=1)
+  exp(x)-eps
+
+myLog <- function(x, eps=1)
+  log(x+eps)
+
+invLogit <- function(x)
+  exp(x)/(1 + exp(x))
+
+#----- MD-plot
+MD <- function(x, y, log=FALSE, pts=NULL, pch=20, col=2, smooth=TRUE, main="", ...)
+{
+  if(log)
+  {
+    m <- (myLog(x)+myLog(y))/2
+    d <- myLog(y)-myLog(x)
+  }
+  if(!log)
+  {
+    m <- (x+y)/2
+    d <- y-x
+  }
+  if(smooth)
+    smoothScatter(m,d,xlab="M",ylab="D",main=main,...)
+  if(!smooth)
+    plot(m,d,xlab="M",ylab="D",main=main,...)
+  lines(lowess(d ~ m), col=2, lwd=2)
+  abline(h=0)
+
+  if(!is.null(pts))
+    points(m[pts],d[pts],pch=pch,col=col)
+}
+
+
+tc <- totalcount(raw)
+
+vars <- rowVars(log1p(tc))
+names(vars) <- rownames(tc)
+vars <- sort(vars, decreasing = TRUE)
+vargenes <- names(vars)[1:1000]
+
+core <- raw[vargenes,]
+
+obs_mean <- rowMeans(log1p(core[,level1=="2i"]))
+obs_prop <- rowMeans(core[,level1=="2i"]>0)
+
+zinb_mu = getLogMu(zinb)[level1=="2i",]
+zinb_pi = getPi(zinb)[level1=="2i",]
+
+zinb_mean <- colMeans((1 - zinb_pi) * zinb_mu)
+zinb_prop <- colMeans(zinb_pi + (1 - zinb_pi) * (1 + getPhi(zinb)[1] * zinb_mu)^(1/getPhi(zinb)[1]))
+
+MD(obs_mean, zinb_mean, log=FALSE)
+MD(obs_pi, zinb_pi, log=FALSE)

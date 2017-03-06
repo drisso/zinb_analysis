@@ -215,3 +215,19 @@ save_plot("patel_fig1_v4.pdf", fig1_4,
 )
 
 save_plot("patel_supp_sil.pdf", sil)
+
+data.frame(Dim1=pc_raw[,1], Dim2=pc_raw[,2]) %>%
+  ggplot(aes(Dim1, Dim2, colour=level1)) + geom_point() +
+  scale_color_brewer(palette="Set1") -> pca_raw
+data.frame(Dim1=pc_tc[,1], Dim2=pc_tc[,2]) %>%
+  ggplot(aes(Dim1, Dim2, colour=level1)) + geom_point() +
+  scale_color_brewer(palette="Set1") -> pca_tc
+data.frame(Dim1=pc_tmm[,1], Dim2=pc_tmm[,2]) %>%
+  ggplot(aes(Dim1, Dim2, colour=level1)) + geom_point() +
+  scale_color_brewer(palette="Set1") -> pca_tmm
+data.frame(Dim1=pc_fq[,1], Dim2=pc_fq[,2]) %>%
+  ggplot(aes(Dim1, Dim2, colour=level1)) + geom_point() +
+  scale_color_brewer(palette="Set1") -> pca_fq
+
+fig_pca <- plot_grid(pca_raw, pca_tc, pca_tmm, pca_fq, labels=c("A", "B", "C", "D"))
+save_plot("patel_supp_pca.pdf", fig_pca)
