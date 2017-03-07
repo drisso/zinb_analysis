@@ -177,11 +177,30 @@ plot(zinb_qc@W, pch=19, col=colMerged, main="ZINB")
 
 # Gene-level covariates
 
-```{r gc_content, eval=FALSE}
-counts <- counts[bm[,1],]
-gene_info = getGeneLengthAndGCContent(as.character(bm[,2]), "mm10", mode="org.db")
-rownames(gene_info) = bm[,1]
-gene_info = na.omit(gene_info)
+```{r gc_content}
+gene_info = getGeneLengthAndGCContent(vargenes, "mm10", mode="org.db")
+
+zinb_gc <- zinbFit(raw[vargenes,], ncores = ncores, K = 2, 
+                   V=model.matrix(~log(length) + gc, data=as.data.frame(gene_info)),
+                   X=model.matrix(~Batch, data=targets),
+                   epsilon=1e3)
+
+plot(zinb_gc@W, pch=19, col=colMerged, main="ZINB")
+
+methods <- list(pc_raw[,1:2], pc_tc[,1:2], pc_tmm[,1:2], pc_fq[,1:2],
+                zifa_raw, zifa_tc, zifa_tmm, zifa_fq,
+                zinb@W, zinb_batch@W, zinb_gc@W)
+names(methods) <- c(paste0("PCA_", c("RAW", "TC", "TMM", "FQ")),
+                    paste0("ZIFA_", c("RAW", "TC", "TMM", "FQ")),
+                    "ZINB", "ZINB_BATCH", "ZINB_GC")
+
+sil_cl <- sapply(seq_along(methods), function(i) {
+  d <- dist(methods[[i]])
+  ss <- silhouette(as.numeric(targets$Serum), d)
+  mean(ss[,3])
+})
+names(sil_cl) <- names(methods)
+barplot(sil_cl, las=3)
 ```
 
 ```{r write_out, dependson=c("zinb", "zifa", "pca", "zinb_batch", "zinb_qc")}

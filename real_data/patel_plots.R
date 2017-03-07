@@ -230,4 +230,7 @@ data.frame(Dim1=pc_fq[,1], Dim2=pc_fq[,2]) %>%
   scale_color_brewer(palette="Set1") -> pca_fq
 
 fig_pca <- plot_grid(pca_raw, pca_tc, pca_tmm, pca_fq, labels=c("A", "B", "C", "D"))
-save_plot("patel_supp_pca.pdf", fig_pca)
+save_plot("patel_supp_pca.pdf", fig_pca,
+          ncol = 2,
+          nrow = 2,
+          base_aspect_ratio = 1.3)
