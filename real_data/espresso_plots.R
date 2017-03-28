@@ -61,7 +61,7 @@ data.frame(Dim1=zinb@W[,1], Dim2=zinb@W[,2]) %>%
 p1 <- plot_grid(panel1_pca + theme(legend.position = "none"),
           panel1_zifa + theme(legend.position = "none"),
           panel1_zinb + theme(legend.position = "none"),
-          labels=c("A", "C", "E"), align = "h", ncol=3)
+          labels=c("a", "c", "e"), align = "h", ncol=3)
 
 legend <- get_legend(panel1_pca)
 upper <- plot_grid(p1, legend, rel_widths = c(3, .6))
@@ -76,7 +76,7 @@ data.frame(Dim1=zinb@W[,1], Dim2=zinb@W[,2]) %>%
 p2 <- plot_grid(panel2_pca + theme(legend.position = "none"),
                 panel2_zifa + theme(legend.position = "none"),
                 panel2_zinb + theme(legend.position = "none"),
-                labels=c("B", "D", "F"), align = "h", ncol=3)
+                labels=c("b", "d", "f"), align = "h", ncol=3)
 
 legend2 <- get_legend(panel2_pca)
 lower <- plot_grid(p2, legend2, rel_widths = c(3, .6))
@@ -125,7 +125,7 @@ bars %>%
 p2 <- plot_grid(panel2_pca + theme(legend.position = "none"),
                 panel2_zifa + theme(legend.position = "none"),
                 panel2_zinb + theme(legend.position = "none"),
-                labels=c("B", "D", "F"), align = "h", ncol=3)
+                labels=c("b", "d", "f"), align = "h", ncol=3)
 
 legend2 <- get_legend(panel2_pca)
 lower <- plot_grid(p2, legend2, rel_widths = c(3, 1))
@@ -146,8 +146,8 @@ methods <- list(pc_raw[,1:2], pc_tc[,1:2], pc_tmm[,1:2], pc_fq[,1:2],
                 zinb@W)
 names(methods) <- c(paste0("PCA_", c("RAW", "TC", "TMM", "FQ")),
                     paste0("ZIFA_", c("RAW", "TC", "TMM", "FQ")),
-                    "ZINB")
-met_type <- as.factor(c(rep(c("PCA", "ZIFA"), each=4), "ZINB"))
+                    "ZINB-Wave")
+met_type <- as.factor(c(rep(c("PCA", "ZIFA"), each=4), "ZINB-Wave"))
 
 sil_cl <- sapply(seq_along(methods), function(i) {
   d <- dist(methods[[i]])
@@ -182,7 +182,7 @@ sil_pc <- lapply(seq_along(methods_sub), function(i) {
 })
 
 bars <- data.frame(AverageSilhouette=unlist(sil_pc),
-                   Method=rep(c("PCA", "ZIFA", "ZINB"), each=nlevels(level1)),
+                   Method=rep(c("PCA", "ZIFA", "ZINB-Wave"), each=nlevels(level1)),
                    Cluster=factor(rep(levels(level1), length(methods_sub)),
                                   levels=levels(level1)))
 
@@ -197,9 +197,9 @@ bars %>%
 p1 <- plot_grid(panel1_pca + theme(legend.position = "none"),
                 panel1_zifa + theme(legend.position = "none"),
                 panel1_zinb + theme(legend.position = "none"),
-                labels=c("A", "C", "E"), align = "h", ncol=3)
+                labels=c("a", "c", "e"), align = "h", ncol=3)
 
-upper <- plot_grid(p1, sil, labels=c("", "G"), rel_widths = c(3, 1))
+upper <- plot_grid(p1, sil, labels=c("", "g"), rel_widths = c(3, 1))
 
 fig1_4 <- plot_grid(upper, lower, ncol=1, nrow=2)
 fig1_4
@@ -225,7 +225,7 @@ data.frame(Dim1=zinb_batch@W[,1], Dim2=zinb_batch@W[,2]) %>%
 
 fig2 <- plot_grid(panel1_zinb + theme(legend.position = "none"),
                   panel2_zinb,
-                  labels=c("A", "B"), ncol=2, nrow=1, rel_widths = c(1, 1.25))
+                  labels=c("a", "b"), ncol=2, nrow=1, rel_widths = c(1, 1.25))
 fig2
 
 save_plot("espresso_fig2.pdf", fig2,
@@ -234,7 +234,7 @@ save_plot("espresso_fig2.pdf", fig2,
           base_aspect_ratio = 1.3
 )
 
-methods_sub <- list(ZINB=zinb@W, ZINB_BATCH=zinb_batch@W)
+methods_sub <- list("ZINB-WaVE"=zinb@W, "ZINB-Batch"=zinb_batch@W)
 sil_cond <- lapply(seq_along(methods_sub), function(i) {
   d <- dist(methods_sub[[i]])
   s_cond <- silhouette(as.numeric(condition), d)
@@ -276,7 +276,7 @@ bars %>%
 fig2_bis <- plot_grid(panel1_zinb + theme(legend.position = "none"),
                   panel2_zinb,
                   sil, sil2,
-                  labels=c("A", "B", "C", "D"), ncol=2, nrow=2, rel_widths = c(1, 1.25, 1, 1))
+                  labels=c("a", "b", "c", "d"), ncol=2, nrow=2, rel_widths = c(1, 1.25, 1, 1))
 fig2_bis
 
 save_plot("espresso_fig2bis.pdf", fig2_bis,
@@ -285,67 +285,67 @@ save_plot("espresso_fig2bis.pdf", fig2_bis,
           base_aspect_ratio = 1.3
 )
 
-## goodness-of-fit
-library(matrixStats)
-totalcount = function (ei)
-{
-  sums = colSums(ei)
-  eo = t(t(ei)*mean(sums)/sums)
-  return(eo)
-}
-
-#-------------------- Functions
-myExp <- function(x, eps=1)
-  exp(x)-eps
-
-myLog <- function(x, eps=1)
-  log(x+eps)
-
-invLogit <- function(x)
-  exp(x)/(1 + exp(x))
-
-#----- MD-plot
-MD <- function(x, y, log=FALSE, pts=NULL, pch=20, col=2, smooth=TRUE, main="", ...)
-{
-  if(log)
-  {
-    m <- (myLog(x)+myLog(y))/2
-    d <- myLog(y)-myLog(x)
-  }
-  if(!log)
-  {
-    m <- (x+y)/2
-    d <- y-x
-  }
-  if(smooth)
-    smoothScatter(m,d,xlab="M",ylab="D",main=main,...)
-  if(!smooth)
-    plot(m,d,xlab="M",ylab="D",main=main,...)
-  lines(lowess(d ~ m), col=2, lwd=2)
-  abline(h=0)
-
-  if(!is.null(pts))
-    points(m[pts],d[pts],pch=pch,col=col)
-}
-
-
-tc <- totalcount(raw)
-
-vars <- rowVars(log1p(tc))
-names(vars) <- rownames(tc)
-vars <- sort(vars, decreasing = TRUE)
-vargenes <- names(vars)[1:1000]
-
-core <- raw[vargenes,]
-
-obs_mean <- rowMeans(log1p(core[,level1=="2i"]))
-obs_prop <- rowMeans(core[,level1=="2i"]>0)
-
-zinb_mu = getLogMu(zinb)[level1=="2i",]
-zinb_pi = getPi(zinb)[level1=="2i",]
-
-zinb_mean <- colMeans((1 - zinb_pi) * zinb_mu)
-zinb_prop <- colMeans(zinb_pi + (1 - zinb_pi) * (1 + getPhi(zinb)[1] * zinb_mu)^(1/getPhi(zinb)[1]))
-
-MD(obs_mean, zinb_mean, log=FALSE)
-MD(obs_pi, zinb_pi, log=FALSE)
+# ## goodness-of-fit
+# library(matrixStats)
+# totalcount = function (ei)
+# {
+#   sums = colSums(ei)
+#   eo = t(t(ei)*mean(sums)/sums)
+#   return(eo)
+# }
+#
+# #-------------------- Functions
+# myExp <- function(x, eps=1)
+#   exp(x)-eps
+#
+# myLog <- function(x, eps=1)
+#   log(x+eps)
+#
+# invLogit <- function(x)
+#   exp(x)/(1 + exp(x))
+#
+# #----- MD-plot
+# MD <- function(x, y, log=FALSE, pts=NULL, pch=20, col=2, smooth=TRUE, main="", ...)
+# {
+#   if(log)
+#   {
+#     m <- (myLog(x)+myLog(y))/2
+#     d <- myLog(y)-myLog(x)
+#   }
+#   if(!log)
+#   {
+#     m <- (x+y)/2
+#     d <- y-x
+#   }
+#   if(smooth)
+#     smoothScatter(m,d,xlab="M",ylab="D",main=main,...)
+#   if(!smooth)
+#     plot(m,d,xlab="M",ylab="D",main=main,...)
+#   lines(lowess(d ~ m), col=2, lwd=2)
+#   abline(h=0)
+#
+#   if(!is.null(pts))
+#     points(m[pts],d[pts],pch=pch,col=col)
+# }
+#
+#
+# tc <- totalcount(raw)
+#
+# vars <- rowVars(log1p(tc))
+# names(vars) <- rownames(tc)
+# vars <- sort(vars, decreasing = TRUE)
+# vargenes <- names(vars)[1:1000]
+#
+# core <- raw[vargenes,]
+#
+# obs_mean <- rowMeans(log1p(core[,level1=="2i"]))
+# obs_prop <- rowMeans(core[,level1=="2i"]>0)
+#
+# zinb_mu = getLogMu(zinb)[level1=="2i",]
+# zinb_pi = getPi(zinb)[level1=="2i",]
+#
+# zinb_mean <- colMeans((1 - zinb_pi) * zinb_mu)
+# zinb_prop <- colMeans(zinb_pi + (1 - zinb_pi) * (1 + getPhi(zinb)[1] * zinb_mu)^(1/getPhi(zinb)[1]))
+#
+# MD(obs_mean, zinb_mean, log=FALSE)
+# MD(obs_pi, zinb_pi, log=FALSE)

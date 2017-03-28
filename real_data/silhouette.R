@@ -31,8 +31,8 @@ methods <- list(pc_raw[,1:2], pc_tc[,1:2], pc_tmm[,1:2], pc_fq[,1:2],
                 zinb@W)
 names(methods) <- c(paste0("PCA_", c("RAW", "TC", "TMM", "FQ")),
                     paste0("ZIFA_", c("RAW", "TC", "TMM", "FQ")),
-                    "ZINB")
-met_type <- as.factor(c(rep(c("PCA", "ZIFA"), each=4), "ZINB"))
+                    "ZINB-WaVE")
+met_type <- as.factor(c(rep(c("PCA", "ZIFA"), each=4), "ZINB-WaVE"))
 
 sil_lay <- sapply(seq_along(methods), function(i) {
   d <- dist(methods[[i]])
@@ -44,7 +44,7 @@ bars <- data.frame(AverageSilhouette=sil_lay,
                    Method=factor(names(methods),
                                  levels=c("PCA_RAW", "PCA_TC", "PCA_TMM", "PCA_FQ",
                                           "ZIFA_RAW", "ZIFA_TC", "ZIFA_TMM", "ZIFA_FQ",
-                                          "ZINB")),
+                                          "ZINB-WaVE")),
                    Type=met_type)
 
 bars %>%
@@ -62,7 +62,7 @@ sil_pc <- lapply(seq_along(methods_sub), function(i) {
 })
 
 bars <- data.frame(AverageSilhouette=unlist(sil_pc),
-                   Method=rep(c("PCA", "ZIFA", "ZINB"), each=nlevels(cluster2)),
+                   Method=rep(c("PCA", "ZIFA", "ZINB-WaVE"), each=nlevels(cluster2)),
                    Cluster=rep(levels(cluster2), length(methods_sub)))
 
 bars %>%
@@ -100,8 +100,8 @@ methods <- list(pc_raw[,1:3], pc_tc[,1:3], pc_tmm[,1:3], pc_fq[,1:3],
                 zinb@W)
 names(methods) <- c(paste0("PCA_", c("RAW", "TC", "TMM", "FQ")),
                     paste0("ZIFA_", c("RAW", "TC", "TMM", "FQ")),
-                    "ZINB")
-met_type <- as.factor(c(rep(c("PCA", "ZIFA"), each=4), "ZINB"))
+                    "ZINB-WaVE")
+met_type <- as.factor(c(rep(c("PCA", "ZIFA"), each=4), "ZINB-WaVE"))
 
 sil_cl <- sapply(seq_along(methods), function(i) {
   d <- dist(methods[[i]])
@@ -113,7 +113,7 @@ bars <- data.frame(AverageSilhouette=sil_cl,
                    Method=factor(names(methods),
                                  levels=c("PCA_RAW", "PCA_TC", "PCA_TMM", "PCA_FQ",
                                           "ZIFA_RAW", "ZIFA_TC", "ZIFA_TMM", "ZIFA_FQ",
-                                          "ZINB")), Type=met_type)
+                                          "ZINB-WaVE")), Type=met_type)
 
 bars %>%
   ggplot(aes(Method, AverageSilhouette, group=Type, fill=Method)) +
@@ -130,7 +130,7 @@ sil_pc <- lapply(seq_along(methods_sub), function(i) {
 })
 
 bars <- data.frame(AverageSilhouette=unlist(sil_pc),
-                   Method=rep(c("PCA", "ZIFA", "ZINB"), each=nlevels(level1)),
+                   Method=rep(c("PCA", "ZIFA", "ZINB-WaVE"), each=nlevels(level1)),
                    Cluster=rep(levels(level1), length(methods_sub)))
 
 library(dplyr)
@@ -160,8 +160,8 @@ methods <- list(pc_raw[,1:2], pc_tc[,1:2], pc_tmm[,1:2], pc_fq[,1:2],
                 zinb@W, zinb_batch@W)
 names(methods) <- c(paste0("PCA_", c("RAW", "TC", "TMM", "FQ")),
                     paste0("ZIFA_", c("RAW", "TC", "TMM", "FQ")),
-                    "ZINB", "ZINB_BATCH")
-met_type <- as.factor(c(rep(c("PCA", "ZIFA"), each=4), "ZINB", "ZINB"))
+                    "ZINB-WaVE", "ZINB-Batch")
+met_type <- as.factor(c(rep(c("PCA", "ZIFA"), each=4), "ZINB-WaVE", "ZINB-WaVE"))
 
 sil_cl <- sapply(seq_along(methods), function(i) {
   d <- dist(methods[[i]])
@@ -173,7 +173,7 @@ bars <- data.frame(AverageSilhouette=sil_cl,
                    Method=factor(names(methods),
                                  levels=c("PCA_RAW", "PCA_TC", "PCA_TMM", "PCA_FQ",
                                           "ZIFA_RAW", "ZIFA_TC", "ZIFA_TMM", "ZIFA_FQ",
-                                          "ZINB", "ZINB_BATCH")), Type=met_type)
+                                          "ZINB-WaVE", "ZINB-Batch")), Type=met_type)
 
 bars %>%
   ggplot(aes(Method, AverageSilhouette, group=Type, fill=Method)) +
@@ -190,7 +190,7 @@ sil_pc <- lapply(seq_along(methods_sub), function(i) {
 })
 
 bars <- data.frame(AverageSilhouette=unlist(sil_pc),
-                   Method=rep(c("PCA", "ZIFA", "ZINB"), each=nlevels(level1)),
+                   Method=rep(c("PCA", "ZIFA", "ZINB-WaVE"), each=nlevels(level1)),
                    Cluster=factor(rep(levels(level1), length(methods_sub)),
                                   levels=levels(level1)))
 
@@ -227,8 +227,8 @@ methods <- list(pc_raw[,1:2], pc_tc[,1:2], pc_tmm[,1:2], pc_fq[,1:2],
                 zinb@W)
 names(methods) <- c(paste0("PCA_", c("RAW", "TC", "TMM", "FQ")),
                     paste0("ZIFA_", c("RAW", "TC", "TMM", "FQ")),
-                    "ZINB")
-met_type <- as.factor(c(rep(c("PCA", "ZIFA"), each=4), "ZINB"))
+                    "ZINB-WaVE")
+met_type <- as.factor(c(rep(c("PCA", "ZIFA"), each=4), "ZINB-WaVE"))
 
 sil_cl <- sapply(seq_along(methods), function(i) {
   d <- dist(methods[[i]])
@@ -240,7 +240,7 @@ bars <- data.frame(AverageSilhouette=sil_cl,
                    Method=factor(names(methods),
                                  levels=c("PCA_RAW", "PCA_TC", "PCA_TMM", "PCA_FQ",
                                           "ZIFA_RAW", "ZIFA_TC", "ZIFA_TMM", "ZIFA_FQ",
-                                          "ZINB")), Type=met_type)
+                                          "ZINB-WaVE")), Type=met_type)
 
 bars %>%
   ggplot(aes(Method, AverageSilhouette, group=Type, fill=Method)) +
@@ -257,7 +257,7 @@ sil_pc <- lapply(seq_along(methods_sub), function(i) {
 })
 
 bars <- data.frame(AverageSilhouette=unlist(sil_pc),
-                   Method=rep(c("PCA", "ZIFA", "ZINB"), each=nlevels(level1)),
+                   Method=rep(c("PCA", "ZIFA", "ZINB-WaVE"), each=nlevels(level1)),
                    Cluster=rep(levels(level1), length(methods_sub)))
 
 library(dplyr)
@@ -297,8 +297,8 @@ bars %>%
 #   theme(legend.position = "none") -> sil_olfactory
 
 sil <- plot_grid(sil_allen, sil_zeisel,
-                 sil_espresso, sil_patel,
-                 labels=c("A", "B", "C", "D"))
+                 sil_patel, sil_espresso,
+                 labels=c("a", "b", "c", "d"))
 
 save_plot("silhouette.pdf",
           sil,
@@ -308,8 +308,8 @@ save_plot("silhouette.pdf",
 )
 
 sil_pc <- plot_grid(sil_allen_pc, sil_zeisel_pc,
-                 sil_espresso_pc, sil_patel_pc,
-                 labels=c("A", "B", "C", "D"))
+                 sil_patel_pc, sil_espresso_pc,
+                 labels=c("a", "b", "c", "d"))
 
 save_plot("silhouette_pc.pdf",
           sil_pc,

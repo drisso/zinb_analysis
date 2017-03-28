@@ -66,7 +66,7 @@ data.frame(Dim1=zinb@W[,1], Dim2=zinb@W[,2]) %>%
 p1 <- plot_grid(panel1_pca + theme(legend.position = "none"),
           panel1_zifa + theme(legend.position = "none"),
           panel1_zinb + theme(legend.position = "none"),
-          labels=c("A", "C", "E"), align = "h", ncol=3)
+          labels=c("a", "c", "e"), align = "h", ncol=3)
 
 legend <- get_legend(panel1_pca)
 upper <- plot_grid(p1, legend, rel_widths = c(3, .6))
@@ -81,7 +81,7 @@ data.frame(Dim1=zinb@W[,1], Dim2=zinb@W[,2]) %>%
 p2 <- plot_grid(panel2_pca + theme(legend.position = "none"),
                 panel2_zifa + theme(legend.position = "none"),
                 panel2_zinb + theme(legend.position = "none"),
-                labels=c("B", "D", "F"), align = "h", ncol=3)
+                labels=c("b", "d", "f"), align = "h", ncol=3)
 
 legend2 <- get_legend(panel2_pca)
 lower <- plot_grid(p2, legend2, rel_widths = c(3, .6))
@@ -130,7 +130,7 @@ bars %>%
 p2 <- plot_grid(panel2_pca + theme(legend.position = "none"),
                 panel2_zifa + theme(legend.position = "none"),
                 panel2_zinb + theme(legend.position = "none"),
-                labels=c("B", "D", "F"), align = "h", ncol=3)
+                labels=c("b", "d", "f"), align = "h", ncol=3)
 
 legend2 <- get_legend(panel2_pca)
 lower <- plot_grid(p2, legend2, rel_widths = c(3, 1))
@@ -201,9 +201,9 @@ bars %>%
 p1 <- plot_grid(panel1_pca + theme(legend.position = "none"),
                 panel1_zifa + theme(legend.position = "none"),
                 panel1_zinb + theme(legend.position = "none"),
-                labels=c("A", "C", "E"), align = "h", ncol=3)
+                labels=c("a", "c", "e"), align = "h", ncol=3)
 
-upper <- plot_grid(p1, sil, labels=c("", "G"), rel_widths = c(3, 1))
+upper <- plot_grid(p1, sil, labels=c("", "g"), rel_widths = c(3, 1))
 
 fig1_4 <- plot_grid(upper, lower, ncol=1, nrow=2)
 fig1_4
@@ -229,7 +229,7 @@ data.frame(Dim1=pc_fq[,1], Dim2=pc_fq[,2]) %>%
   ggplot(aes(Dim1, Dim2, colour=level1)) + geom_point() +
   scale_color_brewer(palette="Set1") -> pca_fq
 
-fig_pca <- plot_grid(pca_raw, pca_tc, pca_tmm, pca_fq, labels=c("A", "B", "C", "D"))
+fig_pca <- plot_grid(pca_raw, pca_tc, pca_tmm, pca_fq, labels=c("a", "b", "c", "d"))
 save_plot("patel_supp_pca.pdf", fig_pca,
           ncol = 2,
           nrow = 2,
