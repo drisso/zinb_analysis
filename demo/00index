@@ -1,3 +1,0 @@
-standard.R	An example on how to optimize the standard zinb likelihood via optim
-smallmatrix.R	An example on how to optimize the modified (small design matrix) likelihood
-test_svetlana.R Test the model of Svetlana
