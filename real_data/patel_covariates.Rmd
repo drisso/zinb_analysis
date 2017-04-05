@@ -15,7 +15,7 @@ output:
 knitr::opts_chunk$set(fig.align="center", cache=TRUE, error=FALSE, message=FALSE, warning=TRUE)
 library(SummarizedExperiment)
 library(scRNAseq)
-library(zinb)
+library(zinbwave)
 library(ggplot2)
 library(magrittr)
 library(matrixStats)
