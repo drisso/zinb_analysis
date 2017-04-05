@@ -64,4 +64,8 @@ file.
 
 To create the simulated datasets from the real datasets used in the paper, first run the code in [simFunction.R](https://github.com/drisso/zinb_analysis/blob/master/sims/figures/simFunction.R). Then, run the `.R` files in the folders in `sims/figures`. Finally, run [figuresPaper.Rmd](https://github.com/drisso/zinb_analysis/blob/master/sims/figures/figuresPaper.Rmd).
 
+To simulate the datasets from the Lun & Marioni model, use the steps described in the methods section of the paper.
+
+To fit the simulated datasets with 10,000 cells, run [Makefile](https://github.com/drisso/zinb_analysis/blob/master/sims/figures/fig6ad-S13-S14/Makefile). It launches a job on a servor [fitZinb10000.R](https://github.com/drisso/zinb_analysis/blob/master/sims/figures/fig6ad-S13-S14/fitZinb10000.R) with the arguments in the Makefile. Alternatively, you can just call [fitZinb10000.R](https://github.com/drisso/zinb_analysis/blob/master/sims/figures/fig6ad-S13-S14/fitZinb10000.R) from your terminal with the arguments you want.
+
 
