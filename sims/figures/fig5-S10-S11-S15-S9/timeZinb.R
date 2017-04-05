@@ -1,4 +1,4 @@
-library(zinb)
+library(zinbwave)
 
 cpuTime = lapply(c(50, 100, 500, 1000, 5000, 10000), function(nc){
   fileName = sprintf('simZeisel_nc%s_ratio1_offs2', nc)

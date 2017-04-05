@@ -1,7 +1,7 @@
 # Use the allen data to simulate with realistic parameters
 library(scRNAseq)
 library(EDASeq)
-library(zinb)
+library(zinbwave)
 library(matrixStats)
 
 set.seed(1829)

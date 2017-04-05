@@ -1,6 +1,6 @@
 library(cluster)
 library(parallel)
-library(zinb)
+library(zinbwave)
 library(EDASeq)
 library(digest)
 library(edgeR)
@@ -28,7 +28,7 @@ lun = T
 if (lun){
   for (nc in c(100)){
     for (ziadd in c('', '_ziadd0.33', '_ziadd0.67')){
-      pref = sprintf('~/Documents/BRAIN/gitrepo/zinb_analysis/sims/figures/lunSims/simLun_%s%s', nc, ziadd)
+      pref = sprintf('sims/figures/lunSims/simLun_%s%s', nc, ziadd)
       load(paste0(pref, '.rda'))
       
       print('zifa raw')

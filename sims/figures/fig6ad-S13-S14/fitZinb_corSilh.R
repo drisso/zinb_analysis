@@ -1,6 +1,6 @@
-library(zinb)
+library(zinbwave)
 
-setwd("~/Documents/BRAIN/gitrepo/zinb_analysis/sims/figures/corr_silh/")
+setwd("sims/figures/corr_silh/")
 
 nc = 100
 for (b2 in c(1, 5, 10)){

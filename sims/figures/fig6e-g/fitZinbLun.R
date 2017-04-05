@@ -1,5 +1,4 @@
-library(zinb)
-setwd('~/Documents/BRAIN/gitrepo/zinb_analysis/sims/figures/lunSims/')
+library(zinbwave)
 
 
 for (ncells in c(100)){

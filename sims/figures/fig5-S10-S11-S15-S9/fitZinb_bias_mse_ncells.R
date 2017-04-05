@@ -1,4 +1,4 @@
-library(zinb)
+library(zinbwave)
 
 ncores = c(1, 5, 5, 10, 20, 20)
 nc = c(50, 100, 500, 1000, 5000, 10000)

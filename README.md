@@ -62,4 +62,6 @@ file.
 
 ### Simulations
 
-TODO
+To create the simulated datasets from the real datasets used in the paper, first run the code in [simFunction.R](https://github.com/drisso/zinb_analysis/blob/master/sims/figures/simFunction.R). Then, run the `.R` files in the folders in `sims/figures`. Finally, run [figuresPaper.Rmd](https://github.com/drisso/zinb_analysis/blob/master/sims/figures/figuresPaper.Rmd).
+
+

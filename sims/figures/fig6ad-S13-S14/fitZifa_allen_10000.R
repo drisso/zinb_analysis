@@ -1,6 +1,6 @@
 library(cluster)
 library(parallel)
-library(zinb)
+library(zinbwave)
 library(EDASeq)
 library(digest)
 library(edgeR)
@@ -18,7 +18,7 @@ wrapRzifa <- function(Y, block = T){
     print('run ZIFA')
     bb = ifelse(block, '-b ', '')
     #cmd = sprintf('python real_data/run_zifa.py %s%s.csv %s_zifa.csv', bb, tmp, tmp)
-    cmd = sprintf('python ~/Documents/BRAIN/gitrepo/zinb_analysis/real_data/run_zifa.py %s%s.csv %s_zifa.csv', bb, tmp, tmp)
+    cmd = sprintf('python run_zifa.py %s%s.csv %s_zifa.csv', bb, tmp, tmp)
     system(cmd)
   }
   read.csv(sprintf("%s_zifa.csv", tmp), header=FALSE)
@@ -93,10 +93,9 @@ zifa_tmm <- function(simData){
 }
 
 b2 = 5
-offs = 2
-pref = sprintf('simZeisel_nc10000_ratio%s_offs%s', b2, offs)
+offs = 5
+pref = sprintf('simAllen_nc10000_ratio%s_offs%s', b2, offs)
 load(paste0(pref, '.rda'))
-mclapply(list(zifa_raw, zifa_tmm, zifa_tc, zifa_fq), function(x) x(simData), mc.cores = 2)
-
+mclapply(list(zifa_raw, zifa_tmm, zifa_tc, zifa_fq), function(x) x(simData), mc.cores = 8)
 
 

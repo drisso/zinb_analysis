@@ -1,4 +1,4 @@
-library(zinb)
+library(zinbwave)
 library(EDASeq)
 
 COUNT_GEN <- readRDS("sims/figures/lunSims/function.rds")

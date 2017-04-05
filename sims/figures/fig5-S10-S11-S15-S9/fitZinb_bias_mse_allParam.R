@@ -1,4 +1,4 @@
-library(zinb)
+library(zinbwave)
 
 makeZinbFit <- function(Xintercept = T, Vintercept = T, K = 2,
                         commondispersion = T, ngenes = 1000, ncells = 100){

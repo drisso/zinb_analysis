@@ -12,7 +12,7 @@ toc_float: yes
 ---
 ```{r options, echo=FALSE, results="hide",message=FALSE, error=FALSE, include=FALSE, autodep=TRUE}
 knitr::opts_chunk$set(fig.align="center", cache=TRUE, error=FALSE, message=FALSE, warning=TRUE, fig.width=6, fig.height=6)
-library(zinb)
+library(zinbwave)
 library(cluster)
 library(RColorBrewer)
 library(ggplot2)
