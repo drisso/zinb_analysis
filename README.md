@@ -43,7 +43,7 @@ In order to be able to run the code in this repo, it is required to have `R` (>=
 
 ### python packages
 
-- [ZIFA (python package)](https://github.com/epierson9/ZIFA)
+- [ZIFA](https://github.com/epierson9/ZIFA)
 
 ## Getting started
 
