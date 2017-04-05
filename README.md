@@ -60,6 +60,8 @@ one can use the `.R` file to generate the dataset-specific plots found in the pa
 To generate the plots related to silhouette width, one needs to source the [silhouette.R](https://github.com/drisso/zinb_analysis/blob/master/real_data/silhouette.R)
 file.
 
+To generate the plots related to the goodness-of-fit, run the `.Rmd` files in the `real_data` folder starting with `goodness_of_fit`, e.g., for the Patel data, the file is [goodness_of_fit_patel.Rmd].
+
 ### Simulations
 
 To create the simulated datasets from the real datasets used in the paper, first run the code in [simFunction.R](https://github.com/drisso/zinb_analysis/blob/master/sims/figures/simFunction.R). Then, run the `.R` files in the folders in `sims/figures`. Finally, run [figuresPaper.Rmd](https://github.com/drisso/zinb_analysis/blob/master/sims/figures/figuresPaper.Rmd).
