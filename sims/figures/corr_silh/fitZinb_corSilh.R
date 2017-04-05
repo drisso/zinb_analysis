@@ -1,5 +1,7 @@
 library(zinb)
 
+setwd("~/Documents/BRAIN/gitrepo/zinb_analysis/sims/figures/corr_silh/")
+
 nc = 100
 for (b2 in c(1, 5, 10)){
   for (offs in c(-1.5,0.5,2)){

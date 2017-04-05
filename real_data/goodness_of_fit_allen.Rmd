@@ -1,0 +1,154 @@
+---
+title: "Goddness-of-fit"
+author: "Fanny"
+date: "03/24/2017"
+output: 
+  html_document: 
+  fig_height: 10
+fig_width: 10
+toc: yes
+code_folding: hide
+toc_float: yes
+---
+```{r options, echo=FALSE, results="hide",message=FALSE, error=FALSE, include=FALSE, autodep=TRUE}
+knitr::opts_chunk$set(fig.align="center", cache=TRUE, error=FALSE, message=FALSE, warning=TRUE, fig.width=6, fig.height=6)
+library(zinb)
+library(cluster)
+library(RColorBrewer)
+library(ggplot2)
+library(reshape)
+library(EDASeq)
+library(edgeR)
+library(dplyr)
+library(DESeq2)
+library(cowplot)
+library(matrixStats)
+library(scRNAseq)
+mycol = c(brewer.pal(11,"RdYlGn")[c(8:11, 1:4)], brewer.pal(11,"RdYlBu")[8:11])
+```
+
+
+```{r datain}
+df = 'allen'
+
+data("allen")
+allen_core <- allen[grep("^ERCC-", rownames(allen), invert = TRUE),
+                    which(colData(allen)$Core.Type=="Core")]
+filter <- rowSums(assay(allen_core)>10)>=10
+raw <- assay(allen_core)[filter,]
+col1 <- brewer.pal(9, "Set1")
+level1 <- as.factor(colData(allen_core)$driver_1_s)
+colMerged <- col1[level1]
+
+vars <- rowVars(log1p(as.matrix(raw)))
+names(vars) <- rownames(raw)
+vars <- sort(vars, decreasing = TRUE)
+vargenes <- names(vars)[1:1000]
+
+core <- as.matrix(raw[vargenes, ])
+```
+
+```{r zinb}
+zinb <- zinbFit(core, ncores = 2, K = 2, epsilon = 1e3, 
+                commondispersion = FALSE, verbose = T)
+```
+
+```{r functions}
+computeExp <- function(zinbModel){
+  (1 - t(getPi(zinbModel))) * t(getMu(zinbModel))
+}
+
+computeVar <- function(zinbModel){
+  mu = t(getMu(zinbModel))
+  pi = t(getPi(zinbModel))
+  phi = exp(-getZeta(zinbModel))
+  (1 - pi) * mu * (1 + mu*(phi + pi))
+}
+
+computeP0 <- function(zinbModel){
+  mu = t(getMu(zinbModel))
+  pi = t(getPi(zinbModel))
+  phi = exp(-getZeta(zinbModel))
+  pi + (1 - pi) * (1 + phi * mu) ^ (-1/phi)
+}
+
+plotMD <- function(x, y, xlim = c(0,10), ylim = c(-5, 5),
+                   main = 'ZINB: MD-plot estimated vs. observed mean count, log scale'){
+  mm = .5*(x + y)
+  dd = x - y
+  smoothScatter(mm, dd, xlim = xlim, ylim = ylim, xlab = 'Mean', ylab = 'Difference',
+                main = main)
+  abline(h = 0, col = 'gray')
+  fit = loess(dd ~ mm)
+  xpred = seq(0, 10, .1)
+  pred = predict(fit, xpred)
+  lines(xpred, pred, col = 'red', type = 'l', lwd=2)
+}
+
+fitNB <- function(counts){
+  set = newSeqExpressionSet(counts)
+  fq = betweenLaneNormalization(set, which = "full", offset = T)
+  disp = estimateDisp(counts(fq), offset = -offst(fq)) 
+  fit = glmFit(counts(fq), dispersion = disp$tagwise.dispersion, offset = -offst(fq))
+  list(fitted = fit$fitted.values, disp = disp$tagwise.dispersion)
+}
+```
+
+```{r nbzinb}
+# zinb
+zz = zinb
+zinbEY = log1p(rowMeans(computeExp(zz)))
+zinbPY0 = rowMeans(computeP0(zz))
+# observed
+logAveCount = log1p(rowMeans(core))
+prop0 = rowMeans(core == 0)
+# edgeR
+nb = fitNB(core)
+nbEY = log1p(rowMeans(nb$fitted))
+nbPY0 = rowMeans((1 + nb$fitted * nb$disp)^(-1/nb$disp))
+```
+
+MD-plot estimated vs. observed mean count, log scale
+```{r meanCount25}
+pdf(sprintf('../paper/6680489mtyrjx/gof_mu_%s.pdf', df), width = 10, height = 5)
+par(mfrow=c(1,2))
+xlim =  c(5,9.5)
+ylim = c(-1, 3)
+plotMD(zinbEY, logAveCount, xlim = xlim, ylim = ylim, main = 'ZINB-WaVE')
+plotMD(nbEY, logAveCount, xlim = xlim, ylim = ylim, main = 'NB, edgeR')
+dev.off()
+```
+
+MD-plot estimated vs. observed zero probability
+```{r}
+pdf(sprintf('../paper/6680489mtyrjx/gof_pi_%s.pdf', df), width = 10, height = 5)
+par(mfrow = c(1, 2))
+plotMD(zinbPY0, prop0, xlim = c(0, .8), ylim = c(-.2, .1), main = 'ZINB-WaVE')
+plotMD(nbPY0, prop0, xlim = c(0, .8), ylim = c(-.2, .1), main = 'NB, edgeR')
+dev.off()
+```
+
+Estimated dispersion versus observed zero probability
+```{r}
+pdf(sprintf('../paper/6680489mtyrjx/gof_disp_%s.pdf', df), width = 10, height = 5)
+par(mfrow = c(1,2))
+xpred = seq(0, 1, .05)
+fitzinb = loess(exp(-zz@zeta) ~ rowMeans(core == 0))
+predzinb = predict(fitzinb, xpred)
+fitnb = loess(nb$disp ~ rowMeans(core == 0))
+prednb = predict(fitnb, xpred)
+smoothScatter(rowMeans(core == 0), exp(-zz@zeta),
+              xlab = 'Observed zero probability',ylim = c(0, 15),
+              ylab = 'Estimated dispersion',xlim = c(0,1), 
+              main = 'ZINB-WaVE')
+lines(xpred, predzinb, col = 'red', type = 'l', lwd=2)
+
+smoothScatter(rowMeans(core == 0), nb$disp,
+              xlab = 'Observed zero probability',ylim = c(0, 15),
+              ylab = 'Estimated dispersion',xlim = c(0,1), 
+              main = 'NB, edgeR')
+lines(xpred, prednb, col = 'red', type = 'l', lwd=2)
+dev.off()
+```
+
+
