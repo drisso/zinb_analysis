@@ -1,0 +1,394 @@
+---
+title: 'Fluidigm: covariates and batch effects'
+author: "Davide Risso"
+date: "2/21/2016"
+output: 
+  html_document: 
+    fig_height: 7
+    fig_width: 7
+    toc: yes
+    code_folding: hide
+    toc_float: yes
+---
+
+```{r options, echo=FALSE, results="hide",mesasge=FALSE, error=FALSE, include=FALSE, autodep=TRUE}
+knitr::opts_chunk$set(fig.align="center", cache=TRUE, error=FALSE, message=FALSE, warning=TRUE)
+library(SummarizedExperiment)
+library(scRNAseq)
+library(zinb)
+library(ggplot2)
+library(magrittr)
+library(matrixStats)
+library(Rtsne)
+library(scone)
+library(RColorBrewer)
+library(cluster)
+library(parallel)
+library(EDASeq)
+library(digest)
+library(edgeR)
+library(DESeq2)
+
+set.seed(8283)
+options(getClass.msg=FALSE) #get rid of annoying messages about cache until fixed internally in R
+
+ncores <- detectCores() - 1
+```
+
+Here, I will explore the relation between the expression values and some covariates provided with the data.
+
+```{r datain}
+data("fluidigm")
+fluidigm_high <- fluidigm[grep("^ERCC-", rownames(fluidigm), invert = TRUE),
+                    which(colData(fluidigm)$Coverage_Type=="High")]
+fluidigm_low <- fluidigm[grep("^ERCC-", rownames(fluidigm), invert = TRUE),
+                    which(colData(fluidigm)$Coverage_Type=="Low")]
+
+filter <- rowSums(assay(fluidigm_low)>10)>=10
+```
+
+# High coverage
+
+```{r normalization}
+raw <- assay(fluidigm_high)[filter,]
+
+totalcount = function (ei)
+{
+  sums = colSums(ei)
+  eo = t(t(ei)*mean(sums)/sums)
+  return(eo)
+}
+
+tc <- totalcount(raw)
+fq <- FQT_FN(raw)
+tmm <- TMM_FN(raw)
+deseq <- DESEQ_FN(raw)
+```
+
+## PCA
+
+```{r pca}
+library(rARPACK)
+fastpca <- function(expr, scale=FALSE) {
+  svd_raw <- svds(scale(t(expr), center=TRUE, scale=scale), k=3, nu=3, nv=0)
+  pc_raw <- svd_raw$u %*% diag(svd_raw$d[1:3])
+  return(pc_raw)
+}
+
+pc_raw <- fastpca(log1p(raw))
+pc_tc <- fastpca(log1p(tc))
+pc_fq <- fastpca(log1p(fq))
+pc_tmm <- fastpca(log1p(tmm))
+pc_deseq <- fastpca(log1p(deseq))
+
+col1 <- brewer.pal(9, "Set1")
+col2 <- brewer.pal(8, "Set2")
+
+level1 <- as.factor(colData(fluidigm_high)$Biological_Condition)
+colMerged <- col1[level1]
+plot(pc_raw, col=colMerged, pch=19, main="PCA RAW")
+legend("bottomright", levels(level1), fill=col1)
+
+level2 <- as.factor(colData(fluidigm_high)$Cluster2)
+colCl <- col2[level2]
+plot(pc_raw, col=colCl, pch=19, main="PCA RAW")
+legend("bottomright", levels(level2), fill=col2)
+
+plot(pc_tc, col=colCl, pch=19, main="PCA TC")
+plot(pc_tmm, col=colCl, pch=19, main="PCA TMM")
+plot(pc_fq, col=colCl, pch=19, main="PCA FQ")
+```
+
+## ZIFA
+
+```{r zifa}
+wrapRzifa <- function(Y, block = T){
+  # wrapper R function for ZIFA.
+  # md5 hashing and temporary files are used not to re-run zifa 
+  # if it has already be run on this computer.
+  d = digest(Y, "md5")
+  tmp = paste0(tempdir(), '/', d)
+  write.csv(Y, paste0(tmp, '.csv'))
+  
+  if (!file.exists(paste0(tmp, '_zifa.csv'))){
+    print('run ZIFA')
+    bb = ifelse(block, '-b ', '')
+    cmd = sprintf('python run_zifa.py %s%s.csv %s_zifa.csv', bb, tmp, tmp)
+    system(cmd)
+  }
+  read.csv(sprintf("%s_zifa.csv", tmp), header=FALSE)
+}
+
+zifa_raw <- wrapRzifa(log1p(raw))
+plot(zifa_raw, pch=19, col=colCl, main="ZIFA Raw")
+
+zifa_tc <- wrapRzifa(log1p(tc))
+plot(zifa_tc, pch=19, col=colCl, main="ZIFA TC")
+
+zifa_tmm <- wrapRzifa(log1p(tmm))
+plot(zifa_tmm, pch=19, col=colCl, main="ZIFA TMM")
+
+zifa_fq <- wrapRzifa(log1p(fq))
+plot(zifa_fq, pch=19, col=colCl, main="ZIFA FQ")
+```
+
+```{r zifa_deseq}
+zifa_deseq <- wrapRzifa(log1p(deseq))
+plot(zifa_deseq, pch=19, col=colCl, main="ZIFA FQ")
+```
+
+## ZINB
+
+```{r zinb}
+zinb <- zinbFit(raw, ncores = ncores, K = 2, epsilon = 1e4)
+plot(zinb@W, pch=19, col=colCl, main="ZINB")
+```
+
+## PCA
+
+Here, we look at PCA (using TC normalization) to see which covariates influence the data.
+
+```{r pca_cov}
+detection_rate <- colSums(raw>0)
+coverage <- colSums(raw)
+
+df <- cbind(data.frame(PC1=pc_tc[,1], PC2=pc_tc[,2], coverage=coverage, detection_rate=detection_rate), as.data.frame(colData(fluidigm_high)[,1:19]))
+
+df %>% ggplot(aes(PC1, PC2)) + geom_point(aes(color=coverage)) + scale_colour_gradient(low="blue", high="yellow") + theme_classic()
+
+df %>% ggplot(aes(PC1, PC2)) + geom_point(aes(color=detection_rate)) + scale_colour_gradient(low="blue", high="yellow") + theme_classic()
+
+pairs(df[,1:4], col=colMerged, pch=19)
+
+cors <- sapply(1:3, function(i) cor(pc_tc[,i], df[,3:23]))
+colnames(cors) <- paste("PC", 1:NCOL(cors), sep="")
+rownames(cors) <- paste("QC", 1:NROW(cors), sep="")
+barplot(abs(cors), beside = TRUE, col=rainbow(19), border=rainbow(19), ylim=c(0, 1), space=c(0, 2), main="Absolute correlation with QC features")
+legend("topright", colnames(df)[3:23], fill=rainbow(19), border=rainbow(19), cex=.5)
+```
+
+## ZIFA
+
+```{r zifa_cov}
+df <- cbind(data.frame(Z1=zifa_tc[,1], Z2=zifa_tc[,2], coverage=coverage, detection_rate=detection_rate), as.data.frame(colData(fluidigm_high)[,1:19]))
+
+df %>% ggplot(aes(Z1, Z2)) + geom_point(aes(color=coverage)) + scale_colour_gradient(low="blue", high="yellow") + theme_classic()
+
+df %>% ggplot(aes(Z1, Z2)) + geom_point(aes(color=detection_rate)) + scale_colour_gradient(low="blue", high="yellow") + theme_classic()
+
+pairs(df[,1:4], col=colMerged, pch=19)
+
+cors <- sapply(1:2, function(i) cor(zifa_tc[,i], df[,3:23]))
+colnames(cors) <- paste("PC", 1:NCOL(cors), sep="")
+rownames(cors) <- paste("QC", 1:NROW(cors), sep="")
+barplot(abs(cors), beside = TRUE, col=rainbow(19), border=rainbow(19), ylim=c(0, 1), space=c(0, 2), main="Absolute correlation with QC features")
+legend("topright", colnames(df)[3:23], fill=rainbow(19), border=rainbow(19), cex=.5)
+```
+
+## ZINB
+
+```{r zinb_cov}
+df <- cbind(data.frame(W1=zinb@W[,1], W2=zinb@W[,2], coverage=coverage, detection_rate=detection_rate), as.data.frame(colData(fluidigm_high)[,1:19]))
+
+df %>% ggplot(aes(W1, W2)) + geom_point(aes(color=coverage)) + scale_colour_gradient(low="blue", high="yellow") + theme_classic()
+
+df %>% ggplot(aes(W1, W2)) + geom_point(aes(color=detection_rate)) + scale_colour_gradient(low="blue", high="yellow") + theme_classic()
+
+pairs(df[,1:4], col=colMerged, pch=19)
+
+cors <- sapply(1:2, function(i) cor(zinb@W[,i], df[,3:23]))
+colnames(cors) <- paste("PC", 1:NCOL(cors), sep="")
+rownames(cors) <- paste("QC", 1:NROW(cors), sep="")
+barplot(abs(cors), beside = TRUE, col=rainbow(19), border=rainbow(19), ylim=c(0, 1), space=c(0, 2), main="Absolute correlation with QC features")
+legend("topright", colnames(df)[3:23], fill=rainbow(19), border=rainbow(19), cex=.5)
+```
+
+## Add QC features in ZINB model
+
+```{r zinb_batch}
+qcpca <- prcomp(as.data.frame(colData(fluidigm_high)[,1:19]), center=TRUE, scale=TRUE)
+zinb_batch <- zinbFit(raw, ncores = ncores, K = 2, X=qcpca$x[,1:2], epsilon=1e4)
+plot(zinb_batch@W, pch=19, col=colCl, main="ZINB (correcting for QC)")
+```
+
+```{r zinb_batch_cov}
+df <- cbind(data.frame(W1=zinb_batch@W[,1], W2=zinb_batch@W[,2], coverage=coverage, detection_rate=detection_rate), as.data.frame(colData(fluidigm_high)[,1:19]))
+
+df %>% ggplot(aes(W1, W2)) + geom_point(aes(color=coverage)) + scale_colour_gradient(low="blue", high="yellow") + theme_classic()
+
+df %>% ggplot(aes(W1, W2)) + geom_point(aes(color=detection_rate)) + scale_colour_gradient(low="blue", high="yellow") + theme_classic()
+
+pairs(df[,1:4], col=colMerged, pch=19)
+
+cors <- sapply(1:2, function(i) cor(zinb_batch@W[,i], df[,3:23]))
+colnames(cors) <- paste("PC", 1:NCOL(cors), sep="")
+rownames(cors) <- paste("QC", 1:NROW(cors), sep="")
+barplot(abs(cors), beside = TRUE, col=rainbow(19), border=rainbow(19), ylim=c(0, 1), space=c(0, 2), main="Absolute correlation with QC features")
+legend("topright", colnames(df)[3:23], fill=rainbow(19), border=rainbow(19), cex=.5)
+```
+
+# Low coverage
+
+```{r normalization_low}
+raw <- assay(fluidigm_low)[filter,]
+
+tc <- totalcount(raw)
+fq <- FQT_FN(raw)
+tmm <- TMM_FN(raw)
+deseq <- DESEQ_FN(raw)
+```
+
+## PCA
+
+```{r pca_low}
+pc_raw <- fastpca(log1p(raw))
+pc_tc <- fastpca(log1p(tc))
+pc_fq <- fastpca(log1p(fq))
+pc_tmm <- fastpca(log1p(tmm))
+pc_deseq <- fastpca(log1p(deseq))
+
+col1 <- brewer.pal(9, "Set1")
+col2 <- brewer.pal(8, "Set2")
+
+level1 <- as.factor(colData(fluidigm_low)$Biological_Condition)
+colMerged <- col1[level1]
+plot(pc_raw, col=colMerged, pch=19, main="PCA RAW")
+legend("bottomright", levels(level1), fill=col1)
+
+level2 <- as.factor(colData(fluidigm_low)$Cluster2)
+colCl <- col2[level2]
+plot(pc_raw, col=colCl, pch=19, main="PCA RAW")
+legend("bottomright", levels(level2), fill=col2)
+
+plot(pc_tc, col=colCl, pch=19, main="PCA TC")
+plot(pc_tmm, col=colCl, pch=19, main="PCA TMM")
+plot(pc_fq, col=colCl, pch=19, main="PCA FQ")
+```
+
+## ZIFA
+
+```{r zifa_low}
+wrapRzifa <- function(Y, block = T){
+  # wrapper R function for ZIFA.
+  # md5 hashing and temporary files are used not to re-run zifa 
+  # if it has already be run on this computer.
+  d = digest(Y, "md5")
+  tmp = paste0(tempdir(), '/', d)
+  write.csv(Y, paste0(tmp, '.csv'))
+  
+  if (!file.exists(paste0(tmp, '_zifa.csv'))){
+    print('run ZIFA')
+    bb = ifelse(block, '-b ', '')
+    cmd = sprintf('python run_zifa.py %s%s.csv %s_zifa.csv', bb, tmp, tmp)
+    system(cmd)
+  }
+  read.csv(sprintf("%s_zifa.csv", tmp), header=FALSE)
+}
+
+zifa_raw <- wrapRzifa(log1p(raw))
+plot(zifa_raw, pch=19, col=colCl, main="ZIFA Raw")
+
+zifa_tc <- wrapRzifa(log1p(tc))
+plot(zifa_tc, pch=19, col=colCl, main="ZIFA TC")
+
+zifa_tmm <- wrapRzifa(log1p(tmm))
+plot(zifa_tmm, pch=19, col=colCl, main="ZIFA TMM")
+
+zifa_fq <- wrapRzifa(log1p(fq))
+plot(zifa_fq, pch=19, col=colCl, main="ZIFA FQ")
+```
+
+```{r zifa_deseq_low}
+zifa_deseq <- wrapRzifa(log1p(deseq))
+plot(zifa_deseq, pch=19, col=colCl, main="ZIFA FQ")
+```
+
+## ZINB
+
+```{r zinb_low}
+zinb <- zinbFit(raw, ncores = ncores, K = 2, epsilon = 1e4)
+plot(zinb@W, pch=19, col=colCl, main="ZINB")
+```
+
+## PCA
+
+Here, we look at PCA (using TC normalization) to see which covariates influence the data.
+
+```{r pca_cov_low}
+detection_rate <- colSums(raw>0)
+coverage <- colSums(raw)
+
+df <- cbind(data.frame(PC1=pc_tc[,1], PC2=pc_tc[,2], coverage=coverage, detection_rate=detection_rate), as.data.frame(colData(fluidigm_low)[,1:19]))
+
+df %>% ggplot(aes(PC1, PC2)) + geom_point(aes(color=coverage)) + scale_colour_gradient(low="blue", high="yellow") + theme_classic()
+
+df %>% ggplot(aes(PC1, PC2)) + geom_point(aes(color=detection_rate)) + scale_colour_gradient(low="blue", high="yellow") + theme_classic()
+
+pairs(df[,1:4], col=colMerged, pch=19)
+
+cors <- sapply(1:3, function(i) cor(pc_tc[,i], df[,3:23]))
+colnames(cors) <- paste("PC", 1:NCOL(cors), sep="")
+rownames(cors) <- paste("QC", 1:NROW(cors), sep="")
+barplot(abs(cors), beside = TRUE, col=rainbow(19), border=rainbow(19), ylim=c(0, 1), space=c(0, 2), main="Absolute correlation with QC features")
+legend("topright", colnames(df)[3:23], fill=rainbow(19), border=rainbow(19), cex=.5)
+```
+
+## ZIFA
+
+```{r zifa_cov_low}
+df <- cbind(data.frame(Z1=zifa_tc[,1], Z2=zifa_tc[,2], coverage=coverage, detection_rate=detection_rate), as.data.frame(colData(fluidigm_low)[,1:19]))
+
+df %>% ggplot(aes(Z1, Z2)) + geom_point(aes(color=coverage)) + scale_colour_gradient(low="blue", high="yellow") + theme_classic()
+
+df %>% ggplot(aes(Z1, Z2)) + geom_point(aes(color=detection_rate)) + scale_colour_gradient(low="blue", high="yellow") + theme_classic()
+
+pairs(df[,1:4], col=colMerged, pch=19)
+
+cors <- sapply(1:2, function(i) cor(zifa_tc[,i], df[,3:23]))
+colnames(cors) <- paste("PC", 1:NCOL(cors), sep="")
+rownames(cors) <- paste("QC", 1:NROW(cors), sep="")
+barplot(abs(cors), beside = TRUE, col=rainbow(19), border=rainbow(19), ylim=c(0, 1), space=c(0, 2), main="Absolute correlation with QC features")
+legend("topright", colnames(df)[3:23], fill=rainbow(19), border=rainbow(19), cex=.5)
+```
+
+## ZINB
+
+```{r zinb_cov_low}
+df <- cbind(data.frame(W1=zinb@W[,1], W2=zinb@W[,2], coverage=coverage, detection_rate=detection_rate), as.data.frame(colData(fluidigm_low)[,1:19]))
+
+df %>% ggplot(aes(W1, W2)) + geom_point(aes(color=coverage)) + scale_colour_gradient(low="blue", high="yellow") + theme_classic()
+
+df %>% ggplot(aes(W1, W2)) + geom_point(aes(color=detection_rate)) + scale_colour_gradient(low="blue", high="yellow") + theme_classic()
+
+pairs(df[,1:4], col=colMerged, pch=19)
+
+cors <- sapply(1:2, function(i) cor(zinb@W[,i], df[,3:23]))
+colnames(cors) <- paste("PC", 1:NCOL(cors), sep="")
+rownames(cors) <- paste("QC", 1:NROW(cors), sep="")
+barplot(abs(cors), beside = TRUE, col=rainbow(19), border=rainbow(19), ylim=c(0, 1), space=c(0, 2), main="Absolute correlation with QC features")
+legend("topright", colnames(df)[3:23], fill=rainbow(19), border=rainbow(19), cex=.5)
+```
+
+## Add QC features in ZINB model
+
+```{r zinb_batch_low}
+qcpca <- prcomp(as.data.frame(colData(fluidigm_low)[,1:19]), center=TRUE, scale=TRUE)
+zinb_batch <- zinbFit(raw, ncores = ncores, K = 2, X=qcpca$x[,1:2], epsilon=1e4)
+plot(zinb_batch@W, pch=19, col=colCl, main="ZINB (correcting for QC)")
+```
+
+```{r zinb_batch_cov_low}
+df <- cbind(data.frame(W1=zinb_batch@W[,1], W2=zinb_batch@W[,2], coverage=coverage, detection_rate=detection_rate), as.data.frame(colData(fluidigm_low)[,1:19]))
+
+df %>% ggplot(aes(W1, W2)) + geom_point(aes(color=coverage)) + scale_colour_gradient(low="blue", high="yellow") + theme_classic()
+
+df %>% ggplot(aes(W1, W2)) + geom_point(aes(color=detection_rate)) + scale_colour_gradient(low="blue", high="yellow") + theme_classic()
+
+pairs(df[,1:4], col=colMerged, pch=19)
+
+cors <- sapply(1:2, function(i) cor(zinb_batch@W[,i], df[,3:23]))
+colnames(cors) <- paste("PC", 1:NCOL(cors), sep="")
+rownames(cors) <- paste("QC", 1:NROW(cors), sep="")
+barplot(abs(cors), beside = TRUE, col=rainbow(19), border=rainbow(19), ylim=c(0, 1), space=c(0, 2), main="Absolute correlation with QC features")
+legend("topright", colnames(df)[3:23], fill=rainbow(19), border=rainbow(19), cex=.5)
+```
