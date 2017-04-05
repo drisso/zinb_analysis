@@ -1,12 +1,10 @@
 NCELLS=10000
 RATIO=5
-#RATIO=1 5 10
 OFFS=5
-#RATIO=1 5 50
-#OFFS=-1.5 0.5 2
-#OFFS=0 2 5 
 DS=Allen
-#DS=Allen
+#RATIO=1 5 50
+#OFFS=0 2 5 
+#DS=Zeisel
 NCORES=8
 
 targets := $(foreach r,$(OFFS),$(patsubst %,%-offs$r,$(RATIO)))

@@ -92,7 +92,6 @@ zifa_tmm <- function(simData){
   save(zifaTMM, file = paste0(pref, '_zifaTMM.rda'))
 }
 
-setwd('~/Documents/BRAIN/gitrepo/zinb_analysis/sims/figures/corr_silh')
 b2 = 5
 offs = 5
 pref = sprintf('simAllen_nc10000_ratio%s_offs%s', b2, offs)

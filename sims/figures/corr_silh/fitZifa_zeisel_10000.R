@@ -92,12 +92,11 @@ zifa_tmm <- function(simData){
   save(zifaTMM, file = paste0(pref, '_zifaTMM.rda'))
 }
 
-setwd('~/Documents/BRAIN/gitrepo/zinb_analysis/sims/figures/corr_silh')
 b2 = 5
 offs = 2
 pref = sprintf('simZeisel_nc10000_ratio%s_offs%s', b2, offs)
 load(paste0(pref, '.rda'))
-mclapply(list(zifa_raw, zifa_tmm), function(x) x(simData), mc.cores = 2)
-#, zifa_tc, zifa_fq
+mclapply(list(zifa_raw, zifa_tmm, zifa_tc, zifa_fq), function(x) x(simData), mc.cores = 2)
+
 
 
