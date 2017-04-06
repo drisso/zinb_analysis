@@ -10,7 +10,7 @@ In order to be able to run the code in this repo, it is required to have `R` (>=
 
 ### R packages
 
-- [zinbwave (R package)](https://github.com/drisso/zinbwave)
+- [zinbwave](https://github.com/drisso/zinbwave)
 - cluster
 - matrixStats
 - magrittr
