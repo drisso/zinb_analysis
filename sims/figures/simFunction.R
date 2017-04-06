@@ -166,7 +166,7 @@ colIni = cols[bioIni]
 for (nc in c(100, 1000, 10000)){
   for (b2 in c(1, 5, 50)){
     for (offs in c(0, 2, 5)){
-      ff = sprintf('~/Documents/BRAIN/gitrepo/zinb_analysis/sims/figures/corr_silh/simAllen_nc%s_ratio%s_offs%s.rda', nc, b2, offs)
+      ff = sprintf('sims/figures/corr_silh/simAllen_nc%s_ratio%s_offs%s.rda', nc, b2, offs)
       zinbSimWrapper(core = core, colIni = colIni, ncells = nc, nclust = 3, 
                      ratioSSW_SSB = b2, gammapiOffset = offs, B = 10, 
                      fileName = ff)

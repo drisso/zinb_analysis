@@ -88,9 +88,8 @@ computeVarianceList <- function(fittedSim, simModel, keep){
   VarianceList
 }
 
-setwd('~/Documents/BRAIN/gitrepo/zinb_analysis/sims/figures')
-load('bias_mse_cputime/simZeisel_nc1000_ratio1_offs2_fittedAll.rda')
-load('bias_mse_cputime/simZeisel_nc1000_ratio1_offs2.rda')
+load('fig5-S10-S11-S15-S9/simZeisel_nc1000_ratio1_offs2_fittedAll.rda')
+load('fig5-S10-S11-S15-S9/simZeisel_nc1000_ratio1_offs2.rda')
 # Bias
 biasList = computeBiasList(fittedSim, simModel, keep)
 plotbias <- unlist(unlist(unlist(biasList, recursive=FALSE), recursive=FALSE), recursive=FALSE)
@@ -255,9 +254,9 @@ save_plot("../../paper/6680489mtyrjx/variance_allParam.png",device ='png',
 ```
 
 # Mean Difference (figure S12)
-```{r meandiff}
-load('meanDiff/simZeisel_nc1000_ratio1_offs2_fitted.rda')
-load('meanDiff/simZeisel_nc1000_ratio1_offs2.rda')
+```{r figS12}
+load('figS12/simZeisel_nc1000_ratio1_offs2_fitted.rda')
+load('figS12/simZeisel_nc1000_ratio1_offs2.rda')
 zz = fittedSim
 fittedMu = getLogMu(zz)
 fittedPi = getPi(zz)
@@ -338,7 +337,7 @@ computeVariance <- function(fittedSim, keep, simModel, simData){
 
 plotList = lapply(c(50, 100, 500, 1000, 5000, 10000), function(nc){
   print(nc)
-  file = sprintf('bias_mse_cputime/simZeisel_nc%s_ratio1_offs2', nc)
+  file = sprintf('fig5-S10-S11-S15-S9/simZeisel_nc%s_ratio1_offs2', nc)
   load(paste0(file, '_fitted.rda'))
   load(paste0(file, '.rda'))
   biasvar = c(computeBias(fittedSim, keep, simModel, simData),
@@ -381,7 +380,7 @@ ggsave(filename="../../paper/6680489mtyrjx/bias_mse_ncells.png",
 
 # Speed (Figure S15)
 ```{r time}
-load('bias_mse_cputime/cpuTime.rda')
+load('fig5-S10-S11-S15-S9/cpuTime.rda')
 elapse = lapply(1:length(cpuTime), function(nc){
   print(nc)
   sapply(1:length(cpuTime[[1]]), function(i){
@@ -530,7 +529,7 @@ res = lapply(c('Zeisel', 'Allen'), function(ds){
         print(nc)
         print(b2)
         print(offs)
-        ff = sprintf('corr_silh/sim%s_nc%s_ratio%s_offs%s', ds, nc, b2, offs)
+        ff = sprintf('fig6ad-S13-S14/sim%s_nc%s_ratio%s_offs%s', ds, nc, b2, offs)
         load(paste0(ff, '.rda'))
         load(paste0(ff, '_fitted.rda'))
         res <- lapply(1:10, function(j){
@@ -679,8 +678,8 @@ save_plot("../../paper/6680489mtyrjx/corrSilh_boxplots.png", device = 'png',
 
 Figure S14
 ```{r}
-fns = c('corr_silh/simZeisel_nc10000_ratio5_offs2',
-        'corr_silh/simAllen_nc10000_ratio5_offs5')
+fns = c('fig6ad-S13-S14/simZeisel_nc10000_ratio5_offs2',
+        'fig6ad-S13-S14/simAllen_nc10000_ratio5_offs5')
 res = lapply(fns, function(pref){
         load(paste0(pref, '.rda'))
         load(paste0(pref, '_fitted.rda'))
@@ -842,7 +841,7 @@ sil = lapply(c(100, 1000, 10000), function(nc){
   print(nc)
   lapply(c('', '_ziadd0.33', '_ziadd0.67'), function(zf){
     print(zf)
-    pp = sprintf('lunSims/simLun_%s%s', nc, zf)
+    pp = sprintf('fig6e-g/simLun_%s%s', nc, zf)
     res <- lapply(1:10, function(j){
       print(j)
       load(paste0(pp, '.rda'))
