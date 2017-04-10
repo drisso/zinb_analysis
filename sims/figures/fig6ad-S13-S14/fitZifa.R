@@ -16,8 +16,7 @@ wrapRzifa <- function(Y, block = T){
   if (!file.exists(paste0(tmp, '_zifa.csv'))){
     print('run ZIFA')
     bb = ifelse(block, '-b ', '')
-    #cmd = sprintf('python real_data/run_zifa.py %s%s.csv %s_zifa.csv', bb, tmp, tmp)
-    cmd = sprintf('python run_zifa.py %s%s.csv %s_zifa.csv', bb, tmp, tmp)
+    cmd = sprintf('python ../../real_data/run_zifa.py %s%s.csv %s_zifa.csv', bb, tmp, tmp)
     system(cmd)
   }
   read.csv(sprintf("%s_zifa.csv", tmp), header=FALSE)
@@ -26,9 +25,9 @@ wrapRzifa <- function(Y, block = T){
 
 lun = T
 if (lun){
-  for (nc in c(100)){
-    for (ziadd in c('', '_ziadd0.33', '_ziadd0.67')){
-      pref = sprintf('sims/figures/lunSims/simLun_%s%s', nc, ziadd)
+  for (nc in c(100, 1000, 10000)){
+    for (ziadd in c('_ziadd0', '_ziadd0.33', '_ziadd0.67')){
+      pref = sprintf('fig6e-g/simLun_%s%s', nc, ziadd)
       load(paste0(pref, '.rda'))
       
       print('zifa raw')
@@ -110,17 +109,12 @@ if (lun){
 }
 
 
-
-
-
-
-
 allen = F
 if (allen){
   for (nc in c(100, 1000)){
     for (b2 in c(1, 5, 50)){
       for (offs in c(0, 2, 5)){
-        pref = sprintf('simAllen_nc%s_ratio%s_offs%s', nc, b2, offs)
+        pref = sprintf('fig6ad-S13-S14/simAllen_nc%s_ratio%s_offs%s', nc, b2, offs)
         load(paste0(pref, '.rda'))
         
         print('zifa raw')

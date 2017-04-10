@@ -166,10 +166,10 @@ colIni = cols[bioIni]
 for (nc in c(100, 1000, 10000)){
   for (b2 in c(1, 5, 50)){
     for (offs in c(0, 2, 5)){
-      ff = sprintf('sims/figures/corr_silh/simAllen_nc%s_ratio%s_offs%s.rda', nc, b2, offs)
+      ff = sprintf('fig6ad-S13-S14/simAllen_nc%s_ratio%s_offs%s.rda', nc, b2, offs)
       zinbSimWrapper(core = core, colIni = colIni, ncells = nc, nclust = 3, 
                      ratioSSW_SSB = b2, gammapiOffset = offs, B = 10, 
-                     fileName = ff)
+                     fileName = ff, ncores = 2)
     }
   }
 }
@@ -179,7 +179,7 @@ for (nc in c(100, 1000, 10000)){
 ##########
 ## ZEISEL
 ##########
-data <- read.table("sims/datasets/expression_mRNA_17-Aug-2014.txt", sep='\t',
+data <- read.table("../datasets/expression_mRNA_17-Aug-2014.txt", sep='\t',
                    stringsAsFactors = FALSE, comment.char = '%')
 counts <- as.matrix(data[12:NROW(data),-(1:2)])
 counts <- matrix(as.numeric(counts), ncol=ncol(counts), nrow=nrow(counts))
@@ -202,14 +202,13 @@ colIni <- col[level1]
 for (nc in c(100, 1000, 10000)){
   for (b2 in c(1, 5, 10)){
     for (offs in c(-1.5, 0.5, 2)){
-      ff = sprintf('sims/figures/corr_silh/simZeisel_nc%s_ratio%s_offs%s.rda', nc, b2, offs)
+      ff = sprintf('fig6ad-S13-S14/simZeisel_nc%s_ratio%s_offs%s.rda', nc, b2, offs)
       zinbSimWrapper(core = counts, colIni = colIni, ncells = nc, nclust = 3, 
                      ratioSSW_SSB = b2, gammapiOffset = offs, B = 10, 
-                     fileName = ff)
+                     fileName = ff, ncores = 2)
     }
   }
 }
-
 
 
 #######################################################################
@@ -219,7 +218,7 @@ for (nc in c(100, 1000, 10000)){
 nc = 1000
 b2 = 1
 offs = 2
-ff = sprintf('sims/figures/meanDiff/simZeisel_nc%s_ratio%s_offs%s.rda', nc, b2, offs)
+ff = sprintf('figS12/simZeisel_nc%s_ratio%s_offs%s.rda', nc, b2, offs)
 
 ## simulate
 zinbSimWrapper(core = counts, colIni = colIni, ncells = nc, nclust = 3, 
@@ -234,10 +233,8 @@ simData$counts = simData$counts[,keep]
 save(bio, simModel, simData, keep, file = ff)
 
 # fit
-fittedSim = zinbFit(t(simData$counts), K = 2, commondispersion = FALSE,
-                    epsilon = 250, ncores = 2)
+fittedSim = zinbFit(t(simData$counts), K = 2, commondispersion = FALSE, ncores = 2)
 save(fittedSim, file = gsub('.rda', '_fitted.rda', ff))
-
 
 
 
@@ -247,7 +244,7 @@ save(fittedSim, file = gsub('.rda', '_fitted.rda', ff))
 b2 = 1
 offs = 2
 for (nc in c(50, 100, 500, 1000, 5000, 10000)){
-  ff = sprintf('sims/figures/bias_mse_cputime/simZeisel_nc%s_ratio%s_offs%s.rda', nc, b2, offs)
+  ff = sprintf('fig5-S10-S11-S15-S9/simZeisel_nc%s_ratio%s_offs%s.rda', nc, b2, offs)
   zinbSimWrapper(core = counts, colIni = colIni, ncells = nc, nclust = 3, 
                  ratioSSW_SSB = b2, gammapiOffset = offs, B = 10,
                  fileName = ff, ncores = 2)

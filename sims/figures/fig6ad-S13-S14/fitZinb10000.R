@@ -7,7 +7,7 @@ nc = args[2]
 b2 = strsplit(args[3], '-offs')[[1]][1]
 offs = strsplit(args[3], '-offs')[[1]][2]
 
-ff = sprintf('sim%s_nc%s_ratio%s_offs%s', ds, nc, b2, offs)
+ff = sprintf('fig6ad-S13-S14/sim%s_nc%s_ratio%s_offs%s', ds, nc, b2, offs)
 load(paste0(ff, '.rda'))
 fittedSim = lapply(1:4, function(k){
   print(k)

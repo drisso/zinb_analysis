@@ -26,13 +26,13 @@ nc = 1000
 b2 = 1
 offs = 2
 
-pp = sprintf('sim%s_nc%s_ratio%s_offs%s', ds, nc, b2, offs)
+pp = sprintf('fig5-S10-S11-S15-S9/sim%s_nc%s_ratio%s_offs%s', ds, nc, b2, offs)
 load(paste0(pp,".rda"))
 fittedSim = lapply(K, function(k){
   lapply(Vintercept, function(Vint){
     lapply(commondispersion, function(commondisp){
       mclapply(1:length(simData), function(i){
-        counts = t(simData[[i]]$counts)
+        counts = simData[[i]]$counts
         counts = counts[rowSums(counts) !=0, ]
         #zeros = (rowSums(counts) == 0)
         #if (sum(zeros) > 0){

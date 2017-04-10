@@ -1,7 +1,7 @@
 library(zinbwave)
 
 cpuTime = lapply(c(50, 100, 500, 1000, 5000, 10000), function(nc){
-  fileName = sprintf('simZeisel_nc%s_ratio1_offs2', nc)
+  fileName = sprintf('fig5-S10-S11-S15-S9/simZeisel_nc%s_ratio1_offs2', nc)
   load(paste0(fileName, ".rda"))
   tt = lapply(1:10, function(j){
     counts = t(simData[[j]]$counts)

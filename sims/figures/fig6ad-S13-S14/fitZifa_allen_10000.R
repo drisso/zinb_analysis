@@ -18,7 +18,7 @@ wrapRzifa <- function(Y, block = T){
     print('run ZIFA')
     bb = ifelse(block, '-b ', '')
     #cmd = sprintf('python real_data/run_zifa.py %s%s.csv %s_zifa.csv', bb, tmp, tmp)
-    cmd = sprintf('python run_zifa.py %s%s.csv %s_zifa.csv', bb, tmp, tmp)
+    cmd = sprintf('python ../../real_data/run_zifa.py %s%s.csv %s_zifa.csv', bb, tmp, tmp)
     system(cmd)
   }
   read.csv(sprintf("%s_zifa.csv", tmp), header=FALSE)

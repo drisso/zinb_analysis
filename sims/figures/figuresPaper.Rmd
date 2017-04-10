@@ -1,7 +1,7 @@
 ---
 title: "Figures for simulations"
 author: "Fanny Perraudeau"
-date: "04/05/2017"
+date: "04/10/2017"
 output: 
   html_document: 
   fig_height: 10
@@ -377,36 +377,6 @@ ggsave(filename="../../paper/6680489mtyrjx/bias_mse_ncells.png",
        device = 'png', width = 8, height = 6)
 ```
 
-
-# Speed (Figure S15)
-```{r time}
-load('fig5-S10-S11-S15-S9/cpuTime.rda')
-elapse = lapply(1:length(cpuTime), function(nc){
-  print(nc)
-  sapply(1:length(cpuTime[[1]]), function(i){
-    print(i)
-    cpuTime[[nc]][[i]][[3]]
-  })
-})
-mean = sapply(elapse, median)
-sd = sapply(elapse, quantile)
-sd = sd[3, ] - sd[2,]
-nc = c(50, 100, 500, 1000, 5000, 10000)
-dfTime = data.frame(mean = mean, sd = sd, nc = nc)
-pd <- position_dodge(0.1)
-cpu = ggplot(dfTime, aes(x = nc, y = mean, group = 1)) +
-  geom_errorbar(aes(ymin = mean - sd, ymax = mean + sd), width = .1, position = pd) +
-  geom_line(position=pd) + 
-  geom_point(position=pd) + background_grid(major = 'xy', minor = 'xy') + 
-  xlab('Number of cells') + ylab('CPU time (sec.)') +
-  coord_trans(y = "log10", x = 'log10') + 
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-  scale_y_continuous(breaks = c(25, 50, 100, 250, 500, 1000, 2000)) +
-  scale_x_continuous(breaks = nc)
-cpu
-# save figure S15
-ggsave(filename="../../paper/6680489mtyrjx/cpu.png", plot = cpu, device = 'png')
-```
 
 # Correlation and Silhouette width, our model (Figure 6, panels a-d, figure s13, s14)
 ```{r corr}
