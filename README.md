@@ -6,7 +6,7 @@ Risso D, Perraudeau F, Gribkova S, Dudoit S, Vert JP. ZINB-WaVE: A general and f
 
 ## Dependencies
 
-In order to be able to run the code in this repo, it is required to have `R` (>=3.3) and `python` (>=2.7).
+To be able to run the code in this repo, it is required to have `R` (>=3.3), `python` (>=2.7), and the following packages.
 
 ### R packages
 
@@ -45,6 +45,22 @@ In order to be able to run the code in this repo, it is required to have `R` (>=
 
 - [ZIFA](https://github.com/epierson9/ZIFA)
 
+### A note on `zinbwave` version
+
+To exactly reproduce the analyses of the paper, version 0.1.1 of the `zinbwave` package is required. This can be installed in R with the following code.
+
+```{r}
+library(devtools)
+install_github("drisso/zinbwave@v0.1.1")
+```
+
+The `zinbwave` packages is under active development and we are constantly fixing bugs, adding new features, and improving the documentation, hence we recommend to download the latest stable release (currently `0.1.4`) for all purposes other than exactly reproducing the analyses of our paper. To do so, use the following code.
+
+```{r}
+library(devtools)
+install_github("drisso/zinbwave@v0.1.4")
+```
+
 ## Getting started
 
 ### Real data
@@ -70,4 +86,4 @@ To simulate the datasets from the Lun & Marioni model, run [lunSim.R](https://gi
 
 To fit the simulated datasets with n=10,000 cells, we used a [Makefile](https://github.com/drisso/zinb_analysis/blob/master/sims/figures/fig6ad-S13-S14/Makefile) to launch jobs on a server. Alternatively, you can just call [fitZinb10000.R](https://github.com/drisso/zinb_analysis/blob/master/sims/figures/fig6ad-S13-S14/fitZinb10000.R) from your terminal with the arguments you want.
 
-
+For any questions or issues with the code on this repository, please use the "Issues" tab.
