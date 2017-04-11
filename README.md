@@ -47,7 +47,7 @@ To be able to run the code in this repo, it is required to have `R` (>=3.3), `py
 
 ### A note on `zinbwave` version
 
-To exactly reproduce the analyses of the paper, version 0.1.1 of the `zinbwave` package is required. This can be installed in R with the following code.
+To exactly reproduce the analyses of the paper, version `0.1.1` of the `zinbwave` package is required. This can be installed in R with the following code.
 
 ```{r}
 library(devtools)
