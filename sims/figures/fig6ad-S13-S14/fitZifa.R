@@ -33,11 +33,7 @@ if (lun){
       print('zifa raw')
       zifa = lapply(1:length(simData), function(i){
         print(i)
-        if (ziadd == ''){
-          Y = simData[[i]] 
-        }else{
-          Y = simData[[i]]$counts
-        }
+        Y = simData[[i]]$counts
         Y = Y[rowSums(Y) != 0, ]
         Y = log1p(Y)
         zz <- tryCatch({z = wrapRzifa(Y)},
@@ -50,11 +46,7 @@ if (lun){
       print('zifa tc')
       zifaTC = lapply(1:length(simData), function(i){
         print(i)
-        if (ziadd == ''){
-          Y = simData[[i]] 
-        }else{
-          Y = simData[[i]]$counts
-        }
+        Y = simData[[i]]$counts
         Y = Y[rowSums(Y) != 0, ]
         mult = sum(Y) / (ncol(Y) * nrow(Y))
         fact = colSums(Y)
@@ -70,11 +62,7 @@ if (lun){
       print('zifa fq')
       zifaFQ = lapply(1:length(simData), function(i){
         print(i)
-        if (ziadd == ''){
-          Y = simData[[i]] 
-        }else{
-          Y = simData[[i]]$counts
-        }
+        Y = simData[[i]]$counts
         Y = Y[rowSums(Y) != 0, ]
         fq <- betweenLaneNormalization(Y, which="full")
         Y = log1p(fq)
@@ -88,11 +76,7 @@ if (lun){
       print('zifa tmm')
       zifaTMM = lapply(1:length(simData), function(i){
         print(i)
-        if (ziadd == ''){
-          Y = simData[[i]] 
-        }else{
-          Y = simData[[i]]$counts
-        }
+        Y = simData[[i]]$counts
         counts = Y[rowSums(Y) != 0, ]
         y = DGEList(counts)
         y = calcNormFactors(y, method="TMM")

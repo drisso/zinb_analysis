@@ -11,7 +11,7 @@ lapply(1:length(nc), function(i){
   pp = sprintf('fig5-S10-S11-S15-S9/simZeisel_nc%s_ratio1_offs2', nc[i])
   load(paste0(pp, ".rda"))
   fittedSim = mclapply(1:length(simData), function(j){
-    counts = simData[[j]]$counts
+    counts = t(simData[[j]]$counts)
     counts = counts[rowSums(counts) != 0, ]
     zinbFit(counts, K = 2, commondispersion = FALSE,
             epsilon = eps, ncores = ncores[i])

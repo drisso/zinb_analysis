@@ -32,7 +32,7 @@ fittedSim = lapply(K, function(k){
   lapply(Vintercept, function(Vint){
     lapply(commondispersion, function(commondisp){
       mclapply(1:length(simData), function(i){
-        counts = simData[[i]]$counts
+        counts = t(simData[[i]]$counts)
         counts = counts[rowSums(counts) !=0, ]
         #zeros = (rowSums(counts) == 0)
         #if (sum(zeros) > 0){

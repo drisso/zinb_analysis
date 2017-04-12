@@ -218,6 +218,7 @@ for (nc in c(100, 1000, 10000)){
 nc = 1000
 b2 = 1
 offs = 2
+system('mkdir figS12')
 ff = sprintf('figS12/simZeisel_nc%s_ratio%s_offs%s.rda', nc, b2, offs)
 
 ## simulate
@@ -233,7 +234,8 @@ simData$counts = simData$counts[,keep]
 save(bio, simModel, simData, keep, file = ff)
 
 # fit
-fittedSim = zinbFit(t(simData$counts), K = 2, commondispersion = FALSE, ncores = 2)
+fittedSim = zinbFit(t(simData$counts), K = 2, commondispersion = FALSE,
+                    ncores = 2, epsilon = ncol(simData$counts))
 save(fittedSim, file = gsub('.rda', '_fitted.rda', ff))
 
 

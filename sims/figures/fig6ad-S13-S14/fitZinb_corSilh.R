@@ -12,7 +12,7 @@ for (b2 in c(1, 5, 10)){
     load(paste0(ff, '.rda'))
     fittedSim = lapply(1:4, function(k){
       lapply(1:length(simData), function(i){
-        counts = simData[[i]]$counts
+        counts = t(simData[[i]]$counts)
         counts = counts[rowSums(counts) != 0, ]
         ngenes = nrow(counts)
         zinbFit(counts, K = k, commondispersion = FALSE,
