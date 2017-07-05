@@ -24,9 +24,25 @@ library(DESeq2)
 library(cowplot)
 library(matrixStats)
 library(scRNAseq)
+library(MAST)
+library(BiocParallel)
+library(doParallel)
 mycol = c(brewer.pal(11,"RdYlGn")[c(8:11, 1:4)], brewer.pal(11,"RdYlBu")[8:11])
 ```
 
+```{r parallel}
+NCORES = 2
+mysystem = Sys.info()[['sysname']]
+if (mysystem == 'Darwin'){
+  registerDoParallel(NCORES)
+  register(DoparParam())
+}else if (mysystem == 'Linux'){
+  register(bpstart(MulticoreParam(workers=NCORES)))
+}else{
+  print('Please change this to allow parallel computing')
+  register(SerialParam())
+}
+```
 
 ```{r datain}
 df = 'allen'
@@ -49,8 +65,7 @@ core <- as.matrix(raw[vargenes, ])
 ```
 
 ```{r zinb}
-zinb <- zinbFit(core, ncores = 2, K = 2, epsilon = 1e3, 
-                commondispersion = FALSE, verbose = T)
+zinb <- zinbFit(core, K = 2, epsilon = 1e3, commondispersion = FALSE)
 ```
 
 ```{r functions}
@@ -87,7 +102,7 @@ plotMD <- function(x, y, xlim = c(0,10), ylim = c(-5, 5),
 
 fitNB <- function(counts){
   set = newSeqExpressionSet(counts)
-  fq = betweenLaneNormalization(set, which = "full", offset = T)
+  fq = EDASeq::betweenLaneNormalization(set, which = "full", offset = T)
   disp = estimateDisp(counts(fq), offset = -offst(fq)) 
   fit = glmFit(counts(fq), dispersion = disp$tagwise.dispersion, offset = -offst(fq))
   list(fitted = fit$fitted.values, disp = disp$tagwise.dispersion)
@@ -108,35 +123,77 @@ nbEY = log1p(rowMeans(nb$fitted))
 nbPY0 = rowMeans((1 + nb$fitted * nb$disp)^(-1/nb$disp))
 ```
 
+
+```{r mast}
+invlogit = function(x) 1/(1 + exp(-x))
+
+sca = newSeqExpressionSet(core)
+sca = FromMatrix(log1p(counts(sca)))
+cdr2 = colSums(assay(sca) > 0)
+colData(sca)$cngeneson = scale(cdr2)
+
+fit <- zlm(~ cngeneson, sca)
+X = model.matrix(~ colData(sca)$cngeneson)
+#X = model.matrix(~ rep(1, ncol(sca)) + 0)
+P_z_1 = invlogit(coef(fit, 'D') %*% t(X))
+mean_gaussian = coef(fit, 'C') %*% t(X)
+var_gaussian = fit@dispersion[,'C']
+P_gaussian_0 = (1/sqrt(2*pi*var_gaussian))* exp(-0.5 * mean_gaussian^2 / var_gaussian)
+hurdleEY_1 = rowMeans((P_z_1 / (1 - P_gaussian_0)) * mean_gaussian)
+hurdlePY0_1 = rowMeans(1 - P_z_1)
+```
+
+```{r mastnocov}
+sca = newSeqExpressionSet(core)
+#fq = EDASeq::betweenLaneNormalization(sca, 'full')
+sca = FromMatrix(log1p(counts(sca)))
+
+fit <- zlm(~ 1, sca)
+X = model.matrix(~ rep(1, ncol(sca)) + 0)
+P_z_1 = invlogit(coef(fit, 'D') %*% t(X))
+mean_gaussian = coef(fit, 'C') %*% t(X)
+var_gaussian = fit@dispersion[,'C']
+P_gaussian_0 = (1/sqrt(2*pi*var_gaussian))* exp(-0.5 * mean_gaussian^2 / var_gaussian)
+hurdleEY_2 = rowMeans((P_z_1 / (1 - P_gaussian_0)) * mean_gaussian)
+hurdlePY0_2 = rowMeans(1 - P_z_1)
+```
+
 MD-plot estimated vs. observed mean count, log scale
-```{r meanCount25}
-pdf(sprintf('../paper/6680489mtyrjx/gof_mu_%s.pdf', df), width = 10, height = 5)
-par(mfrow=c(1,2))
-xlim =  c(5,9.5)
-ylim = c(-1, 3)
+```{r plot1}
+#pdf(sprintf('../paper/6680489mtyrjx/gof_mu_%s.pdf', df), width = 10, height = 5)
+par(mfrow=c(2,2))
+xlim =  c(2,9.5)
+ylim = c(-7, 3)
 plotMD(zinbEY, logAveCount, xlim = xlim, ylim = ylim, main = 'ZINB-WaVE')
 plotMD(nbEY, logAveCount, xlim = xlim, ylim = ylim, main = 'NB, edgeR')
-dev.off()
+plotMD(hurdleEY_1, logAveCount, xlim = xlim, ylim = ylim, main = 'Hurdle, MAST, gene det as a cov')
+plotMD(hurdleEY_2, logAveCount, xlim = xlim, ylim = ylim, main = 'Hurdle, MAST')
+#dev.off()
 ```
 
 MD-plot estimated vs. observed zero probability
-```{r}
-pdf(sprintf('../paper/6680489mtyrjx/gof_pi_%s.pdf', df), width = 10, height = 5)
-par(mfrow = c(1, 2))
+```{r plot2}
+#pdf(sprintf('../paper/6680489mtyrjx/gof_pi_%s.pdf', df), width = 10, height = 5)
+par(mfrow = c(2, 2))
 plotMD(zinbPY0, prop0, xlim = c(0, .8), ylim = c(-.2, .1), main = 'ZINB-WaVE')
 plotMD(nbPY0, prop0, xlim = c(0, .8), ylim = c(-.2, .1), main = 'NB, edgeR')
-dev.off()
+plotMD(hurdlePY0_1, prop0, xlim = c(0, .8), ylim = c(-.2, .1), main = 'Hurdle, MAST, gene det as a cov')
+plotMD(hurdlePY0_2, prop0, xlim = c(0, .8), ylim = c(-.2, .1), main = 'Hurdle, MAST')
+#dev.off()
 ```
 
 Estimated dispersion versus observed zero probability
-```{r}
-pdf(sprintf('../paper/6680489mtyrjx/gof_disp_%s.pdf', df), width = 10, height = 5)
-par(mfrow = c(1,2))
+```{r plot3}
+#pdf(sprintf('../paper/6680489mtyrjx/gof_disp_%s.pdf', df), width = 10, height = 5)
+par(mfrow = c(2,2))
 xpred = seq(0, 1, .05)
 fitzinb = loess(exp(-zz@zeta) ~ rowMeans(core == 0))
 predzinb = predict(fitzinb, xpred)
 fitnb = loess(nb$disp ~ rowMeans(core == 0))
 prednb = predict(fitnb, xpred)
+fithurdle = loess(var_gaussian ~ rowMeans(core == 0))
+predhurdle = predict(fithurdle, xpred)
+
 smoothScatter(rowMeans(core == 0), exp(-zz@zeta),
               xlab = 'Observed zero probability',ylim = c(0, 15),
               ylab = 'Estimated dispersion',xlim = c(0,1), 
@@ -148,7 +205,13 @@ smoothScatter(rowMeans(core == 0), nb$disp,
               ylab = 'Estimated dispersion',xlim = c(0,1), 
               main = 'NB, edgeR')
 lines(xpred, prednb, col = 'red', type = 'l', lwd=2)
-dev.off()
+
+smoothScatter(rowMeans(core == 0), var_gaussian,
+              xlab = 'Observed zero probability',ylim = c(0, 15),
+              ylab = 'Estimated gaussian variance',xlim = c(0,1), 
+              main = 'Hurdle, MAST')
+lines(xpred, predhurdle, col = 'red', type = 'l', lwd=2)
+#dev.off()
 ```
 
 

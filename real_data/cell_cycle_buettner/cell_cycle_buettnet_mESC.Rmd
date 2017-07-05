@@ -17,6 +17,23 @@ library(zinbwave)
 library(RColorBrewer)
 library(ggplot2)
 library(readxl)
+library(BiocParallel)
+library(doParallel)
+set.seed(9843)
+```
+
+```{r parallel}
+NCORES = 2
+mysystem = Sys.info()[['sysname']]
+if (mysystem == 'Darwin'){
+  registerDoParallel(NCORES)
+  register(DoparParam())
+}else if (mysystem == 'Linux'){
+  register(bpstart(MulticoreParam(workers=NCORES)))
+}else{
+  print('Please change this to allow parallel computing')
+  register(SerialParam())
+}
 ```
 
 
@@ -90,7 +107,7 @@ eps = ncol(counts)
 We fit zinbwave with K = 2 and X an intercept only. I tried higher K but results are similar.
 ```{r}
 set.seed(89303)
-print(system.time(zinb <- zinbFit(Y = counts, K = 2, ncores = 2, epsilon = eps)))
+print(system.time(zinb <- zinbFit(Y = counts, K = 2, epsilon = eps)))
 ```
 
 
@@ -127,7 +144,7 @@ We fit zinb where X = c(int, learnt clusters from kmeans)
 ```{r}
 X = model.matrix(~ labs_k3)
 eps = 10000
-print(system.time(zinb_learnt_k3 <- zinbFit(Y = counts, K = 2, X = X, ncores = 2, epsilon = eps)))
+print(system.time(zinb_learnt_k3 <- zinbFit(Y = counts, K = 2, X = X, epsilon = eps)))
 ```
 
 ```{r}
@@ -142,7 +159,7 @@ legend(x = 'bottomright', legend = unique(labs_k3), fill = unique(labs_k3),
 
 ```{r}
 X = model.matrix(~ labs_k4)
-print(system.time(zinb_learnt_k4 <- zinbFit(Y = counts, K = 2, X = X, ncores = 2, epsilon = eps)))
+print(system.time(zinb_learnt_k4 <- zinbFit(Y = counts, K = 2, X = X, epsilon = eps)))
 ```
 
 ```{r}
@@ -162,7 +179,7 @@ legend(x = 'bottomright', legend = unique(labs_k4), fill = unique(labs_k4),
 We fit zinb where X = c(int, known cell cycle status)
 ```{r}
 X = model.matrix(~ cellcycle)
-print(system.time(zinb_known_cl <- zinbFit(Y = counts, K = 2, X = X, ncores = 2, epsilon = eps)))
+print(system.time(zinb_known_cl <- zinbFit(Y = counts, K = 2, X = X, epsilon = eps)))
 ```
 ```{r}
 plot(zinb_known_cl@W, col = pal[cellcycle], main = 'ZINB W, K = 2, X = known cell cycle status')
@@ -205,7 +222,7 @@ boxplot(aveLogCounts ~ len_bins, las=2, main = 'Investigate length bias',
 ```{r zinbLength}
 set.seed(89303)
 V = model.matrix( ~ log(len))
-print(system.time(zinb_len <- zinbFit(Y = counts, K = 2, V = V, ncores = 2, epsilon = eps)))
+print(system.time(zinb_len <- zinbFit(Y = counts, K = 2, V = V, epsilon = eps)))
 ```
 
 ```{r}
@@ -233,7 +250,7 @@ legend(x = 'bottomright', legend = unique(labs_k3), cex = .5,
 
 ```{r}
 X = model.matrix(~ labs_k3)
-print(system.time(zinb_learnt_k3 <- zinbFit(Y = counts, K = 2, X = X, ncores = 2, V=V, epsilon = eps)))
+print(system.time(zinb_learnt_k3 <- zinbFit(Y = counts, K = 2, X = X, V=V, epsilon = eps)))
 ```
 
 ```{r}
