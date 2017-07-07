@@ -1,0 +1,159 @@
+---
+title: "68k PBMC cells from 10x genomics"
+author: "Davide Risso"
+date: "07/07/2017"
+output: 
+  html_document: 
+    fig_height: 7
+    fig_width: 7
+    toc: yes
+    code_folding: hide
+    toc_float: yes
+---
+
+```{r options, echo=FALSE, results="hide",mesasge=FALSE, error=FALSE, include=FALSE, autodep=TRUE}
+knitr::opts_chunk$set(fig.align="center", cache=TRUE, error=FALSE, message=FALSE, warning=TRUE)
+library(zinbwave)
+library(ggplot2)
+library(magrittr)
+library(matrixStats)
+library(Rtsne)
+library(RColorBrewer)
+library(cowplot)
+
+set.seed(8283)
+ncores <- 7
+```
+
+Here, we apply ZINB-WaVE to the set of 68k PBMCs from 10x genomics. The idea is
+to show scalability of the method and hopefully new biological insights.
+
+In the original pubblications, the authors performed k-means on the first 50 PCs
+and identified 10 clusters. Here, I copy/paste snippets of text from their results.
+
+- Clusters 1-3, 6: T cells (enriched in CD3D)
+- Cluster 5: NK cells (NKG7)
+- Cluster 7: B cells (CD79A)
+- Cluster 9: myeloid cells (S100A8 and S100A9)
+- Cluster 1, 4, 6: CD8+ cytotoxic T cells
+- Cluster 2, 3 CD4+ T cells
+
+Moreover, cells in cluster 3 showed high expression of CCR10 and TNFRSF18, markers for memory T cells and regulatory T cells respectively, and likely consisted of a mixture of memory and regulatory T cells. The presence of ID3, which is important in maintaining a naive T-cell state, suggests that cluster 2 represents naive CD8 T cells, whereas cluster 4 represents naive CD4 T cells.
+
+To identify subpopulations within the myeloid population, they applied k-means clustering on the first 50 PCs of cluster 9 cells. At least three populations were evident: dendritic cells (characterized by the presence of FCER1A25), CD16þ monocytes and CD16-/low monocytes.
+
+Cluster 8 showed preferential expression of megakaryocyte markers, such as PF4, suggesting that it represents a cluster of megakaryocytes. Cells in cluster 10 express markers of B, T and dendritic cells, suggesting a likely cluster of multiplets.
+
+We classified 68k PBMCs based on their best match to the average expression profile of 11 reference transcriptomes. Cell classification was largely consistent with previously described marker-based classification, although the boundaries among some of the T-cell subpopulations were blurred. Namely, part of the inferred CD4+ naive T population was classified as CD8+ T cells. We have also tried to cluster the 68k PBMC data with Seurat. While it was able to distinguish inferred CD4+ naive from inferred CD8+ naive T cells, it was not able to cleanly separate out inferred activated cytotoxic T cells from inferred NK cells.
+
+Interestingly, there is no mention of normalization in the paper. Were the data normalized?
+
+Here, I download the original UMI count matrix and run ZINB-WaVE on it. We can consider two strategies: run zinbwave with K=2 or 3 for visualization or run it with an higher K for clustering (perhaps followed by t-SNE?).
+
+I will visualize the data using the original clustering.
+
+# Original analysis
+
+I've downloaded the t-sne coordinates and cluster labels of the original analysis.
+This should allow us to reproduce the original Figure 3.
+
+```{r}
+tsne_coords <- read.csv("tenx_pbmc/projection.csv", row.names=1)
+clusters <- read.csv("tenx_pbmc/clusters.csv")
+cl <- clusters[,2]
+names(cl) <- clusters[,1]
+table(cl)
+dim(clusters)
+dim(tsne_coords)
+
+stopifnot(all(names(cl)==rownames(tsne_coords)))
+
+tsne_coords$cluster <- as.factor(cl)
+```
+
+For some reason the downloaded data include only 40k cells instead of the advertised 68k...
+
+```{r}
+pal <- clusterExperiment::bigPalette
+plot(tsne_coords, pch=19, col=pal[cl])
+
+ggplot(aes(TSNE.1, TSNE.2, colour=cluster), data = tsne_coords) + geom_point()
+```
+
+To see if the clusters correspond to the published clusters, we need to look at
+some marker genes. To do that, I need to load the full data.
+
+```{r}
+library(cellrangerRkit)
+pipestance_path <- "tenx_pbmc"
+if(!file.exists(paste0(pipestance_path, "/outs"))) {
+  download_sample(sample_name="fresh_68k_pbmc_donor_a",sample_dir=pipestance_path,
+                  host="http://cf.10xgenomics.com/samples/cell-exp/1.1.0/")
+}
+gbm <- load_cellranger_matrix(pipestance_path)
+dim(gbm)
+```
+
+This object has the full dataset. For now, let's use the 40k cells for which they
+provide the full analysis.
+
+```{r}
+all(rownames(tsne_coords) %in% colnames(gbm))
+gbm_40k <- gbm[, rownames(tsne_coords)]
+dim(gbm_40k)
+
+tsne_coords$CD3D <- exprs(gbm_40k)[which(fData(gbm_40k)[,2] == "CD3D"),]
+tsne_coords$NKG7 <- exprs(gbm_40k)[which(fData(gbm_40k)[,2] == "NKG7"),]
+tsne_coords$CD79A <- exprs(gbm_40k)[which(fData(gbm_40k)[,2] == "CD79A"),]
+tsne_coords$S100A8 <- exprs(gbm_40k)[which(fData(gbm_40k)[,2] == "S100A8"),]
+tsne_coords$S100A9 <- exprs(gbm_40k)[which(fData(gbm_40k)[,2] == "S100A9"),]
+
+
+ggplot(aes(TSNE.1, TSNE.2, colour=CD3D), data = tsne_coords) + 
+  geom_point() + scale_colour_gradient(low="blue", high="yellow")
+boxplot(tsne_coords$CD3D~cl)
+
+ggplot(aes(TSNE.1, TSNE.2, colour=NKG7), data = tsne_coords) + 
+  geom_point() + scale_colour_gradient(low="blue", high="yellow")
+boxplot(tsne_coords$NKG7~cl)
+
+ggplot(aes(TSNE.1, TSNE.2, colour=CD79A), data = tsne_coords) + 
+  geom_point() + scale_colour_gradient(low="blue", high="yellow")
+boxplot(tsne_coords$CD79A~cl)
+
+ggplot(aes(TSNE.1, TSNE.2, colour=S100A8), data = tsne_coords) + 
+  geom_point() + scale_colour_gradient(low="blue", high="yellow")
+boxplot(tsne_coords$S100A8~cl)
+
+ggplot(aes(TSNE.1, TSNE.2, colour=S100A9), data = tsne_coords) + 
+  geom_point() + scale_colour_gradient(low="blue", high="yellow")
+boxplot(tsne_coords$S100A9~cl)
+
+```
+
+There is no correspondance between the publication clusters and the clusters downloaded 
+here.
+
+# ZINB-WaVE
+
+Here, I try to run zinbwave with K=2 on the full dataset. Following the authors'
+analysis and our own practice, I start with the 1000 most variable genes.
+
+```{r}
+use_genes <- get_nonzero_genes(gbm)
+dense <- as.matrix(exprs(gbm[use_genes,]))
+vars <- rowVars(log1p(dense))
+names(vars) <- rownames(dense)
+vars <- sort(vars, decreasing = TRUE)
+vargenes <- names(vars)[1:1000]
+
+dense <- dense[vargenes,]
+```
+
+To avoid memory problems, I'm running it in serial mode for now.
+
+```{r}
+library(BiocParallel)
+register(SerialParam())
+system.time(zinb_res <- zinbFit(dense, K=2))
+```
