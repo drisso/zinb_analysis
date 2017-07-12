@@ -1,0 +1,310 @@
+---
+title: "4k T cells from 10x genomics"
+author: "Davide Risso"
+date: "07/10/2017"
+output: 
+  html_document: 
+    fig_height: 7
+    fig_width: 7
+    toc: yes
+    code_folding: hide
+    toc_float: yes
+---
+
+```{r options, echo=FALSE, results="hide",mesasge=FALSE, error=FALSE, include=FALSE, autodep=TRUE}
+knitr::opts_chunk$set(fig.align="center", cache=TRUE, error=FALSE, message=FALSE, warning=TRUE)
+library(zinbwave)
+library(ggplot2)
+library(magrittr)
+library(matrixStats)
+library(Rtsne)
+library(RColorBrewer)
+library(cowplot)
+
+set.seed(8283)
+ncores <- 7
+```
+
+Here, we apply ZINB-WaVE to the set of 4k T cells from 10x genomics. The idea is
+to show scalability of the method and hopefully new biological insights.
+
+In the 10X website, the authors performed "graph-based clustering". We will use those
+labels here.
+
+Here, I download the original UMI count matrix and run ZINB-WaVE on it. We can consider two strategies: run zinbwave with K=2 or 3 for visualization or run it with an higher K for clustering (perhaps followed by t-SNE?).
+
+I will visualize the data using the original clustering.
+
+# Original analysis
+
+I've downloaded the t-sne coordinates and cluster labels of the original analysis.
+
+```{r}
+tsne_coords <- read.csv("tenx_t4k/projection.csv", row.names=1)
+clusters <- read.csv("tenx_t4k/clusters.csv")
+cl <- clusters[,2]
+names(cl) <- clusters[,1]
+table(cl)
+dim(clusters)
+dim(tsne_coords)
+
+stopifnot(all(names(cl)==rownames(tsne_coords)))
+
+tsne_coords$cluster <- as.factor(cl)
+```
+
+The data consist of 4532 cells.
+
+```{r}
+pal <- clusterExperiment::bigPalette
+plot(tsne_coords[,1:2], pch=19, col=pal[cl])
+
+ggplot(aes(TSNE.1, TSNE.2, colour=cluster), data = tsne_coords) + geom_point()
+```
+
+To see if the clusters correspond to the published clusters, we need to look at
+some marker genes. To do that, I need to load the full data.
+
+```{r}
+library(cellrangerRkit)
+pipestance_path <- "tenx_t4k"
+if(!file.exists(paste0(pipestance_path, "/outs"))) {
+  download_sample(sample_name="t_4k",sample_dir=pipestance_path,
+                  host="http://cf.10xgenomics.com/samples/cell-exp/1.3.0/")
+}
+t4k <- load_cellranger_matrix(pipestance_path)
+dim(t4k)
+```
+
+This object has the full dataset.
+
+# ZINB-WaVE
+
+Here, I try to run zinbwave with K=2 on the full dataset. Following the authors'
+analysis and our own practice, I start with the 1000 most variable genes.
+
+```{r}
+load("~/Google Drive/SCONE_COPY/t_4k/scone_update.rda")
+
+## select only cells that pass scone QC
+keep <- which(colnames(t4k) %in% colnames(scone_obj))
+
+use_genes <- get_nonzero_genes(t4k[, keep])
+dense <- as.matrix(exprs(t4k[use_genes, keep]))
+
+vars <- rowVars(log1p(dense))
+names(vars) <- rownames(dense)
+vars <- sort(vars, decreasing = TRUE)
+vargenes <- names(vars)[1:1000]
+
+dense <- dense[vargenes,]
+```
+
+
+```{r}
+library(BiocParallel)
+library(doParallel)
+registerDoParallel(ncores)
+register(DoparParam())
+system.time(zinb_res <- zinbFit(dense, K=3))
+```
+
+```{r}
+W <- getW(zinb_res)
+clus <- cl[colnames(dense)]
+plot(W, pch=19, col=pal[clus])
+pairs(W, pch=19, col=pal[clus])
+zinb_df <- data.frame(W1 = W[,1], W2 = W[,2], W3 = W[,3], Cluster=as.factor(clus))
+
+ggplot(aes(W1, W2, colour=Cluster), data = zinb_df) + geom_point()
+
+zinb_df$CD3D <- log1p(exprs(t4k[, keep])[which(fData(t4k)[,2] == "CD3D"),])
+zinb_df$IL7R <- log1p(exprs(t4k[, keep])[which(fData(t4k)[,2] == "IL7R"),])
+zinb_df$NKG7 <- log1p(exprs(t4k[, keep])[which(fData(t4k)[,2] == "NKG7"),])
+
+ggplot(aes(W1, W2, colour=CD3D), data = zinb_df) + 
+  geom_point() + scale_colour_gradient(low="blue", high="yellow")
+
+ggplot(aes(W1, W2, colour=IL7R), data = zinb_df) + 
+  geom_point() + scale_colour_gradient(low="blue", high="yellow")
+
+ggplot(aes(W1, W2, colour=NKG7), data = zinb_df) + 
+  geom_point() + scale_colour_gradient(low="blue", high="yellow")
+```
+
+```{r}
+zinb_tsne <- Rtsne(W, pca = FALSE)
+```
+
+```{r}
+plot(zinb_tsne$Y, pch=19, col=pal[clus])
+```
+
+```{r}
+save(zinb_res, file="tenx_t4k/zinb_res.rda")
+write.table(zinb_df, file="tenx_t4k/zinb_coords.txt", sep='\t', quote=FALSE, 
+            row.names = TRUE)
+```
+
+## Look at data quality
+
+```{r}
+tmp <- read.table("tenx_t4k/t_4k_qc2.txt")
+rownames(tmp) <- paste0(rownames(tmp), "-1")
+qc <- tmp[colnames(dense),]
+
+cors <- lapply(1:3, function(i) abs(cor(W[,i], qc)))
+cors <- unlist(cors)
+bars <- data.frame(AbsoluteCorrelation=cors, QC=rep(stringr::str_to_lower(colnames(qc)), 3), Dimension=as.factor(rep(1:3, each=ncol(qc))))
+
+bars %>%
+  ggplot(aes(Dimension, AbsoluteCorrelation, group=QC, fill=QC)) + 
+  geom_bar(stat="identity", position='dodge') + 
+  scale_fill_manual(values=pal) + ylim(0, 1) + ggtitle("Correlation bw W and QC")
+
+library(rARPACK)
+fastpca <- function(expr, scale=FALSE) {
+  svd_raw <- svds(scale(t(expr), center=TRUE, scale=scale), k=3, nu=3, nv=0)
+  pc_raw <- svd_raw$u %*% diag(svd_raw$d[1:3])
+  return(pc_raw)
+}
+
+pc_raw <- fastpca(log1p(dense))
+
+totalcount = function (ei)
+{
+  sums = colSums(ei)
+  eo = t(t(ei)*mean(sums)/sums)
+  return(eo)
+}
+
+tc <- totalcount(as.matrix(exprs(t4k[use_genes, keep])))
+pc_tc <- fastpca(log1p(tc[rownames(dense),]))
+
+cors <- lapply(1:3, function(i) abs(cor(pc_tc[,i], qc)))
+cors <- unlist(cors)
+bars <- data.frame(AbsoluteCorrelation=cors, QC=rep(stringr::str_to_lower(colnames(qc)), 3), Dimension=as.factor(rep(1:3, each=ncol(qc))))
+
+bars %>%
+  ggplot(aes(Dimension, AbsoluteCorrelation, group=QC, fill=QC)) + 
+  geom_bar(stat="identity", position='dodge') + 
+  scale_fill_manual(values=pal) + ylim(0, 1) + ggtitle("Correlation bw PCA and QC")
+```
+
+## Include QC in ZINB
+
+```{r}
+qcpca <- prcomp(as.matrix(qc), center=TRUE, scale=TRUE)
+Xmod <- model.matrix(~qcpca$x[,1:2])
+system.time(zinb_qc <- zinbFit(dense, K=3, X=Xmod))
+```
+
+```{r}
+Wqc <- getW(zinb_qc)
+plot(Wqc, pch=19, col=pal[clus])
+pairs(Wqc, pch=19, col=pal[clus])
+
+cors <- lapply(1:3, function(i) abs(cor(Wqc[,i], qc)))
+cors <- unlist(cors)
+bars <- data.frame(AbsoluteCorrelation=cors, QC=rep(stringr::str_to_lower(colnames(qc)), 3), Dimension=as.factor(rep(1:3, each=ncol(qc))))
+
+bars %>%
+  ggplot(aes(Dimension, AbsoluteCorrelation, group=QC, fill=QC)) + 
+  geom_bar(stat="identity", position='dodge') + 
+  scale_fill_manual(values=pal) + ylim(0, 1) + ggtitle("Correlation bw W and QC (after adjusting)")
+
+```
+
+## Include GC-content and length
+
+```{r}
+library(biomaRt)
+mart <- useMart("ensembl")
+mart <- useDataset("hsapiens_gene_ensembl", mart = mart)
+bm <- getBM(attributes=c('ensembl_gene_id', 'hgnc_symbol', 'start_position',
+                         'end_position', 'percentage_gene_gc_content'),
+            filters = 'ensembl_gene_id',
+            values = rownames(dense),
+            mart = mart)
+
+bm$length <- bm$end_position - bm$start_position
+rownames(bm) <- bm$ensembl_gene_id
+bm <- bm[rownames(dense),]
+
+Vmod <- model.matrix(~log(length) + percentage_gene_gc_content, data=bm)
+```
+
+```{r}
+system.time(zinb_gcc <- zinbFit(dense, K=3, V=Vmod))
+```
+
+```{r}
+Wgcc <- getW(zinb_gcc)
+plot(Wgcc, pch=19, col=pal[clus])
+pairs(Wgcc, pch=19, col=pal[clus])
+
+cors <- lapply(1:3, function(i) abs(cor(Wgcc[,i], qc)))
+cors <- unlist(cors)
+bars <- data.frame(AbsoluteCorrelation=cors, QC=rep(stringr::str_to_lower(colnames(qc)), 3), Dimension=as.factor(rep(1:3, each=ncol(qc))))
+
+bars %>%
+  ggplot(aes(Dimension, AbsoluteCorrelation, group=QC, fill=QC)) + 
+  geom_bar(stat="identity", position='dodge') + 
+  scale_fill_manual(values=pal) + ylim(0, 1) + ggtitle("Correlation bw W and QC (after adjusting)")
+```
+
+I think that the next step would be to perform clustering and see if we can 
+reconstruct sub-populations. We could use some known t-cell signatures to show
+that the clustering and/or the projection is more meaningful that, say, PCA.
+
+# T-cell specific genes
+
+```{r}
+library(xCell)
+
+genes <- lapply(xCell$signatures, function(x) geneIds(x))
+
+# for each cell, get average expression of each signature
+t4k_sub <- t4k[,keep]
+scores <- lapply(genes, function(x) {
+  idx <- intersect(rownames(dense), rownames(fData(t4k_sub))[fData(t4k_sub)[,2] %in% x])
+  if(length(idx)>1) {
+    return(colMeans(dense[idx,]))
+  } else {
+    return(NA)
+  }
+})
+names(scores) <- names(xCell$signatures)
+scores <- scores[!is.na(scores)]
+scores <- simplify2array(scores)
+colnames(scores) <- make.names(colnames(scores))
+cors <- abs(cor(Wgcc[,1], scores))
+cors <- t(cors)
+head(cors[order(cors[,1], decreasing=TRUE),])
+
+df <- data.frame(W1=Wgcc[,1], W2=Wgcc[,2], log(scores))
+
+ggplot(aes(W1, W2, colour=CD8..Tem.BP.1), data = df) + 
+  geom_point() + scale_colour_gradient(low="blue", high="yellow")
+
+cors <- abs(cor(Wgcc[,2], log(scores)))
+cors <- t(cors)
+head(cors[order(cors[,1], decreasing=TRUE),])
+
+ggplot(aes(W1, W2, colour=Monocytes.IRIS.10), data = df) + 
+  geom_point() + scale_colour_gradient(low="blue", high="yellow")
+
+cors <- abs(cor(Wgcc[,3], scores))
+cors <- t(cors)
+head(cors[order(cors[,1], decreasing=TRUE),])
+
+boxplot(scores[,"CD8..Tem.BP.1"]~clus, main="CD8..Tem.BP.1")
+boxplot(scores[,"Monocytes.IRIS.10"]~clus, main="Monocytes.IRIS.10")
+boxplot(scores[,"NK.cells.BP.6"]~clus, main="NK.cells.BP.6")
+boxplot(scores[,"Th1.cells.IRIS.3"]~clus, main="Th1.cells.IRIS.3")
+boxplot(scores[,"CD4..T.cells.IRIS.8"]~clus, main="CD4..T.cells.IRIS.8")
+boxplot(scores[,"CD4..naive.T.cells.IRIS.3"]~clus, main="CD4..naive.T.cells.IRIS.3")
+boxplot(scores[,"Memory.B.cells.BP.1"]~clus, main="Memory.B.cells.BP.1")
+boxplot(scores[,"Tregs.BP.5"]~clus, main="Tregs.BP.5")
+```
+

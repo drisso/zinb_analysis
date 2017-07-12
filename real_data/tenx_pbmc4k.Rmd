@@ -1,0 +1,382 @@
+---
+title: "4k BBMCs from 10x genomics"
+author: "Davide Risso"
+date: "07/10/2017"
+output: 
+  html_document: 
+    fig_height: 7
+    fig_width: 7
+    toc: yes
+    code_folding: hide
+    toc_float: yes
+---
+
+```{r options, echo=FALSE, results="hide",mesasge=FALSE, error=FALSE, include=FALSE, autodep=TRUE}
+knitr::opts_chunk$set(fig.align="center", cache=TRUE, error=FALSE, message=FALSE, warning=TRUE)
+library(zinbwave)
+library(ggplot2)
+library(magrittr)
+library(matrixStats)
+library(Rtsne)
+library(RColorBrewer)
+library(cowplot)
+
+set.seed(8283)
+ncores <- 7
+```
+
+Here, we apply ZINB-WaVE to the set of 4k PBMCs from 10x genomics. The idea is
+to show scalability of the method and hopefully new biological insights.
+
+In the 10X website, the authors performed "graph-based clustering". We will use those
+labels here.
+
+Here, I download the original UMI count matrix and run ZINB-WaVE on it. We can consider two strategies: run zinbwave with K=2 or 3 for visualization or run it with an higher K for clustering (perhaps followed by t-SNE?).
+
+I will visualize the data using the original clustering.
+
+In principle, the clustering should be related to the analysis of the full 68k data:
+
+- T cells (enriched in CD3D)
+- NK cells (NKG7)
+- B cells (CD79A)
+- myeloid cells (S100A8 and S100A9)
+- CD8+ cytotoxic T cells
+- CD4+ T cells
+
+# Original analysis
+
+I've downloaded the t-sne coordinates and cluster labels of the original analysis.
+
+```{r}
+tsne_coords <- read.csv("tenx_pbmc4k/projection.csv", row.names=1)
+clusters <- read.csv("tenx_pbmc4k/clusters.csv")
+cl <- clusters[,2]
+names(cl) <- clusters[,1]
+table(cl)
+dim(clusters)
+dim(tsne_coords)
+
+stopifnot(all(names(cl)==rownames(tsne_coords)))
+
+tsne_coords$cluster <- as.factor(cl)
+```
+
+The data consist of 4352 cells.
+
+```{r}
+pal <- clusterExperiment::bigPalette
+plot(tsne_coords[,1:2], pch=19, col=pal[cl])
+
+ggplot(aes(TSNE.1, TSNE.2, colour=cluster), data = tsne_coords) + geom_point()
+```
+
+To see if the clusters correspond to the published clusters, we need to look at
+some marker genes. To do that, I need to load the full data.
+
+```{r}
+library(cellrangerRkit)
+pipestance_path <- "tenx_pbmc4k"
+if(!file.exists(paste0(pipestance_path, "/outs"))) {
+  download_sample(sample_name="pbmc4k",sample_dir=pipestance_path,
+                  host="http://cf.10xgenomics.com/samples/cell-exp/1.3.0/")
+}
+pbmc <- load_cellranger_matrix(pipestance_path)
+dim(pbmc)
+```
+
+This object has the full dataset.
+
+# ZINB-WaVE
+
+Here, I try to run zinbwave with K=2 on the full dataset. Following the authors'
+analysis and our own practice, I start with the 1000 most variable genes.
+
+```{r}
+# ## select only cells that pass scone QC
+# keep <- which(colnames(pbmc) %in% colnames(scone_obj))
+
+use_genes <- get_nonzero_genes(pbmc)
+dense <- as.matrix(exprs(pbmc[use_genes, ]))
+
+vars <- rowVars(log1p(dense))
+names(vars) <- rownames(dense)
+vars <- sort(vars, decreasing = TRUE)
+vargenes <- names(vars)[1:1000]
+
+dense <- dense[vargenes,]
+```
+
+
+```{r}
+library(BiocParallel)
+library(doParallel)
+registerDoParallel(ncores)
+register(DoparParam())
+system.time(zinb_res <- zinbFit(dense, K=3))
+```
+
+```{r}
+W <- getW(zinb_res)
+clus <- cl[colnames(dense)]
+plot(W, pch=19, col=pal[clus])
+pairs(W, pch=19, col=pal[clus])
+zinb_df <- data.frame(W1 = W[,1], W2 = W[,2], W3 = W[,3], Cluster=as.factor(clus))
+
+ggplot(aes(W1, W2, colour=Cluster), data = zinb_df) + geom_point()
+
+zinb_df$CD3D <- log1p(exprs(pbmc)[which(fData(pbmc)[,2] == "CD3D"),]) #t cell
+zinb_df$IL7R <- log1p(exprs(pbmc)[which(fData(pbmc)[,2] == "IL7R"),]) 
+zinb_df$NKG7 <- log1p(exprs(pbmc)[which(fData(pbmc)[,2] == "NKG7"),]) #nk cells
+zinb_df$S100A8 <- log1p(exprs(pbmc)[which(fData(pbmc)[,2] == "S100A8"),]) #myeloid cells
+zinb_df$CCR10 <- log1p(exprs(pbmc)[which(fData(pbmc)[,2] == "CCR10"),]) #mem t cells
+zinb_df$TNFRSF18 <- log1p(exprs(pbmc)[which(fData(pbmc)[,2] == "TNFRSF18"),]) #reg t cells
+zinb_df$ID3 <- log1p(exprs(pbmc)[which(fData(pbmc)[,2] == "ID3"),]) #naive t cells
+zinb_df$PF4 <- log1p(exprs(pbmc)[which(fData(pbmc)[,2] == "PF4"),]) #megakaryocytes
+
+ggplot(aes(W1, W2, colour=CD3D), data = zinb_df) + 
+  geom_point() + scale_colour_gradient(low="blue", high="yellow")
+
+ggplot(aes(W1, W2, colour=NKG7), data = zinb_df) + 
+  geom_point() + scale_colour_gradient(low="blue", high="yellow")
+
+ggplot(aes(W1, W2, colour=S100A8), data = zinb_df) + 
+  geom_point() + scale_colour_gradient(low="blue", high="yellow")
+
+```
+
+```{r}
+zinb_tsne <- Rtsne(W, pca = FALSE)
+```
+
+```{r}
+plot(zinb_tsne$Y, pch=19, col=pal[clus])
+```
+
+```{r}
+save(zinb_res, file="tenx_pbmc/zinb_res.rda")
+write.table(zinb_df, file="tenx_pbmc/zinb_coords.txt", sep='\t', quote=FALSE, 
+            row.names = TRUE)
+```
+
+## Look at data quality
+
+```{r}
+library(scater)
+sceset <- newSCESet(countData = exprs(pbmc[use_genes,]))
+
+sceset <- calculateQCMetrics(sceset)
+qc <- pData(sceset)[,c(2, 5, 7, 12:15)]
+head(qc)
+qcpca <- prcomp(qc, scale. = TRUE, center = TRUE)
+
+cors <- lapply(1:3, function(i) abs(cor(W[,i], qc)))
+cors <- unlist(cors)
+bars <- data.frame(AbsoluteCorrelation=cors, QC=rep(stringr::str_to_lower(colnames(qc)), 3), Dimension=as.factor(rep(1:3, each=ncol(qc))))
+
+bars %>%
+  ggplot(aes(Dimension, AbsoluteCorrelation, group=QC, fill=QC)) + 
+  geom_bar(stat="identity", position='dodge') + 
+  scale_fill_manual(values=pal) + ylim(0, 1) + ggtitle("Correlation bw W and QC")
+
+library(rARPACK)
+fastpca <- function(expr, scale=FALSE) {
+  svd_raw <- svds(scale(t(expr), center=TRUE, scale=scale), k=3, nu=3, nv=0)
+  pc_raw <- svd_raw$u %*% diag(svd_raw$d[1:3])
+  return(pc_raw)
+}
+
+norm10x = function (ei)
+{
+  sums = colSums(ei)
+  eo = t(t(ei)*median(sums)/sums)
+  return(eo)
+}
+
+tc <- norm10x(as.matrix(exprs(pbmc[use_genes,])))
+pc_tc <- fastpca(log1p(tc[rownames(dense),]))
+
+cors <- lapply(1:3, function(i) abs(cor(pc_tc[,i], qc)))
+cors <- unlist(cors)
+bars <- data.frame(AbsoluteCorrelation=cors, QC=rep(stringr::str_to_lower(colnames(qc)), 3), Dimension=as.factor(rep(1:3, each=ncol(qc))))
+
+bars %>%
+  ggplot(aes(Dimension, AbsoluteCorrelation, group=QC, fill=QC)) + 
+  geom_bar(stat="identity", position='dodge') + 
+  scale_fill_manual(values=pal) + ylim(0, 1) + ggtitle("Correlation bw PCA and QC")
+
+plot(pc_tc, pch=19, col=pal[clus])
+pairs(pc_tc, pch=19, col=pal[clus])
+
+```
+
+## Include QC in ZINB
+
+```{r}
+Xmod <- model.matrix(~qcpca$x[,1:2])
+system.time(zinb_qc <- zinbFit(dense, K=3, X=Xmod))
+```
+
+```{r}
+Wqc <- getW(zinb_qc)
+plot(Wqc, pch=19, col=pal[clus], ylim=c(-2.5, 2.5))
+pairs(Wqc, pch=19, col=pal[clus])
+
+cors <- lapply(1:3, function(i) abs(cor(Wqc[,i], qc)))
+cors <- unlist(cors)
+bars <- data.frame(AbsoluteCorrelation=cors, QC=rep(stringr::str_to_lower(colnames(qc)), 3), Dimension=as.factor(rep(1:3, each=ncol(qc))))
+
+bars %>%
+  ggplot(aes(Dimension, AbsoluteCorrelation, group=QC, fill=QC)) + 
+  geom_bar(stat="identity", position='dodge') + 
+  scale_fill_manual(values=pal) + ylim(0, 1) + ggtitle("Correlation bw W and QC (after adjusting)")
+```
+
+## Include GC-content and length
+
+```{r}
+library(biomaRt)
+mart <- useMart("ensembl")
+mart <- useDataset("hsapiens_gene_ensembl", mart = mart)
+bm <- getBM(attributes=c('ensembl_gene_id', 'hgnc_symbol', 'start_position',
+                         'end_position', 'percentage_gene_gc_content'),
+            filters = 'ensembl_gene_id',
+            values = rownames(dense),
+            mart = mart)
+
+bm$length <- bm$end_position - bm$start_position
+bm <- bm[bm$hgnc_symbol != "CCL3L3",]
+rownames(bm) <- bm$ensembl_gene_id
+bm <- bm[rownames(dense),]
+
+Vmod <- model.matrix(~log(length) + percentage_gene_gc_content, data=bm)
+```
+
+```{r}
+system.time(zinb_gcc <- zinbFit(dense, K=3, V=Vmod))
+```
+
+```{r}
+Wgcc <- getW(zinb_gcc)
+plot(Wgcc, pch=19, col=pal[clus])
+pairs(Wgcc, pch=19, col=pal[clus])
+
+cors <- lapply(1:3, function(i) abs(cor(Wgcc[,i], qc)))
+cors <- unlist(cors)
+bars <- data.frame(AbsoluteCorrelation=cors, QC=rep(stringr::str_to_lower(colnames(qc)), 3), Dimension=as.factor(rep(1:3, each=ncol(qc))))
+
+bars %>%
+  ggplot(aes(Dimension, AbsoluteCorrelation, group=QC, fill=QC)) + 
+  geom_bar(stat="identity", position='dodge') + 
+  scale_fill_manual(values=pal) + ylim(0, 1) + ggtitle("Correlation bw W and QC (after adjusting)")
+```
+
+I think that the next step would be to perform clustering and see if we can 
+reconstruct sub-populations. We could use some known t-cell signatures to show
+that the clustering and/or the projection is more meaningful that, say, PCA.
+
+# T-cell specific genes
+
+```{r}
+library(xCell)
+
+genes <- lapply(xCell$signatures, function(x) geneIds(x))
+
+# for each cell, get average expression of each signature
+scores <- lapply(genes, function(x) {
+  idx <- intersect(rownames(dense), rownames(fData(pbmc))[fData(pbmc)[,2] %in% x])
+  if(length(idx)>1) {
+    return(colMeans(dense[idx,]))
+  } else {
+    return(NA)
+  }
+})
+names(scores) <- names(xCell$signatures)
+scores <- scores[!is.na(scores)]
+scores <- simplify2array(scores)
+colnames(scores) <- make.names(colnames(scores))
+cors <- abs(cor(Wgcc[,1], scores))
+cors <- t(cors)
+head(cors[order(cors[,1], decreasing=TRUE),])
+
+df <- data.frame(W1=Wgcc[,1], W2=Wgcc[,2], log(scores), Cluster=as.factor(clus))
+
+ggplot(aes(W1, W2, colour=Monocytes.HPCA.14), data = df) + 
+  geom_point() + scale_colour_gradient(low="blue", high="yellow")
+
+cors <- abs(cor(Wgcc[,2], log(scores)))
+cors <- t(cors)
+head(cors[order(cors[,1], decreasing=TRUE),])
+
+ggplot(aes(W1, W2, colour=B.cells.HPCA.5), data = df) + 
+  geom_point() + scale_colour_gradient(low="blue", high="yellow")
+
+ggplot(aes(W1, W2, colour=Macrophages.FANTOM.3), data = df) + 
+  geom_point() + scale_colour_gradient(low="blue", high="yellow")
+
+cors <- abs(cor(Wgcc[,3], scores))
+cors <- t(cors)
+head(cors[order(cors[,1], decreasing=TRUE),])
+
+ggplot(aes(W1, W2, colour=NKT.NOV.1), data = df) + 
+  geom_point() + scale_colour_gradient(low="blue", high="yellow")
+
+ggplot(aes(W1, W2, colour=CD8..Tcm.BP.1), data = df) + 
+  geom_point() + scale_colour_gradient(low="blue", high="yellow")
+
+ggplot(aes(W1, W2, colour=Cluster), data = df) + 
+  geom_point() + scale_color_manual(values = pal)
+
+boxplot(scores[,"Monocytes.HPCA.14"]~clus, main="Monocytes.HPCA.14")
+boxplot(scores[,"B.cells.HPCA.5"]~clus, main="B.cells.HPCA.5")
+boxplot(scores[,"Macrophages.FANTOM.3"]~clus, main="Macrophages.FANTOM.3")
+boxplot(scores[,"NKT.NOV.1"]~clus, main="NKT.NOV.1")
+boxplot(scores[,"CD8..Tcm.BP.1"]~clus, main="CD8..Tcm.BP.1")
+
+rownames(tc) <- fData(pbmc[use_genes])[,2]
+means <- t(apply(tc, 1, tapply, clus, mean))
+res <- xCellAnalysis(means)
+
+rownames(res)[apply(res, 2, which.max)]
+
+round(res, 2)
+```
+
+```{r}
+res_all <- xCellAnalysis(tc)
+```
+
+```{r}
+res_sub <- res_all[c(1, 4, 6:15, 17, 20, 29, 38, 41, 46, 49, 50, 52, 57, 62:64),]
+# round(t(apply(res_sub, 1, tapply, clus, mean)), 2)
+type <- as.factor(rownames(res_all)[apply(res_all, 2, which.max)])
+# df <- data.frame(W1=Wgcc[,1], W2=Wgcc[,2], Type=type)
+# ggplot(aes(W1, W2, colour=Type), data = df) + 
+#   geom_point() + scale_color_manual(values = pal)
+
+plot(Wgcc, pch=19, col=pal[type], xlim=c(-2, 4))
+legend("topright", levels(type), fill=pal, cex=.6)
+
+df <- data.frame(W1=Wgcc[,1], W2=Wgcc[,2], W3=Wgcc[,3], t(res_all))
+
+ggplot(aes(W1, W2, colour=B.cells), data = df) + 
+ geom_point() + scale_colour_gradient(low="blue", high="yellow")
+
+ggplot(aes(W1, W2, colour=CD4..T.cells), data = df) + 
+ geom_point() + scale_colour_gradient(low="blue", high="yellow")
+
+ggplot(aes(W1, W2, colour=CD8..T.cells), data = df) + 
+ geom_point() + scale_colour_gradient(low="blue", high="yellow")
+
+ggplot(aes(W1, W2, colour=Monocytes), data = df) + 
+ geom_point() + scale_colour_gradient(low="blue", high="yellow")
+
+ggplot(aes(W1, W2, colour=NK.cells), data = df) + 
+ geom_point() + scale_colour_gradient(low="blue", high="yellow")
+
+ggplot(aes(W1, W2, colour=pDC), data = df) + 
+ geom_point() + scale_colour_gradient(low="blue", high="yellow")
+
+ggplot(aes(W1, W2, colour=cDC), data = df) + 
+ geom_point() + scale_colour_gradient(low="blue", high="yellow")
+```
