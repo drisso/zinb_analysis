@@ -368,10 +368,10 @@ ggplot(aes(W1, W2, colour=CD4..T.cells), data = df) +
 ggplot(aes(W1, W2, colour=CD8..T.cells), data = df) + 
  geom_point() + scale_colour_gradient(low="blue", high="yellow")
 
-ggplot(aes(W1, W2, colour=Monocytes), data = df) + 
+ggplot(aes(W1, W2, colour=NK.cells), data = df) + 
  geom_point() + scale_colour_gradient(low="blue", high="yellow")
 
-ggplot(aes(W1, W2, colour=NK.cells), data = df) + 
+ggplot(aes(W1, W2, colour=Monocytes), data = df) + 
  geom_point() + scale_colour_gradient(low="blue", high="yellow")
 
 ggplot(aes(W1, W2, colour=pDC), data = df) + 
