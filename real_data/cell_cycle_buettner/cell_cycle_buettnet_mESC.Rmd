@@ -37,7 +37,7 @@ if (mysystem == 'Darwin'){
 ```
 
 
-In paper "Computational analysis of cell-to-cell heterogeneity in single-cell RNA-sequencing data reveals hidden subpopulations of cells" (Buettner et al), they use a dataset with 182 cells and about 9000 genes (fluidigm C1) where they know the cell cycle status of the cells (G1, S, or G2M). Let's see if we can use this dataset to demonstrate the ability of zinbwave to extract wanted/unwanted variance. We would to show that we can remove unwanted cell-cycle effect.
+In paper "Computational analysis of cell-to-cell heterogeneity in single-cell RNA-sequencing data reveals hidden subpopulations of cells" (Buettner et al), they use a dataset with 182 cells and about 9000 genes (fluidigm C1) where they know the cell cycle status of the cells (G1, S, or G2M). Let's see if we can use this dataset to demonstrate the ability of zinbwave to extract wanted/unwanted variance. We want to show that we can remove unwanted cell-cycle effect.
 
 # Preprocessing
 

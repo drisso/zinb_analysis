@@ -11,7 +11,7 @@
 
 <meta name="author" content="Fanny Perraudeau" />
 
-<meta name="date" content="2017-07-05" />
+<meta name="date" content="2017-07-12" />
 
 <title>Cell cycle - Buettner mESC dataset</title>
 
@@ -234,7 +234,7 @@ div.tocify {
 
 <h1 class="title toc-ignore">Cell cycle - Buettner mESC dataset</h1>
 <h4 class="author"><em>Fanny Perraudeau</em></h4>
-<h4 class="date"><em>July 05, 2017</em></h4>
+<h4 class="date"><em>July 12, 2017</em></h4>
 
 </div>
 
@@ -250,7 +250,7 @@ if (mysystem == 'Darwin'){
   print('Please change this to allow parallel computing')
   register(SerialParam())
 }</code></pre>
-<p>In paper “Computational analysis of cell-to-cell heterogeneity in single-cell RNA-sequencing data reveals hidden subpopulations of cells” (Buettner et al), they use a dataset with 182 cells and about 9000 genes (fluidigm C1) where they know the cell cycle status of the cells (G1, S, or G2M). Let’s see if we can use this dataset to demonstrate the ability of zinbwave to extract wanted/unwanted variance. We would to show that we can remove unwanted cell-cycle effect.</p>
+<p>In paper “Computational analysis of cell-to-cell heterogeneity in single-cell RNA-sequencing data reveals hidden subpopulations of cells” (Buettner et al), they use a dataset with 182 cells and about 9000 genes (fluidigm C1) where they know the cell cycle status of the cells (G1, S, or G2M). Let’s see if we can use this dataset to demonstrate the ability of zinbwave to extract wanted/unwanted variance. We want to show that we can remove unwanted cell-cycle effect.</p>
 <div id="preprocessing" class="section level1">
 <h1>Preprocessing</h1>
 <p>We filter cells and genes as in the paper.</p>
