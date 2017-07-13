@@ -169,31 +169,178 @@ plot(W, pch=19, col=pal[clus])
 zinb_df <- data.frame(W1 = W[,1], W2 = W[,2], Cluster=as.factor(clus))
 
 ggplot(aes(W1, W2, colour=Cluster), data = zinb_df) + geom_point()
-
-zinb_df$CD3D <- exprs(gbm)[which(fData(gbm)[,2] == "CD3D"),]
-zinb_df$NKG7 <- exprs(gbm)[which(fData(gbm)[,2] == "NKG7"),]
-zinb_df$CD79A <- exprs(gbm)[which(fData(gbm)[,2] == "CD79A"),]
-zinb_df$S100A8 <- exprs(gbm)[which(fData(gbm)[,2] == "S100A8"),]
-zinb_df$S100A9 <- exprs(gbm)[which(fData(gbm)[,2] == "S100A9"),]
-
-ggplot(aes(W1, W2, colour=CD3D), data = zinb_df) + 
-  geom_point() + scale_colour_gradient(low="blue", high="yellow")
-
-ggplot(aes(W1, W2, colour=NKG7), data = zinb_df) + 
-  geom_point() + scale_colour_gradient(low="blue", high="yellow")
-
-ggplot(aes(W1, W2, colour=CD79A), data = zinb_df) + 
-  geom_point() + scale_colour_gradient(low="blue", high="yellow")
-
-ggplot(aes(W1, W2, colour=S100A8), data = zinb_df) + 
-  geom_point() + scale_colour_gradient(low="blue", high="yellow")
-
-ggplot(aes(W1, W2, colour=S100A9), data = zinb_df) + 
-  geom_point() + scale_colour_gradient(low="blue", high="yellow")
 ```
 
 ```{r}
 save(zinb_res, file="tenx_pbmc/zinb_res.rda")
 write.table(zinb_df, file="tenx_pbmc/zinb_coords.txt", sep='\t', quote=FALSE, 
             row.names = TRUE)
+```
+
+Let's look at some known markers.
+
+```{r}
+zinb_df$CD3D <- log1p(exprs(gbm)[which(fData(gbm)[,2] == "CD3D"),])
+zinb_df$NKG7 <- log1p(exprs(gbm)[which(fData(gbm)[,2] == "NKG7"),])
+zinb_df$CD79A <- log1p(exprs(gbm)[which(fData(gbm)[,2] == "CD79A"),])
+zinb_df$S100A8 <- log1p(exprs(gbm)[which(fData(gbm)[,2] == "S100A8"),])
+zinb_df$S100A9 <- log1p(exprs(gbm)[which(fData(gbm)[,2] == "S100A9"),])
+zinb_df$IL7R <- log1p(exprs(gbm)[which(fData(gbm)[,2] == "IL7R"),])
+zinb_df$CD14 <- log1p(exprs(gbm)[which(fData(gbm)[,2] == "CD14"),])
+zinb_df$LYZ <- log1p(exprs(gbm)[which(fData(gbm)[,2] == "LYZ"),])
+zinb_df$MS4A1 <- log1p(exprs(gbm)[which(fData(gbm)[,2] == "MS4A1"),])
+zinb_df$CD8A <- log1p(exprs(gbm)[which(fData(gbm)[,2] == "CD8A"),])
+zinb_df$FCGR3A <- log1p(exprs(gbm)[which(fData(gbm)[,2] == "FCGR3A"),])
+zinb_df$MS4A7 <- log1p(exprs(gbm)[which(fData(gbm)[,2] == "MS4A7"),])
+zinb_df$GNLY <- log1p(exprs(gbm)[which(fData(gbm)[,2] == "GNLY"),])
+zinb_df$FCER1A <- log1p(exprs(gbm)[which(fData(gbm)[,2] == "FCER1A"),])
+zinb_df$CST3 <- log1p(exprs(gbm)[which(fData(gbm)[,2] == "CST3"),])
+zinb_df$PPBP <- log1p(exprs(gbm)[which(fData(gbm)[,2] == "PPBP"),])
+
+ggplot(aes(W1, W2, colour=CD3D), data = zinb_df) + 
+  geom_point() + scale_colour_gradient(low="blue", high="yellow") + ggtitle("T cells")
+
+ggplot(aes(W1, W2, colour=IL7R), data = zinb_df) + 
+  geom_point() + scale_colour_gradient(low="blue", high="yellow") + ggtitle("CD4+ T cells")
+
+ggplot(aes(W1, W2, colour=CD8A), data = zinb_df) + 
+  geom_point() + scale_colour_gradient(low="blue", high="yellow") + ggtitle("CD8+ T cells")
+
+ggplot(aes(W1, W2, colour=NKG7), data = zinb_df) + 
+  geom_point() + scale_colour_gradient(low="blue", high="yellow") + ggtitle("NK cells")
+
+ggplot(aes(W1, W2, colour=GNLY), data = zinb_df) + 
+  geom_point() + scale_colour_gradient(low="blue", high="yellow") + ggtitle("NK cells")
+
+ggplot(aes(W1, W2, colour=S100A8), data = zinb_df) + 
+  geom_point() + scale_colour_gradient(low="blue", high="yellow") + ggtitle("Myeloid cells")
+
+ggplot(aes(W1, W2, colour=S100A9), data = zinb_df) + 
+  geom_point() + scale_colour_gradient(low="blue", high="yellow") + ggtitle("Myeloid cells")
+
+ggplot(aes(W1, W2, colour=CD14), data = zinb_df) + 
+  geom_point() + scale_colour_gradient(low="blue", high="yellow") + ggtitle("Monocytes")
+
+ggplot(aes(W1, W2, colour=LYZ), data = zinb_df) + 
+  geom_point() + scale_colour_gradient(low="blue", high="yellow") + ggtitle("CD14+ Monocytes")
+
+ggplot(aes(W1, W2, colour=FCGR3A), data = zinb_df) + 
+  geom_point() + scale_colour_gradient(low="blue", high="yellow") + ggtitle("FCGR3A+ Monocytes")
+
+ggplot(aes(W1, W2, colour=MS4A7), data = zinb_df) + 
+  geom_point() + scale_colour_gradient(low="blue", high="yellow") + ggtitle("FCGR3A+ Monocytes")
+
+ggplot(aes(W1, W2, colour=CD79A), data = zinb_df) + 
+  geom_point() + scale_colour_gradient(low="blue", high="yellow") + ggtitle("B cells")
+
+ggplot(aes(W1, W2, colour=MS4A1), data = zinb_df) + 
+  geom_point() + scale_colour_gradient(low="blue", high="yellow") + ggtitle("B cells")
+
+ggplot(aes(W1, W2, colour=FCER1A), data = zinb_df) + 
+  geom_point() + scale_colour_gradient(low="blue", high="yellow") + ggtitle("Dendritic cells")
+
+ggplot(aes(W1, W2, colour=CST3), data = zinb_df) + 
+  geom_point() + scale_colour_gradient(low="blue", high="yellow") + ggtitle("Dendritic cells")
+
+ggplot(aes(W1, W2, colour=PPBP), data = zinb_df) + 
+  geom_point() + scale_colour_gradient(low="blue", high="yellow") + ggtitle("Megakaryocytes")
+```
+
+# PCA
+
+How does PCA compare?
+
+```{r}
+library(rARPACK)
+fastpca <- function(expr, scale=FALSE) {
+  svd_raw <- svds(scale(t(expr), center=TRUE, scale=scale), k=3, nu=3, nv=0)
+  pc_raw <- svd_raw$u %*% diag(svd_raw$d[1:3])
+  return(pc_raw)
+}
+
+norm10x = function (ei)
+{
+  sums = colSums(ei)
+  eo = t(t(ei)*median(sums)/sums)
+  return(eo)
+}
+
+tc <- norm10x(as.matrix(exprs(gbm[use_genes,])))
+pc_tc <- fastpca(log1p(tc[rownames(dense),]))
+
+plot(pc_tc, pch=19, col=pal[clus])
+
+pca_df <- data.frame(PC1 = pc_tc[,1], PC2 = pc_tc[,2], Cluster=as.factor(clus))
+
+ggplot(aes(PC1, PC2, colour=Cluster), data = pca_df) + geom_point()
+
+```
+
+Let's look at some known markers.
+
+```{r}
+pca_df$CD3D <- log1p(exprs(gbm)[which(fData(gbm)[,2] == "CD3D"),])
+pca_df$NKG7 <- log1p(exprs(gbm)[which(fData(gbm)[,2] == "NKG7"),])
+pca_df$CD79A <- log1p(exprs(gbm)[which(fData(gbm)[,2] == "CD79A"),])
+pca_df$S100A8 <- log1p(exprs(gbm)[which(fData(gbm)[,2] == "S100A8"),])
+pca_df$S100A9 <- log1p(exprs(gbm)[which(fData(gbm)[,2] == "S100A9"),])
+pca_df$IL7R <- log1p(exprs(gbm)[which(fData(gbm)[,2] == "IL7R"),])
+pca_df$CD14 <- log1p(exprs(gbm)[which(fData(gbm)[,2] == "CD14"),])
+pca_df$LYZ <- log1p(exprs(gbm)[which(fData(gbm)[,2] == "LYZ"),])
+pca_df$MS4A1 <- log1p(exprs(gbm)[which(fData(gbm)[,2] == "MS4A1"),])
+pca_df$CD8A <- log1p(exprs(gbm)[which(fData(gbm)[,2] == "CD8A"),])
+pca_df$FCGR3A <- log1p(exprs(gbm)[which(fData(gbm)[,2] == "FCGR3A"),])
+pca_df$MS4A7 <- log1p(exprs(gbm)[which(fData(gbm)[,2] == "MS4A7"),])
+pca_df$GNLY <- log1p(exprs(gbm)[which(fData(gbm)[,2] == "GNLY"),])
+pca_df$FCER1A <- log1p(exprs(gbm)[which(fData(gbm)[,2] == "FCER1A"),])
+pca_df$CST3 <- log1p(exprs(gbm)[which(fData(gbm)[,2] == "CST3"),])
+pca_df$PPBP <- log1p(exprs(gbm)[which(fData(gbm)[,2] == "PPBP"),])
+
+ggplot(aes(PC1, PC2, colour=CD3D), data = pca_df) + 
+  geom_point() + scale_colour_gradient(low="blue", high="yellow") + ggtitle("T cells")
+
+ggplot(aes(PC1, PC2, colour=IL7R), data = pca_df) + 
+  geom_point() + scale_colour_gradient(low="blue", high="yellow") + ggtitle("CD4+ T cells")
+
+ggplot(aes(PC1, PC2, colour=CD8A), data = pca_df) + 
+  geom_point() + scale_colour_gradient(low="blue", high="yellow") + ggtitle("CD8+ T cells")
+
+ggplot(aes(PC1, PC2, colour=NKG7), data = pca_df) + 
+  geom_point() + scale_colour_gradient(low="blue", high="yellow") + ggtitle("NK cells")
+
+ggplot(aes(PC1, PC2, colour=GNLY), data = pca_df) + 
+  geom_point() + scale_colour_gradient(low="blue", high="yellow") + ggtitle("NK cells")
+
+ggplot(aes(PC1, PC2, colour=S100A8), data = pca_df) + 
+  geom_point() + scale_colour_gradient(low="blue", high="yellow") + ggtitle("Myeloid cells")
+
+ggplot(aes(PC1, PC2, colour=S100A9), data = pca_df) + 
+  geom_point() + scale_colour_gradient(low="blue", high="yellow") + ggtitle("Myeloid cells")
+
+ggplot(aes(PC1, PC2, colour=CD14), data = pca_df) + 
+  geom_point() + scale_colour_gradient(low="blue", high="yellow") + ggtitle("Monocytes")
+
+ggplot(aes(PC1, PC2, colour=LYZ), data = pca_df) + 
+  geom_point() + scale_colour_gradient(low="blue", high="yellow") + ggtitle("CD14+ Monocytes")
+
+ggplot(aes(PC1, PC2, colour=FCGR3A), data = pca_df) + 
+  geom_point() + scale_colour_gradient(low="blue", high="yellow") + ggtitle("FCGR3A+ Monocytes")
+
+ggplot(aes(PC1, PC2, colour=MS4A7), data = pca_df) + 
+  geom_point() + scale_colour_gradient(low="blue", high="yellow") + ggtitle("FCGR3A+ Monocytes")
+
+ggplot(aes(PC1, PC2, colour=CD79A), data = pca_df) + 
+  geom_point() + scale_colour_gradient(low="blue", high="yellow") + ggtitle("B cells")
+
+ggplot(aes(PC1, PC2, colour=MS4A1), data = pca_df) + 
+  geom_point() + scale_colour_gradient(low="blue", high="yellow") + ggtitle("B cells")
+
+ggplot(aes(PC1, PC2, colour=FCER1A), data = pca_df) + 
+  geom_point() + scale_colour_gradient(low="blue", high="yellow") + ggtitle("Dendritic cells")
+
+ggplot(aes(PC1, PC2, colour=CST3), data = pca_df) + 
+  geom_point() + scale_colour_gradient(low="blue", high="yellow") + ggtitle("Dendritic cells")
+
+ggplot(aes(PC1, PC2, colour=PPBP), data = pca_df) + 
+  geom_point() + scale_colour_gradient(low="blue", high="yellow") + ggtitle("Megakaryocytes")
 ```

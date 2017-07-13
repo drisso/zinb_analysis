@@ -308,3 +308,263 @@ boxplot(scores[,"Memory.B.cells.BP.1"]~clus, main="Memory.B.cells.BP.1")
 boxplot(scores[,"Tregs.BP.5"]~clus, main="Tregs.BP.5")
 ```
 
+# Check gene length calculations
+
+From David's email, the definition of gene length in our QC matrix is the following.
+
+$$
+\frac{\sum_j Y_{ij} \, l_j}{\sum_j Y_{ij}}
+$$
+
+We can manually compute this quantity and see if we get the same numbers. We are
+probably using a different annotation, so I'm expecting a bit of a discordance.
+Also, David is using average isoform length, while I'm using the length of the longest isoform.
+
+```{r length}
+library(biomaRt)
+mart <- useMart("ensembl")
+mart <- useDataset("hsapiens_gene_ensembl", mart = mart)
+
+bm2 <- getBM(attributes=c('ensembl_gene_id', 'hgnc_symbol', 'start_position',
+                         'end_position', 'percentage_gene_gc_content', 'gene_biotype'),
+            filters = 'ensembl_gene_id',
+            values = rownames(t4k_sub)[use_genes],
+            mart = mart)
+
+bm2$length <- bm2$end_position - bm2$start_position
+length <- bm2$length
+names(length) <- bm2$ensembl_gene_id
+
+t4k_exp <- t4k_sub[use_genes,]
+gene_idx <- intersect(names(length), rownames(t4k_exp))
+length(gene_idx)
+
+t4k_exp <- t4k_exp[gene_idx,]
+length <- length[gene_idx]
+
+## check correlation with David's length
+len <- colSums(exprs(t4k_exp) * length)/colSums(exprs(t4k_exp))
+cor(log(len[rownames(qc)]), log(qc$gene_length))
+
+## check correlation with PCA
+cor(len[rownames(qc)], pc_tc[,1])
+cor(qc$gene_length, pc_tc[,1])
+plot(len[rownames(qc)], pc_tc[,1])
+lines(lowess(len[rownames(qc)], pc_tc[,1]), col=2, lwd=2)
+plot(qc$gene_length, pc_tc[,1])
+lines(lowess(qc$gene_length, pc_tc[,1]), col=2, lwd=2)
+
+## Check correlation with W
+cor(len[rownames(qc)], W[,1])
+cor(qc$gene_length, W[,1])
+plot(len[rownames(qc)], W[,1])
+lines(lowess(len[rownames(qc)], W[,1]), col=2, lwd=2)
+plot(qc$gene_length, W[,1])
+lines(lowess(qc$gene_length, W[,1]), col=2, lwd=2)
+
+alpha_mu <- t(getAlpha_mu(zinb_res))
+alpha_pi <- t(getAlpha_pi(zinb_res))
+
+bins <- cut(length[rownames(dense)], breaks = quantile(length[rownames(dense)],
+                                                       probs=seq(0, 1, 0.05)))
+plot(alpha_mu[,1]~bins, outline=FALSE)
+plot(alpha_pi[,1]~bins, outline=FALSE)
+
+pca <- prcomp(t(log1p(tc[rownames(dense),])))
+bins <- cut(length[rownames(dense)], breaks = quantile(length[rownames(dense)], probs=seq(0, 1, 0.05)))
+plot(pca$rotation[,1]~bins, outline=FALSE)
+```
+
+Interestingly, the dependence does not seem to affect the loadings of the PC nor alpha.
+
+We can do the same for GC-content.
+
+```{r gcc}
+gcc <- bm2$percentage_gene_gc_content
+names(gcc) <- bm2$ensembl_gene_id
+
+gcc <- gcc[gene_idx]
+
+## check correlation with David's length
+gc <- colSums(exprs(t4k_exp) * gcc)/colSums(exprs(t4k_exp))
+cor(gc[rownames(qc)], qc$gc)
+plot(gc[rownames(qc)], qc$gc)
+
+## check correlation with PCA
+cor(gc[rownames(qc)], pc_tc[,1])
+cor(qc$gc, pc_tc[,1])
+plot(gc[rownames(qc)], pc_tc[,1])
+plot(qc$gc, pc_tc[,1])
+
+## Check correlation with W
+cor(gc[rownames(qc)], W[,1])
+cor(qc$gc, W[,1])
+plot(gc[rownames(qc)], W[,1])
+plot(qc$gc, W[,1])
+```
+
+The results of gene length are pretty clear, but why is this the case? Do UMI counts
+depend on gene length? Could this be an artifact of selecting the top 1000 variable genes?
+
+```{r check_len}
+## top 1000 genes
+plot(log1p(dense[,1])~log(length[rownames(dense)]))
+
+bins <- cut(length[rownames(dense)], breaks = quantile(length[rownames(dense)],
+                                                       probs=seq(0, 1, 0.05)))
+plot(log1p(dense[,1])~bins, outline=FALSE, las=2)
+
+bins <- cut(gcc[rownames(dense)], breaks = quantile(gcc[rownames(dense)],
+                                                       probs=seq(0, 1, 0.05)))
+plot(log1p(dense[,1])~bins, outline=FALSE, las=2)
+
+## all genes
+xx <- log1p(exprs(t4k_exp)[exprs(t4k_exp)[,1]>0,1])
+
+plot(xx~log(length[names(xx)]))
+
+bins <- cut(length[names(xx)], breaks = quantile(length[names(xx)], probs=seq(0, 1, 0.05)))
+plot(xx~bins, outline=FALSE, las=2)
+
+bins <- cut(gcc[names(xx)], breaks = quantile(gcc[names(xx)], probs=seq(0, 1, 0.05)))
+plot(xx~bins, outline=FALSE, las=2)
+```
+
+This is just one sample, what if we check the average expression?
+
+```{r check_len2}
+filter <- rowSums(exprs(t4k_exp)>0)>=100
+filtered <- exprs(t4k_exp)[filter,]
+xx <- log(rowMeans(filtered)+0.01)
+
+plot(xx~log(length[names(xx)]))
+
+bins <- cut(length[names(xx)], breaks = quantile(length[names(xx)], probs=seq(0, 1, 0.05)))
+plot(xx~bins, outline=FALSE, las=2)
+
+bins <- cut(gcc[names(xx)], breaks = quantile(gcc[names(xx)], probs=seq(0, 1, 0.05)))
+plot(xx~bins, outline=FALSE, las=2)
+```
+
+What about dropout rates?
+
+```{r check_len3}
+xx <- rowMeans(exprs(t4k_exp)==0)
+
+plot(xx~log(length[names(xx)]))
+
+bins <- cut(length[names(xx)], breaks = quantile(length[names(xx)], probs=seq(0, 1, 0.05)))
+plot(xx~bins, outline=FALSE, las=2, ylab="Dropout rate")
+
+bins <- cut(gcc[names(xx)], breaks = quantile(gcc[names(xx)], probs=seq(0, 1, 0.05)))
+plot(xx~bins, outline=FALSE, las=2, ylab="Dropout rate")
+```
+
+It really does seem that shorter genes tend to be more expressed than longer genes.
+Also, very short and very long genes show higer dropout rates.
+But this contradicts this paper: https://f1000research.com/articles/10.12688/f1000research.11290.1/doi
+
+```{r joy, eval=FALSE}
+## library(devtools)
+## install_github("clauswilke/ggjoy")
+
+library(ggplot2)
+library(ggjoy)
+
+type <- bm2$gene_biotype
+names(type) <- bm2$ensembl_gene_id
+
+boxplot(log(length[names(xx)])~type[names(xx)], las=2, varwidth=TRUE)
+
+df <- data.frame(mean_exp = log(rowMeans(filtered)+0.01), dropouts=rowMeans(filtered==0),
+                 length=cut(length[rownames(filtered)], 
+                            breaks = quantile(length[names(xx)], probs=seq(0, 1, 0.05))),
+                 type=type[rownames(filtered)])
+
+df <- na.omit(df)
+ggplot(df, aes(x=mean_exp, y=length, group=length, height=..density..)) +
+     geom_joy(scale=4) +
+     scale_y_discrete(expand=c(0.01, 0)) +
+     scale_x_continuous(expand=c(0, 0)) + theme_joy()
+
+ggplot(df, aes(x=dropouts, y=length, group=length, height=..density..)) +
+     geom_joy(scale=4) +
+     scale_y_discrete(expand=c(0.01, 0)) +
+     scale_x_continuous(expand=c(0, 0)) + theme_joy()
+
+## Could it be explained by the different gene types?
+library(magrittr)
+library(dplyr)
+df %>%
+  filter(type=="protein_coding") %>%
+  ggplot(aes(x=dropouts, y=length, group=length, height=..density..)) +
+     geom_joy(scale=4) +
+     scale_y_discrete(expand=c(0.01, 0)) +
+     scale_x_continuous(expand=c(0, 0)) + theme_joy()
+
+df %>%
+  filter(type=="protein_coding") %>%
+  ggplot(aes(x=mean_exp, y=length, group=length, height=..density..)) +
+     geom_joy(scale=4) +
+     scale_y_discrete(expand=c(0.01, 0)) +
+     scale_x_continuous(expand=c(0, 0)) + theme_joy()
+```
+
+We should look at other datasets and see if the observations are true in general.
+
+What are these highly expressed genes?
+
+```{r high}
+idx <- rownames(head(df[order(df$mean_exp, decreasing=TRUE),], 50))
+fData(t4k_exp)[idx,]
+```
+
+Interestingly, these are a lot of ribosomal genes, which are probably a proxy 
+for library size / amount of RNA? I bet that these ribosomal genes tend to be shorter.
+
+```{r ribo}
+ribo <- grep("^RPL", fData(t4k_exp)[,2])
+idx <- rownames(fData(t4k_exp))[ribo]
+boxplot(list(RPL=length[idx],
+             Other=length[setdiff(names(length), idx)]), log='y')
+```
+
+My guess is that including an indicator for ribosomal genes in V should reduce
+the dependence on the length.
+
+Could it be possible that just adding some random covariates we get a better projection?
+Or that by chance we were lucky to converge to a better local maxima?
+
+```{r}
+registerDoParallel(4)
+register(DoparParam())
+
+Vmod <- model.matrix(~log(length), data=bm)
+system.time(zinb_len <- zinbFit(dense, K=3, V=Vmod))
+
+Vmod <- model.matrix(~percentage_gene_gc_content, data=bm)
+system.time(zinb_gconly <- zinbFit(dense, K=3, V=Vmod))
+
+ribo <- as.numeric(grepl("^RPL", fData(t4k_exp)[rownames(dense),2]))
+Vmod <- model.matrix(~ribo)
+system.time(zinb_ribo <- zinbFit(dense, K=3, V=Vmod))
+
+rand_df <- data.frame(x1 = rnorm(NROW(dense)), x2 = rnorm(NROW(dense)))
+Vrand <- model.matrix(~x1, data=rand_df)
+system.time(zinb_rand <- zinbFit(dense, K=3, V=Vrand))
+
+Vrand <- model.matrix(~x1 + x2, data=rand_df)
+system.time(zinb_rand2 <- zinbFit(dense, K=3, V=Vrand))
+```
+
+```{r}
+plot(getW(zinb_res), pch=19, col=pal[clus], main="No covariates")
+
+plot(getW(zinb_len), pch=19, col=pal[clus], main="Length only")
+plot(getW(zinb_gconly), pch=19, col=pal[clus], main="GCC only")
+plot(getW(zinb_gcc), pch=19, col=pal[clus], main="Length + GCC")
+plot(getW(zinb_ribo), pch=19, col=pal[clus], main="Ribosomal genes")
+
+plot(getW(zinb_rand), pch=19, col=pal[clus], main="One random covariate")
+plot(getW(zinb_rand2), pch=19, col=pal[clus], main="Two random covariates")
+```

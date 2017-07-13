@@ -1,5 +1,5 @@
 ---
-title: "4k BBMCs from 10x genomics"
+title: "4k PBMCs from 10x genomics"
 author: "Davide Risso"
 date: "07/10/2017"
 output: 
@@ -162,12 +162,50 @@ write.table(zinb_df, file="tenx_pbmc/zinb_coords.txt", sep='\t', quote=FALSE,
 ## Look at data quality
 
 ```{r}
+## compute QC metrics
 library(scater)
 sceset <- newSCESet(countData = exprs(pbmc[use_genes,]))
 
 sceset <- calculateQCMetrics(sceset)
 qc <- pData(sceset)[,c(2, 5, 7, 12:15)]
 head(qc)
+
+## Compute additional metrics (length, gcc)
+library(biomaRt)
+mart <- useMart("ensembl")
+mart <- useDataset("hsapiens_gene_ensembl", mart = mart)
+
+bm <- getBM(attributes=c('ensembl_gene_id', 'hgnc_symbol', 'start_position',
+                         'end_position', 'percentage_gene_gc_content', 'gene_biotype'),
+            filters = 'ensembl_gene_id',
+            values = rownames(pbmc)[use_genes],
+            mart = mart)
+
+type <- bm$gene_biotype
+names(type) <- bm$ensembl_gene_id
+
+## length
+bm$length <- bm$end_position - bm$start_position
+length <- bm$length
+names(length) <- bm$ensembl_gene_id
+
+pbmc_exp <- pbmc[use_genes,]
+gene_idx <- intersect(names(length), rownames(pbmc_exp))
+length(gene_idx)
+
+pbmc_exp <- pbmc_exp[gene_idx,]
+length <- length[gene_idx]
+len <- colSums(exprs(pbmc_exp) * length)/colSums(exprs(pbmc_exp))
+
+##gc content
+gcc <- bm$percentage_gene_gc_content
+names(gcc) <- bm$ensembl_gene_id
+
+gcc <- gcc[gene_idx]
+gc <- colSums(exprs(pbmc_exp) * gcc)/colSums(exprs(pbmc_exp))
+
+## PCA
+qc <- cbind(qc, len, gc)
 qcpca <- prcomp(qc, scale. = TRUE, center = TRUE)
 
 cors <- lapply(1:3, function(i) abs(cor(W[,i], qc)))
@@ -379,4 +417,175 @@ ggplot(aes(W1, W2, colour=pDC), data = df) +
 
 ggplot(aes(W1, W2, colour=cDC), data = df) + 
  geom_point() + scale_colour_gradient(low="blue", high="yellow")
+```
+
+# More on GC-content and length
+
+It seems that including gc-content and length in V helps, but why is that?
+
+We can look at how the PCA loadings and the alpha in ZINB are related to gcc and length.
+
+```{r}
+stopifnot(all(rownames(bm)==rownames(dense)))
+
+alpha_mu <- t(getAlpha_mu(zinb_res))
+alpha_pi <- t(getAlpha_pi(zinb_res))
+
+bins <- cut(bm$length, breaks = quantile(bm$length, probs=seq(0, 1, 0.05)))
+plot(alpha_mu[,1]~bins, outline=FALSE)
+plot(alpha_mu[,2]~bins, outline=FALSE)
+plot(alpha_mu[,3]~bins, outline=FALSE)
+
+plot(alpha_pi[,1]~bins, outline=FALSE)
+plot(alpha_pi[,2]~bins, outline=FALSE)
+plot(alpha_pi[,3]~bins, outline=FALSE)
+
+bins <- cut(bm$percentage_gene_gc_content, 
+            breaks = quantile(bm$percentage_gene_gc_content, probs=seq(0, 1, 0.05)))
+plot(alpha_mu[,1]~bins, outline=FALSE)
+plot(alpha_mu[,2]~bins, outline=FALSE)
+plot(alpha_mu[,3]~bins, outline=FALSE)
+
+plot(alpha_pi[,1]~bins, outline=FALSE)
+plot(alpha_pi[,2]~bins, outline=FALSE)
+plot(alpha_pi[,3]~bins, outline=FALSE)
+```
+
+There does not seem to be any strong effects.
+
+We can check PCA loadings.
+
+```{r}
+rownames(tc) <- rownames(pbmc)[use_genes]
+pca <- prcomp(t(log1p(tc[rownames(dense),])))
+
+plot(pca$x)
+
+bins <- cut(bm$length, breaks = quantile(bm$length, probs=seq(0, 1, 0.05)))
+plot(pca$rotation[,1]~bins, outline=FALSE)
+plot(pca$rotation[,2]~bins, outline=FALSE)
+plot(pca$rotation[,3]~bins, outline=FALSE)
+
+bins <- cut(bm$percentage_gene_gc_content, 
+            breaks = quantile(bm$percentage_gene_gc_content, probs=seq(0, 1, 0.05)))
+plot(pca$rotation[,1]~bins, outline=FALSE)
+plot(pca$rotation[,2]~bins, outline=FALSE)
+plot(pca$rotation[,3]~bins, outline=FALSE)
+```
+
+Let's look at the dependence of UMI counts on gene length.
+
+```{r check_len}
+## top 1000 genes
+plot(log1p(dense[,1])~log(length[rownames(dense)]))
+
+bins <- cut(length[rownames(dense)], breaks = quantile(length[rownames(dense)],
+                                                       probs=seq(0, 1, 0.05)))
+plot(log1p(dense[,1])~bins, outline=FALSE, las=2)
+
+bins <- cut(gcc[rownames(dense)], breaks = quantile(gcc[rownames(dense)],
+                                                       probs=seq(0, 1, 0.05)))
+plot(log1p(dense[,1])~bins, outline=FALSE, las=2)
+
+## all genes
+xx <- log1p(exprs(pbmc_exp)[exprs(pbmc_exp)[,1]>0,1])
+
+plot(xx~log(length[names(xx)]))
+
+bins <- cut(length[names(xx)], breaks = quantile(length[names(xx)], probs=seq(0, 1, 0.05)))
+plot(xx~bins, outline=FALSE, las=2)
+
+bins <- cut(gcc[names(xx)], breaks = quantile(gcc[names(xx)], probs=seq(0, 1, 0.05)))
+plot(xx~bins, outline=FALSE, las=2)
+
+## average expression
+filter <- rowSums(exprs(pbmc_exp)>0)>=100
+filtered <- exprs(pbmc_exp)[filter,]
+xx <- log(rowMeans(filtered)+0.01)
+
+plot(xx~log(length[names(xx)]))
+
+bins <- cut(length[names(xx)], breaks = quantile(length[names(xx)], probs=seq(0, 1, 0.05)))
+plot(xx~bins, outline=FALSE, las=2)
+
+bins <- cut(gcc[names(xx)], breaks = quantile(gcc[names(xx)], probs=seq(0, 1, 0.05)))
+plot(xx~bins, outline=FALSE, las=2)
+
+## dropout
+xx <- rowMeans(exprs(pbmc_exp)==0)
+
+plot(xx~log(length[names(xx)]))
+
+bins <- cut(length[names(xx)], breaks = quantile(length[names(xx)], probs=seq(0, 1, 0.05)))
+plot(xx~bins, outline=FALSE, las=2, ylab="Dropout rate")
+
+bins <- cut(gcc[names(xx)], breaks = quantile(gcc[names(xx)], probs=seq(0, 1, 0.05)))
+plot(xx~bins, outline=FALSE, las=2, ylab="Dropout rate")
+
+library(ggjoy)
+
+df <- data.frame(mean_exp = log(rowMeans(filtered)+0.01), dropouts=rowMeans(filtered==0),
+                 length=cut(length[rownames(filtered)], 
+                            breaks = quantile(length[names(xx)], probs=seq(0, 1, 0.05))),
+                 type=type[rownames(filtered)])
+
+df <- na.omit(df)
+ggplot(df, aes(x=mean_exp, y=length, group=length, height=..density..)) +
+     geom_joy(scale=4) +
+     scale_y_discrete(expand=c(0.01, 0)) +
+     scale_x_continuous(expand=c(0, 0)) + theme_joy()
+
+ggplot(df, aes(x=dropouts, y=length, group=length, height=..density..)) +
+     geom_joy(scale=4) +
+     scale_y_discrete(expand=c(0.01, 0)) +
+     scale_x_continuous(expand=c(0, 0)) + theme_joy()
+
+## Could it be explained by the different gene types?
+library(magrittr)
+library(dplyr)
+df %>%
+  filter(type=="protein_coding") %>%
+  ggplot(aes(x=dropouts, y=length, group=length, height=..density..)) +
+     geom_joy(scale=4) +
+     scale_y_discrete(expand=c(0.01, 0)) +
+     scale_x_continuous(expand=c(0, 0)) + theme_joy()
+
+df %>%
+  filter(type=="protein_coding") %>%
+  ggplot(aes(x=mean_exp, y=length, group=length, height=..density..)) +
+     geom_joy(scale=4) +
+     scale_y_discrete(expand=c(0.01, 0)) +
+     scale_x_continuous(expand=c(0, 0)) + theme_joy()
+```
+
+Could it be possible that just adding some random covariates we get a better projection?
+Or that by chance we were lucky to converge to a better local maxima?
+
+```{r}
+registerDoParallel(4)
+register(DoparParam())
+
+Vmod <- model.matrix(~log(length), data=bm)
+system.time(zinb_len <- zinbFit(dense, K=3, V=Vmod))
+
+Vmod <- model.matrix(~percentage_gene_gc_content, data=bm)
+system.time(zinb_gconly <- zinbFit(dense, K=3, V=Vmod))
+
+rand_df <- data.frame(x1 = rnorm(NROW(dense)), x2 = rnorm(NROW(dense)))
+Vrand <- model.matrix(~x1, data=rand_df)
+system.time(zinb_rand <- zinbFit(dense, K=3, V=Vrand))
+
+Vrand <- model.matrix(~x1 + x2, data=rand_df)
+system.time(zinb_rand2 <- zinbFit(dense, K=3, V=Vrand))
+```
+
+```{r}
+plot(getW(zinb_res), pch=19, col=pal[clus], main="No covariates")
+
+plot(getW(zinb_len), pch=19, col=pal[clus], main="Length only")
+plot(getW(zinb_gconly), pch=19, col=pal[clus], main="GCC only")
+plot(getW(zinb_gcc), pch=19, col=pal[clus], main="Length + GCC")
+
+plot(getW(zinb_rand), pch=19, col=pal[clus], main="One random covariate")
+plot(getW(zinb_rand2), pch=19, col=pal[clus], main="Two random covariates")
 ```
