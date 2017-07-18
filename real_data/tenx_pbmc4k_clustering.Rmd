@@ -1,0 +1,138 @@
+---
+title: "PBMC 4k clustering"
+author: "Davide Risso"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output: 
+  html_document: 
+    fig_height: 7
+    fig_width: 7
+    toc: yes
+    code_folding: hide
+    toc_float: yes
+---
+
+```{r options, include=FALSE}
+knitr::opts_chunk$set(cache=TRUE, error=FALSE, message=FALSE, warning=FALSE)
+```
+
+Here, we look more carefully at clustering of the 4k PBMCs from 10X Genomics.
+
+We will use PAM clustering with k=9 on W with three dimension and compare with
+the clustering published by 10X Genomics.
+
+We will also compare to a more similar procedure that uses PAM with k=9 on the top
+3 and 50 PCs.
+
+```{r original}
+tsne_coords <- read.csv("tenx_pbmc4k/projection.csv", row.names=1)
+clusters <- read.csv("tenx_pbmc4k/clusters.csv")
+cl <- clusters[,2]
+names(cl) <- clusters[,1]
+table(cl)
+dim(clusters)
+dim(tsne_coords)
+
+stopifnot(all(names(cl)==rownames(tsne_coords)))
+
+tsne_coords$cluster <- as.factor(cl)
+
+pal <- clusterExperiment::bigPalette
+plot(tsne_coords[,1:2], pch=19, col=pal[cl])
+```
+
+# ZINBWAVE + PAM
+
+```{r zinb}
+library(cluster)
+library(zinbwave)
+load("tenx_pbmc4k/zinb_res.rda")
+load("tenx_pbmc4k/zinb_gcc.rda")
+
+W <- getW(zinb_res)
+plot(W, pch=19, col=pal[cl])
+pairs(W, pch=19, col=pal[cl])
+
+Wgcc <- getW(zinb_gcc)
+plot(Wgcc, pch=19, col=pal[cl])
+pairs(Wgcc, pch=19, col=pal[cl])
+```
+
+```{r pam}
+d <- dist(W)
+pam_res <- pam(d, k=9)
+pam_cl <- pam_res$clustering
+table(pam_cl)
+
+table(pam_cl, cl)
+
+plot(W, pch=19, col=pal[pam_cl])
+pairs(W, pch=19, col=pal[pam_cl])
+
+plot(tsne_coords[,1:2], pch=19, col=pal[pam_cl])
+
+d <- dist(Wgcc)
+pam_res <- pam(d, k=9)
+pam_clg <- pam_res$clustering
+table(pam_clg)
+
+table(pam_clg, cl)
+table(pam_clg, pam_cl)
+
+plot(Wgcc, pch=19, col=pal[pam_clg])
+pairs(Wgcc, pch=19, col=pal[pam_clg])
+
+plot(tsne_coords[,1:2], pch=19, col=pal[pam_clg])
+```
+
+# PCA + PAM
+
+```{r pca}
+load("tenx_pbmc4k/pca_res.rda")
+plot(pc_tc, pch=19, col=pal[cl])
+```
+
+## First 3 PC
+
+```{r pam2}
+d <- dist(pc_tc[,1:3])
+pam_res <- pam(d, k=9)
+pam_cl2 <- pam_res$clustering
+table(pam_cl2)
+
+table(pam_cl2, cl)
+table(pam_cl2, pam_cl)
+
+plot(pc_tc, pch=19, col=pal[pam_cl2])
+plot(pc_tc, pch=19, col=pal[pam_cl])
+
+plot(W, pch=19, col=pal[pam_cl])
+plot(W, pch=19, col=pal[pam_cl2])
+```
+
+## First 50 PC
+
+```{r pam2}
+d <- dist(pc_tc)
+pam_res <- pam(d, k=9)
+pam_cl3 <- pam_res$clustering
+table(pam_cl3)
+
+table(pam_cl3, cl)
+table(pam_cl3, pam_cl)
+table(pam_cl3, pam_cl2)
+
+plot(pc_tc, pch=19, col=pal[pam_cl3])
+
+plot(W, pch=19, col=pal[pam_cl3])
+```
+
+# RSEC
+
+It's hard to interpret the results of PAM. It may be better to run RSEC on the reduced data,
+both with zinbwave and PCA and see how the results compare. 
+
+# Session Info
+
+```{r}
+sessionInfo()
+```

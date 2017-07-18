@@ -250,7 +250,7 @@ ggplot(aes(W1, W2, colour=PPBP), data = zinb_df) +
 
 How does PCA compare?
 
-```{r}
+```{r, eval=FALSE}
 library(rARPACK)
 fastpca <- function(expr, scale=FALSE) {
   svd_raw <- svds(scale(t(expr), center=TRUE, scale=scale), k=3, nu=3, nv=0)
@@ -278,7 +278,7 @@ ggplot(aes(PC1, PC2, colour=Cluster), data = pca_df) + geom_point()
 
 Let's look at some known markers.
 
-```{r}
+```{r, eval=FALSE}
 pca_df$CD3D <- log1p(exprs(gbm)[which(fData(gbm)[,2] == "CD3D"),])
 pca_df$NKG7 <- log1p(exprs(gbm)[which(fData(gbm)[,2] == "NKG7"),])
 pca_df$CD79A <- log1p(exprs(gbm)[which(fData(gbm)[,2] == "CD79A"),])

@@ -154,8 +154,8 @@ plot(zinb_tsne$Y, pch=19, col=pal[clus])
 ```
 
 ```{r}
-save(zinb_res, file="tenx_pbmc/zinb_res.rda")
-write.table(zinb_df, file="tenx_pbmc/zinb_coords.txt", sep='\t', quote=FALSE, 
+save(zinb_res, file="tenx_pbmc4k/zinb_res.rda")
+write.table(zinb_df, file="tenx_pbmc4k/zinb_coords.txt", sep='\t', quote=FALSE, 
             row.names = TRUE)
 ```
 
@@ -219,8 +219,9 @@ bars %>%
 
 library(rARPACK)
 fastpca <- function(expr, scale=FALSE) {
-  svd_raw <- svds(scale(t(expr), center=TRUE, scale=scale), k=3, nu=3, nv=0)
-  pc_raw <- svd_raw$u %*% diag(svd_raw$d[1:3])
+  k <- 50
+  svd_raw <- svds(scale(t(expr), center=TRUE, scale=scale), k=k, nu=k, nv=0)
+  pc_raw <- svd_raw$u %*% diag(svd_raw$d[1:k])
   return(pc_raw)
 }
 
@@ -243,10 +244,12 @@ bars %>%
   geom_bar(stat="identity", position='dodge') + 
   scale_fill_manual(values=pal) + ylim(0, 1) + ggtitle("Correlation bw PCA and QC")
 
-plot(pc_tc, pch=19, col=pal[clus])
-pairs(pc_tc, pch=19, col=pal[clus])
+plot(pc_tc[,1:2], pch=19, col=pal[clus])
+pairs(pc_tc[,1:3], pch=19, col=pal[clus])
 
+save(pc_tc, file="tenx_pbmc4k/pca_res.rda")
 ```
+
 
 ## Include QC in ZINB
 
@@ -307,6 +310,8 @@ bars %>%
   ggplot(aes(Dimension, AbsoluteCorrelation, group=QC, fill=QC)) + 
   geom_bar(stat="identity", position='dodge') + 
   scale_fill_manual(values=pal) + ylim(0, 1) + ggtitle("Correlation bw W and QC (after adjusting)")
+
+save(zinb_gcc, file="tenx_pbmc4k/zinb_gcc.rda")
 ```
 
 I think that the next step would be to perform clustering and see if we can 
