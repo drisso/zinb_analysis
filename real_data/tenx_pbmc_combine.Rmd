@@ -1,0 +1,59 @@
+---
+title: "4k + 8k PBMCs"
+author: "Davide Risso"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output: 
+  html_document: 
+    fig_height: 7
+    fig_width: 7
+    toc: yes
+    code_folding: hide
+    toc_float: yes
+---
+
+```{r options, echo=FALSE, results="hide",mesasge=FALSE, error=FALSE, include=FALSE, autodep=TRUE}
+knitr::opts_chunk$set(fig.align="center", cache=TRUE, error=FALSE, message=FALSE, warning=FALSE)
+library(zinbwave)
+library(ggplot2)
+library(magrittr)
+library(matrixStats)
+library(Rtsne)
+library(RColorBrewer)
+library(cowplot)
+
+set.seed(8283)
+ncores <- 7
+```
+
+# Read and combine data
+
+```{r}
+library(cellrangerRkit)
+pipestance_path <- "tenx_pbmc4k"
+if(!file.exists(paste0(pipestance_path, "/outs"))) {
+  download_sample(sample_name="pbmc4k",sample_dir=pipestance_path,
+                  host="http://cf.10xgenomics.com/samples/cell-exp/1.3.0/")
+}
+pbmc4k <- load_cellranger_matrix(pipestance_path)
+dim(pbmc4k)
+
+pipestance_path <- "tenx_pbmc8k"
+if(!file.exists(paste0(pipestance_path, "/outs"))) {
+  download_sample(sample_name="pbmc8k",sample_dir=pipestance_path,
+                  host="http://cf.10xgenomics.com/samples/cell-exp/1.3.0/")
+}
+pbmc8k <- load_cellranger_matrix(pipestance_path)
+dim(pbmc8k)
+
+batch <- as.factor(paste0("batch", c(rep(1, NCOL(pbmc4k)), rep(2, NCOL(pbmc8k)))))
+table(batch)
+combined <- cbind(exprs(pbmc4k), exprs(pbmc8k))
+
+```
+
+
+# Session Info
+
+```{r}
+sessionInfo()
+```
