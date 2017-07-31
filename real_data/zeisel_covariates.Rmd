@@ -32,7 +32,15 @@ library(DESeq2)
 set.seed(8283)
 options(getClass.msg=FALSE) #get rid of annoying messages about cache until fixed internally in R
 
-ncores <- 7
+ncores <- 2
+```
+
+```{r}
+library(doParallel)
+library(BiocParallel)
+NCORES = 2
+registerDoParallel(NCORES)
+register(DoparParam())
 ```
 
 Here, I will explore the relation between the expression values and some covariates provided with the data.
@@ -152,7 +160,7 @@ pairs(zifa_fq, pch=19, col=colMerged, main="ZIFA FQ")
 ## ZINB
 
 ```{r zinb}
-zinb <- zinbFit(raw, ncores = ncores, K = 3)
+zinb <- zinbFit(raw,K = 3)
 pairs(zinb@W, pch=19, col=colMerged, main="ZINB")
 ```
 
@@ -266,7 +274,7 @@ boxplot(zinb@W[,2]~position, col=colPal2, ylab="PC2", xlab="Position")
 ## Add batches in ZINB model
 
 ```{r zinb_batch, eval=FALSE}
-zinb_batch <- zinbFit(raw, ncores = ncores, K = 2, X=model.matrix(~batch))
+zinb_batch <- zinbFit(raw, K = 2, X=model.matrix(~batch))
 plot(zinb_batch@W, pch=19, col=colMerged, main="ZINB")
 ```
 

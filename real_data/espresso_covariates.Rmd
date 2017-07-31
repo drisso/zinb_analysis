@@ -32,7 +32,15 @@ library(DESeq2)
 set.seed(8283)
 options(getClass.msg=FALSE) #get rid of annoying messages about cache until fixed internally in R
 
-ncores <- 7
+ncores <- 2
+```
+
+```{r}
+library(doParallel)
+library(BiocParallel)
+NCORES = 2
+registerDoParallel(NCORES)
+register(DoparParam())
 ```
 
 Here, I will explore the relation between the expression values and some covariates provided with the data.
@@ -149,14 +157,14 @@ pairs(zifa_fq, pch=19, col=colMerged, main="ZIFA FQ")
 
 ```{r zinb}
 raw <- as.matrix(raw)
-zinb <- zinbFit(raw[vargenes,], ncores = ncores, K = 2, epsilon=1e3)
+zinb <- zinbFit(raw[vargenes,], K = 2, epsilon=1e3)
 plot(zinb@W, pch=19, col=colMerged, main="ZINB")
 ```
 
 ## Add batches in ZINB model
 
 ```{r zinb_batch}
-zinb_batch <- zinbFit(raw[vargenes,], ncores = ncores, K = 2, X=model.matrix(~Batch, data=targets), epsilon=1e3)
+zinb_batch <- zinbFit(raw[vargenes,], K = 2, X=model.matrix(~Batch, data=targets), epsilon=1e3)
 plot(zinb_batch@W, pch=19, col=colMerged, main="ZINB")
 ```
 
@@ -171,7 +179,7 @@ sceset <- sceset[keep_feature,]
 sceset <- calculateQCMetrics(sceset)
 qc <- pData(sceset)[,c(4, 7, 10, 14:17)]
 qcpca <- prcomp(qc, scale. = TRUE, center = TRUE)
-zinb_qc <- zinbFit(raw[vargenes,], ncores = ncores, K = 2, X=model.matrix(~qcpca$x[,1:2]), epsilon=1e3)
+zinb_qc <- zinbFit(raw[vargenes,], K = 2, X=model.matrix(~qcpca$x[,1:2]), epsilon=1e3)
 plot(zinb_qc@W, pch=19, col=colMerged, main="ZINB")
 ```
 
@@ -180,7 +188,7 @@ plot(zinb_qc@W, pch=19, col=colMerged, main="ZINB")
 ```{r gc_content}
 gene_info = getGeneLengthAndGCContent(vargenes, "mm10", mode="org.db")
 
-zinb_gc <- zinbFit(raw[vargenes,], ncores = ncores, K = 2, 
+zinb_gc <- zinbFit(raw[vargenes,], K = 2, 
                    V=model.matrix(~log(length) + gc, data=as.data.frame(gene_info)),
                    X=model.matrix(~Batch, data=targets),
                    epsilon=1e3)

@@ -349,3 +349,43 @@ save_plot("espresso_fig2bis.pdf", fig2_bis,
 #
 # MD(obs_mean, zinb_mean, log=FALSE)
 # MD(obs_pi, zinb_pi, log=FALSE)
+
+
+# PCA and ZIFA for raw, TC, TMM, FQ
+data.frame(Dim1=pc_raw[,1], Dim2=pc_raw[,2]) %>%
+  ggplot(aes(Dim1, Dim2, colour=level1)) + geom_point() +
+  scale_color_brewer(palette="Set1") -> pca_raw
+data.frame(Dim1=pc_tc[,1], Dim2=pc_tc[,2]) %>%
+  ggplot(aes(Dim1, Dim2, colour=level1)) + geom_point() +
+  scale_color_brewer(palette="Set1") -> pca_tc
+data.frame(Dim1=pc_tmm[,1], Dim2=pc_tmm[,2]) %>%
+  ggplot(aes(Dim1, Dim2, colour=level1)) + geom_point() +
+  scale_color_brewer(palette="Set1") -> pca_tmm
+data.frame(Dim1=pc_fq[,1], Dim2=pc_fq[,2]) %>%
+  ggplot(aes(Dim1, Dim2, colour=level1)) + geom_point() +
+  scale_color_brewer(palette="Set1") -> pca_fq
+
+fig_pca <- plot_grid(pca_raw, pca_tc, pca_tmm, pca_fq, labels=c("a", "b", "c", "d"))
+save_plot("espresso_supp_pca.pdf", fig_pca,
+          ncol = 2,
+          nrow = 2,
+          base_aspect_ratio = 1.3)
+
+data.frame(Dim1=zifa_raw[,1], Dim2=zifa_raw[,2]) %>%
+  ggplot(aes(Dim1, Dim2, colour=level1)) + geom_point() +
+  scale_color_brewer(palette="Set1") -> zifa_raw
+data.frame(Dim1=zifa_tc[,1], Dim2=zifa_tc[,2]) %>%
+  ggplot(aes(Dim1, Dim2, colour=level1)) + geom_point() +
+  scale_color_brewer(palette="Set1") -> zifa_tc
+data.frame(Dim1=zifa_tmm[,1], Dim2=zifa_tmm[,2]) %>%
+  ggplot(aes(Dim1, Dim2, colour=level1)) + geom_point() +
+  scale_color_brewer(palette="Set1") -> zifa_tmm
+data.frame(Dim1=zifa_fq[,1], Dim2=zifa_fq[,2]) %>%
+  ggplot(aes(Dim1, Dim2, colour=level1)) + geom_point() +
+  scale_color_brewer(palette="Set1") -> zifa_fq
+
+fig_zifa <- plot_grid(zifa_raw, zifa_tc, zifa_tmm, zifa_fq, labels=c("a", "b", "c", "d"))
+save_plot("espresso_supp_zifa.pdf", fig_zifa,
+          ncol = 2,
+          nrow = 2,
+          base_aspect_ratio = 1.3)
