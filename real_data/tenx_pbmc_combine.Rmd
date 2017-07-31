@@ -22,35 +22,123 @@ library(RColorBrewer)
 library(cowplot)
 
 set.seed(8283)
-ncores <- 7
+ncores <- 6
 ```
 
 # Read and combine data
 
-```{r}
+Here we use the frozen PBMC data from the 10x genomics paper. They are supposed 
+to be from two different donors, so we should see some batch effects that hopefully
+ZINB-WaVE will be able to remove.
+
+```{r datain}
 library(cellrangerRkit)
-pipestance_path <- "tenx_pbmc4k"
+pipestance_path <- "tenx_frozen1"
 if(!file.exists(paste0(pipestance_path, "/outs"))) {
-  download_sample(sample_name="pbmc4k",sample_dir=pipestance_path,
-                  host="http://cf.10xgenomics.com/samples/cell-exp/1.3.0/")
+  download_sample(sample_name="frozen_pbmc_donor_b",sample_dir=pipestance_path,
+                  host="http://cf.10xgenomics.com/samples/cell-exp/1.1.0/")
 }
-pbmc4k <- load_cellranger_matrix(pipestance_path)
-dim(pbmc4k)
+pbmc_b <- load_cellranger_matrix(pipestance_path)
+dim(pbmc_b)
 
-pipestance_path <- "tenx_pbmc8k"
+pipestance_path <- "tenx_frozen2"
 if(!file.exists(paste0(pipestance_path, "/outs"))) {
-  download_sample(sample_name="pbmc8k",sample_dir=pipestance_path,
-                  host="http://cf.10xgenomics.com/samples/cell-exp/1.3.0/")
+  download_sample(sample_name="frozen_pbmc_donor_c",sample_dir=pipestance_path,
+                  host="http://cf.10xgenomics.com/samples/cell-exp/1.1.0/")
 }
-pbmc8k <- load_cellranger_matrix(pipestance_path)
-dim(pbmc8k)
+pbmc_c <- load_cellranger_matrix(pipestance_path)
+dim(pbmc_c)
 
-batch <- as.factor(paste0("batch", c(rep(1, NCOL(pbmc4k)), rep(2, NCOL(pbmc8k)))))
+batch <- as.factor(paste0("batch", c(rep(1, NCOL(pbmc_b)), rep(2, NCOL(pbmc_c)))))
 table(batch)
-combined <- cbind(exprs(pbmc4k), exprs(pbmc8k))
 
+stopifnot(all(rownames(pbmc_b) == rownames(pbmc_c)))
+combined <- cbind(exprs(pbmc_b), exprs(pbmc_c))
+dim(combined)
 ```
 
+```{r filter}
+pal <- clusterExperiment::bigPalette
+
+filter <- rowSums(combined>0)>=100
+table(filter)
+filtered <- combined[filter,]
+```
+
+# PCA
+
+```{r pca}
+library(rARPACK)
+fastpca <- function(expr, scale=FALSE) {
+  k <- 50
+  svd_raw <- svds(scale(t(expr), center=TRUE, scale=scale), k=k, nu=k, nv=0)
+  pc_raw <- svd_raw$u %*% diag(svd_raw$d[1:k])
+  return(pc_raw)
+}
+
+norm10x = function (ei)
+{
+  sums = colSums(ei)
+  eo = t(t(ei)*median(sums)/sums)
+  return(eo)
+}
+
+tc <- norm10x(filtered)
+
+dense <- as.matrix(filtered)
+library(pryr)
+object_size(dense)
+object_size(filtered)
+
+vars <- rowVars(log(dense+.1))
+names(vars) <- rownames(dense)
+vars <- sort(vars, decreasing = TRUE)
+vargenes <- names(vars)[1:1000]
+
+dense <- dense[vargenes,]
+
+pc_tc <- fastpca(log(tc[rownames(dense),]+.1))
+
+pairs(pc_tc[,1:5], pch=19, col=pal[batch])
+```
+
+PCA shows pretty strong cell-type clusters, even though the cells are derived from two
+different donors. However, PC5 shows some clear batch effects.
+
+# t-SNE
+
+```{r tsne}
+library(Rtsne)
+tsne_data <- Rtsne(pc_tc[,1:50], pca=FALSE)
+
+plot(tsne_data$Y, pch=19, col=pal[batch])
+```
+
+When displaying the data with t-SNE based on the top 50 PCs, batch effects are
+pretty obvious.
+
+# ZINB-WaVE
+
+```{r zinb}
+library(BiocParallel)
+library(doParallel)
+registerDoParallel(ncores)
+register(DoparParam())
+Xmod <- model.matrix(~batch)
+system.time(zinb_res <- zinbFit(dense, K=10, X = Xmod))
+```
+
+```{r plot_zinb}
+W <- getW(zinb_res)
+plot(W, pch=19, col=pal[batch])
+pairs(W[,1:5], pch=19, col=pal[batch])
+```
+
+```{r tsne_zinb}
+tsne_zinb <- Rtsne(W, pca=FALSE)
+
+plot(tsne_zinb$Y, pch=19, col=pal[batch])
+```
 
 # Session Info
 
