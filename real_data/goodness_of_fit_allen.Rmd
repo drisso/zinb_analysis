@@ -1,5 +1,5 @@
 ---
-title: "Goddness-of-fit Allen"
+title: "Goodness-of-fit Allen"
 author: "Fanny Perraudeau"
 date: "03/24/2017"
 output: 
@@ -142,30 +142,30 @@ hurdlePY0 = rowMeans(P_z_0)
 
 MD-plot estimated vs. observed mean count, log scale
 ```{r plot1}
-#pdf(sprintf('../paper/6680489mtyrjx/gof_mu_%s.pdf', df), width = 10, height = 5)
-par(mfrow=c(2,2))
+pdf(sprintf('../paper/6680489mtyrjx/gof_mu_%s.pdf', df), width = 10, height = 5)
+par(mfrow=c(1,3))
 xlim =  c(2,9.5)
 ylim = c(-1, 3)
-plotMD(zinbEY, logAveCount, xlim = xlim, ylim = ylim, main = 'ZINB-WaVE')
-plotMD(nbEY, logAveCount, xlim = xlim, ylim = ylim, main = 'NB, edgeR')
+plotMD(zinbEY, logAveCount, xlim = xlim, ylim = ylim, main = 'ZINB, ZINB-WaVE')
 plotMD(hurdleEY, rowMeans(log1p(core)), xlim = xlim, ylim = ylim, main = 'Hurdle, MAST')
-#dev.off()
+plotMD(nbEY, logAveCount, xlim = xlim, ylim = ylim, main = 'NB, edgeR')
+dev.off()
 ```
 
 MD-plot estimated vs. observed zero probability
 ```{r plot2}
-#pdf(sprintf('../paper/6680489mtyrjx/gof_pi_%s.pdf', df), width = 10, height = 5)
-par(mfrow = c(2, 2))
-plotMD(zinbPY0, prop0, xlim = c(0, .8), ylim = c(-.2, .1), main = 'ZINB-WaVE')
-plotMD(nbPY0, prop0, xlim = c(0, .8), ylim = c(-.2, .1), main = 'NB, edgeR')
+pdf(sprintf('../paper/6680489mtyrjx/gof_pi_%s.pdf', df), width = 10, height = 5)
+par(mfrow = c(1, 3))
+plotMD(zinbPY0, prop0, xlim = c(0, .8), ylim = c(-.2, .1), main = 'ZINB, ZINB-WaVE')
 plotMD(hurdlePY0, prop0, xlim = c(0, .8), ylim = c(-.2, .1), main = 'Hurdle, MAST')
-#dev.off()
+plotMD(nbPY0, prop0, xlim = c(0, .8), ylim = c(-.2, .1), main = 'NB, edgeR')
+dev.off()
 ```
 
 Estimated dispersion versus observed zero probability
 ```{r plot3}
-#pdf(sprintf('../paper/6680489mtyrjx/gof_disp_%s.pdf', df), width = 10, height = 5)
-par(mfrow = c(2,2))
+pdf(sprintf('../paper/6680489mtyrjx/gof_disp_%s.pdf', df), width = 10, height = 5)
+par(mfrow = c(1,3))
 xpred = seq(0, 1, .05)
 fitzinb = loess(exp(-zz@zeta) ~ rowMeans(core == 0))
 predzinb = predict(fitzinb, xpred)
@@ -177,21 +177,21 @@ predhurdle = predict(fithurdle, xpred)
 smoothScatter(rowMeans(core == 0), exp(-zz@zeta),
               xlab = 'Observed zero probability',ylim = c(0, 15),
               ylab = 'Estimated dispersion',xlim = c(0,1), 
-              main = 'ZINB-WaVE')
+              main = 'ZINB, ZINB-WaVE')
 lines(xpred, predzinb, col = 'red', type = 'l', lwd=2)
-
-smoothScatter(rowMeans(core == 0), nb$disp,
-              xlab = 'Observed zero probability',ylim = c(0, 15),
-              ylab = 'Estimated dispersion',xlim = c(0,1), 
-              main = 'NB, edgeR')
-lines(xpred, prednb, col = 'red', type = 'l', lwd=2)
 
 smoothScatter(rowMeans(core == 0), var_gaussian,
               xlab = 'Observed zero probability',ylim = c(0, 15),
               ylab = 'Estimated gaussian variance',xlim = c(0,1), 
               main = 'Hurdle, MAST')
 lines(xpred, predhurdle, col = 'red', type = 'l', lwd=2)
-#dev.off()
+
+smoothScatter(rowMeans(core == 0), nb$disp,
+              xlab = 'Observed zero probability',ylim = c(0, 15),
+              ylab = 'Estimated dispersion',xlim = c(0,1), 
+              main = 'NB, edgeR')
+lines(xpred, prednb, col = 'red', type = 'l', lwd=2)
+dev.off()
 ```
 
 

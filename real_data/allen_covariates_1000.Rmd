@@ -147,8 +147,16 @@ plot(zifa_fq, pch=19, col=colCl, main="ZIFA FQ")
 
 ## ZINB
 
+```{r}
+library(doParallel)
+library(BiocParallel)
+NCORES = 2
+registerDoParallel(NCORES)
+register(DoparParam())
+```
+
 ```{r zinb}
-zinb <- zinbFit(raw[vargenes,], ncores = ncores, K = 2)
+zinb <- zinbFit(raw[vargenes,], K = 2)
 plot(zinb@W, pch=19, col=colMerged, main="ZINB")
 plot(zinb@W, pch=19, col=colCl, main="ZINB")
 ```
@@ -157,13 +165,13 @@ plot(zinb@W, pch=19, col=colCl, main="ZINB")
 
 ## PCA
 
-Here, we look at PCA (using TC normalization) to see which covariates influence the data.
+Here, we look at PCA (using FQ normalization) to see which covariates influence the data.
 
 ```{r pca_cov}
 detection_rate <- colSums(raw>0)
 coverage <- colSums(raw)
 
-df <- cbind(data.frame(PC1=pc_tc[,1], PC2=pc_tc[,2], coverage=coverage, detection_rate=detection_rate), as.data.frame(colData(allen_core)[,1:15]))
+df <- cbind(data.frame(PC1=pc_fq[,1], PC2=pc_fq[,2], coverage=coverage, detection_rate=detection_rate), as.data.frame(colData(allen_core)[,1:15]))
 
 df %>% ggplot(aes(PC1, PC2)) + geom_point(aes(color=coverage)) + scale_colour_gradient(low="blue", high="yellow") + theme_classic()
 
@@ -181,7 +189,7 @@ legend("topright", colnames(df)[3:19], fill=rainbow(17), border=rainbow(17), cex
 ## ZIFA
 
 ```{r zifa_cov}
-df <- cbind(data.frame(Z1=zifa_tc[,1], Z2=zifa_tc[,2], coverage=coverage, detection_rate=detection_rate), as.data.frame(colData(allen_core)[,1:15]))
+df <- cbind(data.frame(Z1=zifa_fq[,1], Z2=zifa_fq[,2], coverage=coverage, detection_rate=detection_rate), as.data.frame(colData(allen_core)[,1:15]))
 
 df %>% ggplot(aes(Z1, Z2)) + geom_point(aes(color=coverage)) + scale_colour_gradient(low="blue", high="yellow") + theme_classic()
 
@@ -218,7 +226,7 @@ legend("topright", colnames(df)[3:19], fill=rainbow(17), border=rainbow(17), cex
 
 ```{r zinb_batch}
 qcpca <- prcomp(as.matrix(colData(allen_core)[,1:15]), center=TRUE, scale=TRUE)
-zinb_batch <- zinbFit(raw[vargenes,], ncores = ncores, K = 2, X=qcpca$x[,1:2])
+zinb_batch <- zinbFit(raw[vargenes,], K = 2, X=qcpca$x[,1:2])
 plot(zinb_batch@W, pch=19, col=colMerged, main="ZINB")
 ```
 
@@ -252,7 +260,7 @@ cluster2[cluster2 == "L5 Ucma"] <- "L5a"
 cluster2[grep("^L5b", cluster2)] <- "L5b"
 cluster2 <- as.factor(cluster2)
 
-zinb_bio <- zinbFit(raw[vargenes,], ncores = ncores, K = 2, X=model.matrix(~cluster2), epsilon=1e3)
+zinb_bio <- zinbFit(raw[vargenes,], K = 2, X=model.matrix(~cluster2), epsilon=1e3)
 plot(zinb_bio@W, pch=19, col=colMerged, main="ZINB")
 ```
 
@@ -294,7 +302,7 @@ table(pamres$clustering)
 plot(zinb_bio@W[-outliers,], col=col1[pamres$clustering], pch=19)
 ```
 
-```{r zinb_check_batch}
+```{r zinb_check_batch,eval=FALSE}
 metadata <- read.csv("../../scone_analysis/data/allen_metadata.csv", stringsAsFactors = FALSE)
 ids <- read.table("../../scone_analysis/data/allen_ids.txt", stringsAsFactors = FALSE, header = TRUE)
 
@@ -316,13 +324,13 @@ boxplot(zinb_bio@W[-outliers,1]~batch[-outliers], las=2)
 
 ## Add batches in ZINB model
 
-```{r zinb_batch2, dependson="zinb_check_batch"}
-zinb_batch <- zinbFit(raw[vargenes,], ncores = ncores, K = 2, X=model.matrix(~batch), epsilon=1e4)
+```{r zinb_batch2, dependson="zinb_check_batch",eval=FALSE}
+zinb_batch <- zinbFit(raw[vargenes,], K = 2, X=model.matrix(~batch), epsilon=1e4)
 plot(zinb_batch@W, pch=19, col=colMerged, main="ZINB")
 plot(zinb_batch@W, pch=19, col=colCl, main="ZINB")
 ```
 
-```{r zinb_batch2_cov, dependson="zinb_batch2"}
+```{r zinb_batch2_cov, dependson="zinb_batch2",eval=FALSE}
 plot(zinb@W, col=col1[batch], pch=19, main="Colored by batch")
 
 df <- cbind(data.frame(W1=zinb_batch@W[,1], W2=zinb_batch@W[,2], coverage=coverage, detection_rate=detection_rate), as.data.frame(colData(allen_core)[,1:15]))
@@ -350,7 +358,12 @@ rownames(gene_info) = bm[,1]
 gene_info = na.omit(gene_info)
 ```
 
-```{r write_out, dependson=c("zinb", "zifa", "pca", "zinb_batch2", "zinb_bio")}
+```{r write_out, dependson=c("zinb", "zifa", "pca", "zinb_batch2", "zinb_bio"), eval=FALSE}
 save(zinb, zinb_batch, zinb_bio, zifa_fq, zifa_tmm, zifa_tc, zifa_raw, pc_deseq, pc_tmm, pc_fq, pc_tc, pc_raw, 
+file="allen_covariates_1000.rda")
+```
+
+```{r write_out_bis, dependson=c("zinb", "zifa", "pca", "zinb_bio")}
+save(zinb, zinb_bio, zifa_fq, zifa_tmm, zifa_tc, zifa_raw, pc_deseq, pc_tmm, pc_fq, pc_tc, pc_raw, 
 file="allen_covariates_1000.rda")
 ```
