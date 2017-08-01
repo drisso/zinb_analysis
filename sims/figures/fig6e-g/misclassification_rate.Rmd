@@ -1,0 +1,121 @@
+---
+title: "Misclassification rate"
+author: "Fanny Perraudeau"
+date: "08/01/2017"
+output: 
+  html_document: 
+  fig_height: 10
+fig_width: 10
+toc: yes
+code_folding: hide
+toc_float: yes
+---
+```{r options, echo=FALSE, results="hide",message=FALSE, error=FALSE, include=FALSE, autodep=TRUE}
+knitr::opts_chunk$set(fig.align="center", cache=TRUE, error=FALSE, message=FALSE, warning=TRUE, fig.width=6, fig.height=6)
+library(zinbwave)
+library(doParallel)
+library(BiocParallel)
+library(edgeR)
+library(EDASeq)
+library(rARPACK)
+library(scone)
+```
+
+```{r}
+NCORES = 2
+registerDoParallel(NCORES)
+register(DoparParam())
+```
+
+```{r data}
+ncells = 1000
+add = '_ziadd0.67'
+fileName = sprintf('simLun_%s%s', ncells, add)
+load(paste0(fileName, '.rda'))
+counts = simData[[1]]$counts
+counts = counts[rowSums(counts) != 0, ]
+```
+
+# Methods
+
+## ZINB
+```{r zinb}
+zinb = zinbFit(counts, K = 2, commondispersion = FALSE)
+W = getW(zinb)
+```
+
+## PCA
+```{r pca}
+fastpca <- function(expr, K = 2, scale=FALSE) {
+  svd_raw <- svds(scale(t(expr), center=TRUE, scale=scale), k=K, nu=K, nv=0)
+  pc_raw <- svd_raw$u %*% diag(svd_raw$d[1:K])
+  return(pc_raw)
+}
+
+totalcount = function (ei)
+{
+  sums = colSums(ei)
+  eo = t(t(ei)*mean(sums)/sums)
+  return(eo)
+}
+
+tc <- totalcount(counts)
+tmm <- TMM_FN(counts)
+fq <- FQT_FN(counts)
+
+pca_raw <- fastpca(log1p(t(counts)))
+pca_tc  <- fastpca(log1p(tc))
+pca_tmm <- fastpca(log1p(tmm))
+pca_fq  <- fastpca(t(log1p(fq)))
+```
+
+## ZIFA
+```{r zifa}
+wrapRzifa <- function(Y, block = TRUE, k=2){
+  # wrapper R function for ZIFA.
+  # md5 hashing and temporary files are used not to re-run zifa 
+  # if it has already be run on this computer.
+  d = digest(Y, "md5")
+  tmp = paste0(tempdir(), '/', d)
+  write.csv(Y, paste0(tmp, '.csv'))
+  
+  if (!file.exists(paste0(tmp, "_", k, '_zifa.csv'))){
+    print('run ZIFA')
+    bb = ifelse(block, '-b ', '')
+    cmd = sprintf('python ../run_zifa.py -d %d %s%s.csv %s_%d_zifa.csv', k, bb, tmp, tmp, k)
+    system(cmd)
+  }
+  read.csv(sprintf("%s_%d_zifa.csv", tmp, k), header=FALSE)
+}
+
+zifa_raw <- wrapRzifa(log1p(counts))
+zifa_tc  <- wrapRzifa(log1p(tc))
+zifa_tmm <- wrapRzifa(log1p(tmm))
+zifa_fq  <- wrapRzifa(log1p(fq))
+```
+
+# Clustering
+```{r clust}
+res <- list('ZINB-WaVE_K=2' = W,
+            'PCA_RAW' = pca_raw, 'PCA_TC' = pca_tc,
+            'PCA_TMM' = pca_tmm, 'PCA_FQ' = pca_fq,
+            'ZIFA_RAW' = zifa_raw, 'ZIFA_TC' = zifa_tc,
+            'ZIFA_TMM' = zifa_tmm, 'ZIFA_FQ' = zifa_fq)
+
+cl <- lapply(1:length(res), function(i){
+  km = kmeans(res[[i]], centers = 3, iter.max = 1000, nstart = 1000)
+  estClust = km$cluster
+  
+  par(mfrow=c(1,2))
+  plot(res[[i]], col = labels, main = paste(names(res)[i], '\nTrue Labels'))
+  plot(res[[i]], col = estClust, main = paste(names(res)[i], '\nFound Labels'))
+  par(mfrow=c(1,1))
+  
+  estClust
+})
+```
+
+```{r tab}
+names(cl) = names(res)
+lapply(cl, table, labels)
+```

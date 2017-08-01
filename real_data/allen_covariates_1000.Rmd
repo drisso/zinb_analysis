@@ -224,13 +224,13 @@ legend("topright", colnames(df)[3:19], fill=rainbow(17), border=rainbow(17), cex
 
 ## Add QC features in ZINB model
 
-```{r zinb_batch}
+```{r zinb_batch, eval=FALSE}
 qcpca <- prcomp(as.matrix(colData(allen_core)[,1:15]), center=TRUE, scale=TRUE)
 zinb_batch <- zinbFit(raw[vargenes,], K = 2, X=qcpca$x[,1:2])
 plot(zinb_batch@W, pch=19, col=colMerged, main="ZINB")
 ```
 
-```{r zinb_batch_cov}
+```{r zinb_batch_cov, eval=FALSE}
 plot(zinb_batch@W, col=colMerged, pch=20, main="Colored by batch")
 
 df <- cbind(data.frame(W1=zinb_batch@W[,1], W2=zinb_batch@W[,2], coverage=coverage, detection_rate=detection_rate), as.data.frame(colData(allen_core)[,1:15]))
@@ -250,7 +250,7 @@ legend("topright", colnames(df)[3:19], fill=rainbow(17), border=rainbow(17), cex
 
 ## Add layers in ZINB model
 
-```{r zinb_bio}
+```{r zinb_bio, eval=FALSE}
 cluster2 <- as.character(level2)
 cluster2[cluster2 %in% c("Pvalb Tacr3", "Sst Myh8")] <- "Other"
 cluster2[grep("^L4", cluster2)] <- "L4"
@@ -264,7 +264,7 @@ zinb_bio <- zinbFit(raw[vargenes,], K = 2, X=model.matrix(~cluster2), epsilon=1e
 plot(zinb_bio@W, pch=19, col=colMerged, main="ZINB")
 ```
 
-```{r zinb_bio_cov, dependson="zinb_bio"}
+```{r zinb_bio_cov, dependson="zinb_bio", eval=FALSE}
 plot(zinb_bio@W, col=col2[level2], pch=20, main="Colored by layer")
 legend("bottomright", levels(level2), fill=col2, cex=.5)
 
@@ -283,7 +283,7 @@ barplot(abs(cors), beside = TRUE, col=rainbow(17), border=rainbow(17), ylim=c(0,
 legend("topright", colnames(df)[3:19], fill=rainbow(17), border=rainbow(17), cex=.5)
 ```
 
-```{r zinb_outliers, dependson="zinb_bio"}
+```{r zinb_outliers, dependson="zinb_bio", eval=FALSE}
 outliers <- which(zinb_bio@W[,1]>2)
 plot(zinb_bio@W, col="grey", pch=19)
 points(zinb_bio@W[outliers,], col="red", pch=19)
@@ -363,7 +363,7 @@ save(zinb, zinb_batch, zinb_bio, zifa_fq, zifa_tmm, zifa_tc, zifa_raw, pc_deseq,
 file="allen_covariates_1000.rda")
 ```
 
-```{r write_out_bis, dependson=c("zinb", "zifa", "pca", "zinb_bio")}
-save(zinb, zinb_bio, zifa_fq, zifa_tmm, zifa_tc, zifa_raw, pc_deseq, pc_tmm, pc_fq, pc_tc, pc_raw, 
+```{r write_out_bis, dependson=c("zinb", "zifa", "pca")}
+save(zinb, zifa_fq, zifa_tmm, zifa_tc, zifa_raw, pc_deseq, pc_tmm, pc_fq, pc_tc, pc_raw, 
 file="allen_covariates_1000.rda")
 ```

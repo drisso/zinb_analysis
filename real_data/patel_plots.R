@@ -5,7 +5,7 @@ library(ggplot2)
 
 load("patel_covariates.rda")
 
-counts <- read.table("Patel/glioblastoma_raw_rnaseq_SCandbulk_counts.txt", header=TRUE, stringsAsFactors = FALSE, row.names=NULL)
+counts <- read.table("../data/patel/glioblastoma_raw_rnaseq_SCandbulk_counts.txt", header=TRUE, stringsAsFactors = FALSE, row.names=NULL)
 
 gene_symbols <- counts[,1]
 ensembl_ids <- counts[,2]
@@ -14,7 +14,7 @@ sample_names <- colnames(counts)[-(1:2)]
 all.counts <- counts[,-(1:2)]
 rownames(all.counts) <- ensembl_ids
 
-metadata <- read.table("patel/SraRunTable.txt", sep='\t', stringsAsFactors = FALSE, header=TRUE, row.names=5, na.strings = "<not provided>")
+metadata <- read.table("../data/patel/SraRunTable.txt", sep='\t', stringsAsFactors = FALSE, header=TRUE, row.names=5, na.strings = "<not provided>")
 metadata <- metadata[sample_names,]
 
 # select only single-cell samples from patients
@@ -43,7 +43,7 @@ keep_feature <- rowSums(exprs(sceset) > 0) > 0
 sceset <- sceset[keep_feature,]
 
 sceset <- calculateQCMetrics(sceset)
-qc <- pData(sceset)[,c(1, 4, 7, 11:14)]
+qc <- pData(sceset)[,c(1, 4, 7, 12:15)]
 
 filter <- rowSums(all.counts>10)>=10
 raw <- all.counts[filter,]
@@ -51,11 +51,11 @@ raw <- all.counts[filter,]
 colMerged <- col1[level1]
 colBatch <- col2[level2]
 
-data.frame(Dim1=pc_tc[,1], Dim2=pc_tc[,2]) %>%
+data.frame(Dim1=pc_fq[,1], Dim2=pc_fq[,2]) %>%
   ggplot(aes(Dim1, Dim2, colour=level1)) + geom_point() +
   scale_color_brewer(palette="Set1") -> panel1_pca
 
-data.frame(Dim1=zifa_tc[,1], Dim2=zifa_tc[,2]) %>%
+data.frame(Dim1=zifa_fq[,1], Dim2=zifa_fq[,2]) %>%
   ggplot(aes(Dim1, Dim2, colour=level1)) + geom_point() +
   scale_color_brewer(palette="Set1") -> panel1_zifa
 
@@ -71,9 +71,9 @@ p1 <- plot_grid(panel1_pca + theme(legend.position = "none"),
 legend <- get_legend(panel1_pca)
 upper <- plot_grid(p1, legend, rel_widths = c(3, .6))
 
-data.frame(Dim1=pc_tc[,1], Dim2=pc_tc[,2]) %>%
+data.frame(Dim1=pc_fq[,1], Dim2=pc_fq[,2]) %>%
   ggplot(aes(Dim1, Dim2)) + geom_point(aes(color=detection_rate)) + scale_colour_gradient(low="blue", high="yellow") -> panel2_pca
-data.frame(Dim1=zifa_tc[,1], Dim2=zifa_tc[,2]) %>%
+data.frame(Dim1=zifa_fq[,1], Dim2=zifa_fq[,2]) %>%
   ggplot(aes(Dim1, Dim2)) + geom_point(aes(color=detection_rate)) + scale_colour_gradient(low="blue", high="yellow") -> panel2_zifa
 data.frame(Dim1=zinb@W[,1], Dim2=zinb@W[,2]) %>%
   ggplot(aes(Dim1, Dim2)) + geom_point(aes(color=detection_rate)) + scale_colour_gradient(low="blue", high="yellow") -> panel2_zinb
@@ -94,7 +94,7 @@ save_plot("patel_fig1.pdf", fig1,
           base_aspect_ratio = 1.3
 )
 
-cors <- lapply(1:2, function(i) abs(cor(pc_tc[,i], qc, method="spearman")))
+cors <- lapply(1:2, function(i) abs(cor(pc_fq[,i], qc)))
 cors <- unlist(cors)
 bars <- data.frame(AbsoluteCorrelation=cors,
                    QC=rep(stringr::str_to_lower(colnames(qc)), 2),
@@ -103,9 +103,9 @@ bars <- data.frame(AbsoluteCorrelation=cors,
 bars %>%
   ggplot(aes(Dimension, AbsoluteCorrelation, group=QC, fill=QC)) +
   geom_bar(stat="identity", position='dodge') +
-  scale_fill_manual(values=col2) + ylim(0, .5) -> panel2_pca
+  scale_fill_manual(values=col2) + ylim(0, 1) -> panel2_pca
 
-cors <- lapply(1:2, function(i) abs(cor(zifa_tc[,i], qc)))
+cors <- lapply(1:2, function(i) abs(cor(zifa_fq[,i], qc)))
 cors <- unlist(cors)
 bars <- data.frame(AbsoluteCorrelation=cors,
                    QC=rep(stringr::str_to_lower(colnames(qc)), 2),
@@ -114,7 +114,7 @@ bars <- data.frame(AbsoluteCorrelation=cors,
 bars %>%
   ggplot(aes(Dimension, AbsoluteCorrelation, group=QC, fill=QC)) +
   geom_bar(stat="identity", position='dodge') +
-  scale_fill_manual(values=col2) + ylim(0, .5) -> panel2_zifa
+  scale_fill_manual(values=col2) + ylim(0, 1) -> panel2_zifa
 
 cors <- lapply(1:2, function(i) abs(cor(zinb@W[,i], qc)))
 cors <- unlist(cors)
@@ -125,7 +125,7 @@ bars <- data.frame(AbsoluteCorrelation=cors,
 bars %>%
   ggplot(aes(Dimension, AbsoluteCorrelation, group=QC, fill=QC)) +
   geom_bar(stat="identity", position='dodge') +
-  scale_fill_manual(values=col2) + ylim(0, .5) -> panel2_zinb
+  scale_fill_manual(values=col2) + ylim(0, 1) -> panel2_zinb
 
 p2 <- plot_grid(panel2_pca + theme(legend.position = "none"),
                 panel2_zifa + theme(legend.position = "none"),

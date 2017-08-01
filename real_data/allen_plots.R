@@ -200,17 +200,17 @@ save_plot("allen_supp_sil.pdf", sil)
 
 # PCA and ZIFA for raw, TC, TMM, FQ
 data.frame(Dim1=pc_raw[,1], Dim2=pc_raw[,2]) %>%
-  ggplot(aes(Dim1, Dim2, colour=level1)) + geom_point() +
-  scale_color_brewer(palette="Set1") -> pca_raw
+  ggplot(aes(Dim1, Dim2, shape=layer, colour=cluster2)) + geom_point() +
+  scale_color_manual(values=col2) -> pca_raw
 data.frame(Dim1=pc_tc[,1], Dim2=pc_tc[,2]) %>%
-  ggplot(aes(Dim1, Dim2, colour=level1)) + geom_point() +
-  scale_color_brewer(palette="Set1") -> pca_tc
+  ggplot(aes(Dim1, Dim2, shape=layer, colour=cluster2)) + geom_point() +
+  scale_color_manual(values=col2) -> pca_tc
 data.frame(Dim1=pc_tmm[,1], Dim2=pc_tmm[,2]) %>%
-  ggplot(aes(Dim1, Dim2, colour=level1)) + geom_point() +
-  scale_color_brewer(palette="Set1") -> pca_tmm
+  ggplot(aes(Dim1, Dim2, shape=layer, colour=cluster2)) + geom_point() +
+  scale_color_manual(values=col2) -> pca_tmm
 data.frame(Dim1=pc_fq[,1], Dim2=pc_fq[,2]) %>%
-  ggplot(aes(Dim1, Dim2, colour=level1)) + geom_point() +
-  scale_color_brewer(palette="Set1") -> pca_fq
+  ggplot(aes(Dim1, Dim2, shape=layer, colour=cluster2)) + geom_point() +
+  scale_color_manual(values=col2) -> pca_fq
 
 fig_pca <- plot_grid(pca_raw, pca_tc, pca_tmm, pca_fq, labels=c("a", "b", "c", "d"))
 save_plot("allen_supp_pca.pdf", fig_pca,
@@ -219,17 +219,17 @@ save_plot("allen_supp_pca.pdf", fig_pca,
           base_aspect_ratio = 1.3)
 
 data.frame(Dim1=zifa_raw[,1], Dim2=zifa_raw[,2]) %>%
-  ggplot(aes(Dim1, Dim2, colour=level1)) + geom_point() +
-  scale_color_brewer(palette="Set1") -> zifa_raw
+  ggplot(aes(Dim1, Dim2, shape=layer, colour=cluster2)) + geom_point() +
+  scale_color_manual(values=col2) -> zifa_raw
 data.frame(Dim1=zifa_tc[,1], Dim2=zifa_tc[,2]) %>%
-  ggplot(aes(Dim1, Dim2, colour=level1)) + geom_point() +
-  scale_color_brewer(palette="Set1") -> zifa_tc
+  ggplot(aes(Dim1, Dim2, shape=layer, colour=cluster2)) + geom_point() +
+  scale_color_manual(values=col2) -> zifa_tc
 data.frame(Dim1=zifa_tmm[,1], Dim2=zifa_tmm[,2]) %>%
-  ggplot(aes(Dim1, Dim2, colour=level1)) + geom_point() +
-  scale_color_brewer(palette="Set1") -> zifa_tmm
+  ggplot(aes(Dim1, Dim2, shape=layer, colour=cluster2)) + geom_point() +
+  scale_color_manual(values=col2) -> zifa_tmm
 data.frame(Dim1=zifa_fq[,1], Dim2=zifa_fq[,2]) %>%
-  ggplot(aes(Dim1, Dim2, colour=level1)) + geom_point() +
-  scale_color_brewer(palette="Set1") -> zifa_fq
+  ggplot(aes(Dim1, Dim2, shape=layer, colour=cluster2)) + geom_point() +
+  scale_color_manual(values=col2) -> zifa_fq
 
 fig_zifa <- plot_grid(zifa_raw, zifa_tc, zifa_tmm, zifa_fq, labels=c("a", "b", "c", "d"))
 save_plot("allen_supp_zifa.pdf", fig_zifa,

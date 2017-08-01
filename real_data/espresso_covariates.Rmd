@@ -28,6 +28,7 @@ library(EDASeq)
 library(digest)
 library(edgeR)
 library(DESeq2)
+library(sva)
 
 set.seed(8283)
 options(getClass.msg=FALSE) #get rid of annoying messages about cache until fixed internally in R
@@ -46,7 +47,7 @@ register(DoparParam())
 Here, I will explore the relation between the expression values and some covariates provided with the data.
 
 ```{r datain}
-all.counts <- read.table("ESpresso/counttable_es.csv", header=TRUE, row.names=1, colClasses=c("character", rep("integer", 704)))
+all.counts <- read.table("../data/espresso/counttable_es.csv", header=TRUE, row.names=1, colClasses=c("character", rep("integer", 704)))
 serum <- sub("ola_mES_([^_]+)_.*", "\\1", colnames(all.counts))
 batch <- sub("ola_mES_[^_]+_([^_]+)_.*", "\\1", colnames(all.counts))
 targets <- data.frame(Serum=serum, Batch=batch)
@@ -168,7 +169,7 @@ zinb_batch <- zinbFit(raw[vargenes,], K = 2, X=model.matrix(~Batch, data=targets
 plot(zinb_batch@W, pch=19, col=colMerged, main="ZINB")
 ```
 
-```{r zinb_qc}
+```{r zinb_qc,eval=FALSE}
 library(scater)
 rownames(targets) <- colnames(all.counts)
 sceset <- newSCESet(countData = all.counts, phenoData = AnnotatedDataFrame(targets))
@@ -185,7 +186,7 @@ plot(zinb_qc@W, pch=19, col=colMerged, main="ZINB")
 
 # Gene-level covariates
 
-```{r gc_content}
+```{r gc_content,eval=FALSE}
 gene_info = getGeneLengthAndGCContent(vargenes, "mm10", mode="org.db")
 
 zinb_gc <- zinbFit(raw[vargenes,], K = 2, 
@@ -211,6 +212,24 @@ names(sil_cl) <- names(methods)
 barplot(sil_cl, las=3)
 ```
 
-```{r write_out, dependson=c("zinb", "zifa", "pca", "zinb_batch", "zinb_qc")}
+## ComBat
+```{r}
+combat_raw <- ComBat(log1p(raw[vargenes,]), targets$Batch, BPPARAM = bpparam())
+combat_tc  <- ComBat(log1p(tc[vargenes, ]), targets$Batch, BPPARAM = bpparam())
+combat_tmm <- ComBat(log1p(tmm[vargenes,]), targets$Batch, BPPARAM = bpparam())
+combat_fq  <- ComBat(log1p(fq[vargenes, ]), targets$Batch, BPPARAM = bpparam())
+
+pc_combat_raw <- fastpca(combat_raw)
+pc_combat_tc  <- fastpca(combat_tc)
+pc_combat_tmm <- fastpca(combat_tmm)
+pc_combat_fq  <- fastpca(combat_fq)
+```
+
+
+```{r write_out, dependson=c("zinb", "zifa", "pca", "zinb_batch", "zinb_qc"), eval=FALSE}
 save(zinb, zinb_batch, zinb_qc, zifa_fq, zifa_tmm, zifa_tc, zifa_raw, pc_tmm, pc_fq, pc_tc, pc_raw, file="espresso_covariates.rda")
+```
+
+```{r write_out2, dependson=c("zinb", "zifa", "pca", "zinb_batch")}
+save(zinb, zinb_batch, zifa_fq, zifa_tmm, zifa_tc, zifa_raw, pc_tmm, pc_fq, pc_tc, pc_raw, pc_combat_raw, pc_combat_fq, pc_combat_tc, pc_combat_tmm, file="espresso_covariates.rda")
 ```
