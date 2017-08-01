@@ -38,7 +38,7 @@ ncores <- 2
 Here, I will explore the relation between the expression values and some covariates provided with the data.
 
 ```{r datain}
-counts <- read.table("Patel/glioblastoma_raw_rnaseq_SCandbulk_counts_withannots.txt", header=TRUE, stringsAsFactors = FALSE)
+counts <- read.table("../data/patel/glioblastoma_raw_rnaseq_SCandbulk_counts_withannots.txt", header=TRUE, stringsAsFactors = FALSE)
 
 info <- as.matrix(counts)[1,-(1:3)]
 counts <- counts[-1,-1]
@@ -50,7 +50,7 @@ sample_names <- colnames(counts)[-(1:2)]
 all.counts <- counts[,-(1:2)]
 rownames(all.counts) <- ensembl_ids
 
-metadata <- read.table("patel/SraRunTable.txt", sep='\t', stringsAsFactors = FALSE, header=TRUE, row.names=5, na.strings = "<not provided>")
+metadata <- read.table("../data/patel/SraRunTable.txt", sep='\t', stringsAsFactors = FALSE, header=TRUE, row.names=5, na.strings = "<not provided>")
 metadata <- metadata[sample_names,]
 
 batch <- stringr::str_split_fixed(info, "_", 2)[,2]
@@ -166,7 +166,7 @@ pairs(zifa_fq, pch=19, col=colMerged, main="ZIFA FQ")
 
 ```{r zinb}
 raw <- as.matrix(raw)
-zinb <- zinbFit(raw[vargenes,], ncores = ncores, K = 2, epsilon=1e3)
+zinb <- zinbFit(raw[vargenes,], K = 2, epsilon=1e3)
 plot(zinb@W, pch=19, col=colMerged, main="ZINB")
 ```
 
@@ -180,12 +180,12 @@ names(vars) <- rownames(tc)
 vars <- sort(vars, decreasing = TRUE)
 vargenes2 <- names(vars)[1:1000]
 
-zinb_batch <- zinbFit(raw[vargenes2, subset], ncores = ncores, K = 2, X=model.matrix(~batch[subset]), epsilon=1e3)
+zinb_batch <- zinbFit(raw[vargenes2, subset], K = 2, X=model.matrix(~batch[subset]), epsilon=1e3)
 plot(zinb_batch@W, pch=19, col=colMerged[subset], main="ZINB")
 plot(zinb_batch@W, pch=19, col=col2[droplevels(level2[subset])], main="ZINB")
 ```
 
-```{r zinb_subset}
+```{r zinb_subset,eval=FALSE}
 subset <- which(level1=="MGH26")
 
 vars <- rowVars(log1p(tc[,subset]))
@@ -193,11 +193,11 @@ names(vars) <- rownames(tc)
 vars <- sort(vars, decreasing = TRUE)
 vargenes2 <- names(vars)[1:1000]
 
-zinb_sub1 <- zinbFit(raw[vargenes2, subset], ncores = ncores, K = 2, epsilon=1e3)
+zinb_sub1 <- zinbFit(raw[vargenes2, subset], K = 2, epsilon=1e3)
 plot(zinb_sub1@W, pch=19, col=col1[droplevels(batch[subset])], main="ZINB")
 plot(zinb_sub1@W, pch=19, col=col2[droplevels(level2[subset])], main="ZINB")
 
-zinb_sub2 <- zinbFit(raw[vargenes2, subset], ncores = ncores, K = 2, X=model.matrix(~batch[subset]), epsilon=1e3)
+zinb_sub2 <- zinbFit(raw[vargenes2, subset], K = 2, X=model.matrix(~batch[subset]), epsilon=1e3)
 plot(zinb_sub2@W, pch=19, col=col1[droplevels(batch[subset])], main="ZINB")
 plot(zinb_sub2@W, pch=19, col=col2[droplevels(level2[subset])], main="ZINB")
 ```

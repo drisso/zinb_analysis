@@ -41,11 +41,11 @@ col1 <- brewer.pal(9, "Set1")
 col2 <- brewer.pal(8, "Set2")
 colMerged <- col2[level1]
 
-data.frame(Dim1=pc_tc[,1], Dim2=pc_tc[,2]) %>%
+data.frame(Dim1=pc_fq[,1], Dim2=pc_fq[,2]) %>%
   ggplot(aes(Dim1, Dim2, colour=level1)) + geom_point() +
   scale_color_brewer(palette="Set2") -> panel1_pca
 
-data.frame(Dim1=zifa_tc[,1], Dim2=zifa_tc[,2]) %>%
+data.frame(Dim1=zifa_fq[,1], Dim2=zifa_fq[,2]) %>%
   ggplot(aes(Dim1, Dim2, colour=level1)) + geom_point() +
   scale_color_brewer(palette="Set2") -> panel1_zifa
 
@@ -61,9 +61,9 @@ p1 <- plot_grid(panel1_pca + theme(legend.position = "none"),
 legend <- get_legend(panel1_pca)
 upper <- plot_grid(p1, legend, rel_widths = c(3, .6))
 
-data.frame(Dim1=pc_tc[,1], Dim2=pc_tc[,2]) %>%
+data.frame(Dim1=pc_fq[,1], Dim2=pc_fq[,2]) %>%
   ggplot(aes(Dim1, Dim2)) + geom_point(aes(color=detection_rate)) + scale_colour_gradient(low="blue", high="yellow") -> panel2_pca
-data.frame(Dim1=zifa_tc[,1], Dim2=zifa_tc[,2]) %>%
+data.frame(Dim1=zifa_fq[,1], Dim2=zifa_fq[,2]) %>%
   ggplot(aes(Dim1, Dim2)) + geom_point(aes(color=detection_rate)) + scale_colour_gradient(low="blue", high="yellow") -> panel2_zifa
 data.frame(Dim1=zinb@W[,1], Dim2=zinb@W[,2]) %>%
   ggplot(aes(Dim1, Dim2)) + geom_point(aes(color=detection_rate)) + scale_colour_gradient(low="blue", high="yellow") -> panel2_zinb
@@ -87,7 +87,7 @@ save_plot("zeisel_fig1.pdf", fig1,
 qc <- data.frame(age, coverage, detection_rate, diameter, nmolecule, well)
 qc <- apply(qc, 2, as.numeric)
 
-cors <- lapply(1:3, function(i) abs(cor(pc_tc[,i], qc, method="spearman")))
+cors <- lapply(1:3, function(i) abs(cor(pc_fq[,i], qc, method="spearman")))
 cors <- unlist(cors)
 bars <- data.frame(AbsoluteCorrelation=cors,
                    QC=rep(stringr::str_to_lower(colnames(qc)), 3),
@@ -98,7 +98,7 @@ bars %>%
   geom_bar(stat="identity", position='dodge') +
   scale_fill_manual(values=col2) + ylim(0, 1) -> panel2_pca
 
-cors <- lapply(1:3, function(i) abs(cor(zifa_tc[,i], qc)))
+cors <- lapply(1:3, function(i) abs(cor(zifa_fq[,i], qc)))
 cors <- unlist(cors)
 bars <- data.frame(AbsoluteCorrelation=cors,
                    QC=rep(stringr::str_to_lower(colnames(qc)), 3),
@@ -212,16 +212,16 @@ save_plot("zeisel_supp_sil.pdf", sil)
 # PCA and ZIFA for raw, TC, TMM, FQ
 data.frame(Dim1=pc_raw[,1], Dim2=pc_raw[,2]) %>%
   ggplot(aes(Dim1, Dim2, colour=level1)) + geom_point() +
-  scale_color_brewer(palette="Set1") -> pca_raw
+  scale_color_brewer(palette="Set2") -> pca_raw
 data.frame(Dim1=pc_tc[,1], Dim2=pc_tc[,2]) %>%
   ggplot(aes(Dim1, Dim2, colour=level1)) + geom_point() +
-  scale_color_brewer(palette="Set1") -> pca_tc
+  scale_color_brewer(palette="Set2") -> pca_tc
 data.frame(Dim1=pc_tmm[,1], Dim2=pc_tmm[,2]) %>%
   ggplot(aes(Dim1, Dim2, colour=level1)) + geom_point() +
-  scale_color_brewer(palette="Set1") -> pca_tmm
+  scale_color_brewer(palette="Set2") -> pca_tmm
 data.frame(Dim1=pc_fq[,1], Dim2=pc_fq[,2]) %>%
   ggplot(aes(Dim1, Dim2, colour=level1)) + geom_point() +
-  scale_color_brewer(palette="Set1") -> pca_fq
+  scale_color_brewer(palette="Set2") -> pca_fq
 
 fig_pca <- plot_grid(pca_raw, pca_tc, pca_tmm, pca_fq, labels=c("a", "b", "c", "d"))
 save_plot("zeisel_supp_pca.pdf", fig_pca,
@@ -231,16 +231,16 @@ save_plot("zeisel_supp_pca.pdf", fig_pca,
 
 data.frame(Dim1=zifa_raw[,1], Dim2=zifa_raw[,2]) %>%
   ggplot(aes(Dim1, Dim2, colour=level1)) + geom_point() +
-  scale_color_brewer(palette="Set1") -> zifa_raw
+  scale_color_brewer(palette="Set2") -> zifa_raw
 data.frame(Dim1=zifa_tc[,1], Dim2=zifa_tc[,2]) %>%
   ggplot(aes(Dim1, Dim2, colour=level1)) + geom_point() +
-  scale_color_brewer(palette="Set1") -> zifa_tc
+  scale_color_brewer(palette="Set2") -> zifa_tc
 data.frame(Dim1=zifa_tmm[,1], Dim2=zifa_tmm[,2]) %>%
   ggplot(aes(Dim1, Dim2, colour=level1)) + geom_point() +
-  scale_color_brewer(palette="Set1") -> zifa_tmm
+  scale_color_brewer(palette="Set2") -> zifa_tmm
 data.frame(Dim1=zifa_fq[,1], Dim2=zifa_fq[,2]) %>%
   ggplot(aes(Dim1, Dim2, colour=level1)) + geom_point() +
-  scale_color_brewer(palette="Set1") -> zifa_fq
+  scale_color_brewer(palette="Set2") -> zifa_fq
 
 fig_zifa <- plot_grid(zifa_raw, zifa_tc, zifa_tmm, zifa_fq, labels=c("a", "b", "c", "d"))
 save_plot("zeisel_supp_zifa.pdf", fig_zifa,
