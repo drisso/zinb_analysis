@@ -285,6 +285,78 @@ save_plot("espresso_fig2bis.pdf", fig2_bis,
           base_aspect_ratio = 1.3
 )
 
+# Compare with combat
+methods_sub <- list("ZINB-WaVE"=zinb@W,
+                    "ZINB-Batch"=zinb_batch@W,
+                    "PCA ComBat RAW" = pc_combat_raw,
+                    "PCA ComBat TC" = pc_combat_tc,
+                    "PCA ComBat TMM" = pc_combat_tmm,
+                    "PCA ComBat FQ" = pc_combat_fq,
+                    "PCA RAW" = pc_raw,
+                    "PCA TC" = pc_tc,
+                    "PCA TMM" = pc_tmm,
+                    "PCA FQ" = pc_fq)
+
+sil_cond <- lapply(seq_along(methods_sub), function(i) {
+  d <- dist(methods_sub[[i]])
+  s_cond <- silhouette(as.numeric(condition), d)
+  ss_cond <-  summary(s_cond)
+  return(ss_cond$clus.avg.widths)
+})
+
+bars <- data.frame(AverageSilhouette=unlist(sil_cond),
+                   Method=rep(names(methods_sub), each=nlevels(condition)),
+                   Cluster=factor(rep(levels(condition), length(methods_sub)),
+                                  levels=levels(condition)))
+
+bars %>%
+  dplyr::mutate(ClusterByMethod = paste0(Cluster, " ", Method)) %>%
+  ggplot(aes(ClusterByMethod, AverageSilhouette, fill=Cluster)) +
+  geom_bar(stat="identity", position='dodge') +
+  scale_fill_manual(values=col1) + coord_flip() +
+  theme(legend.position = "none", axis.text = element_text(size=8)) -> sil
+
+sil_batch <- lapply(seq_along(methods_sub), function(i) {
+  d <- dist(methods_sub[[i]])
+  s_cond <- silhouette(as.numeric(batch), d)
+  ss_cond <-  summary(s_cond)
+  return(ss_cond$clus.avg.widths)
+})
+
+bars <- data.frame(AverageSilhouette=unlist(sil_batch),
+                   Method=rep(names(methods_sub), each=nlevels(batch)),
+                   Cluster=factor(rep(paste0("Batch", levels(batch)), length(methods_sub)),
+                                  levels=paste0("Batch", levels(batch))))
+
+bars %>%
+  dplyr::mutate(ClusterByMethod = paste0(Cluster, " ", Method)) %>%
+  ggplot(aes(ClusterByMethod, AverageSilhouette, fill=Cluster)) +
+  geom_bar(stat="identity", position='dodge') +
+  scale_fill_manual(values=col2) + coord_flip() +
+  theme(legend.position = "none", axis.text = element_text(size=8)) -> sil2
+
+
+data.frame(Dim1=pc_combat_fq[,1], Dim2=pc_combat_fq[,2]) %>%
+  ggplot(aes(Dim1, Dim2, colour=batch, shape=condition)) + geom_point()  +
+  scale_color_brewer(palette="Set2")  -> panel_pc_combat_fq
+
+data.frame(Dim1=pc_fq[,1], Dim2=pc_fq[,2]) %>%
+  ggplot(aes(Dim1, Dim2, colour=batch, shape=condition)) + geom_point()  +
+  scale_color_brewer(palette="Set2")  -> panel_pc_fq
+
+supp_combat <- plot_grid(panel_pc_fq + theme(legend.position = "none"),
+                         panel_pc_combat_fq,
+                         sil, sil2,
+                      labels=c("a", "b", "c", "d"), ncol=2, nrow=2, rel_widths = c(1, 1.25, 1, 1))
+supp_combat
+
+save_plot("espresso_supp_combat.pdf", supp_combat,
+          ncol = 2,
+          nrow = 2,
+          base_aspect_ratio = 1.3
+)
+
+
 # ## goodness-of-fit
 # library(matrixStats)
 # totalcount = function (ei)
