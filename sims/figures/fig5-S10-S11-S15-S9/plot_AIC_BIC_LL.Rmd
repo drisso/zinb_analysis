@@ -1,0 +1,147 @@
+---
+title: "Plot AIC, BIC, log likelihood"
+author: "Fanny Perraudeau"
+date: "08/02/2017"
+output: 
+  html_document: 
+  fig_height: 10
+fig_width: 10
+toc: yes
+code_folding: hide
+toc_float: yes
+---
+```{r options, echo=FALSE, results="hide",message=FALSE, error=FALSE, include=FALSE, autodep=TRUE}
+knitr::opts_chunk$set(fig.align="center", cache=TRUE, error=FALSE, message=FALSE, warning=TRUE, fig.width=6, fig.height=6)
+library(zinbwave)
+library(SummarizedExperiment)
+library(ggplot2)
+library(cowplot)
+library(gridExtra)
+```
+
+
+```{r fct}
+nParams <- function(model){
+  X_pi <- getX_pi(model)
+  X_mu <- getX_mu(model)
+  V_pi <- getV_pi(model)
+  V_mu <- getV_mu(model)
+  disp <- get
+  
+  n <- nSamples(model)
+  J <- nFeatures(model)
+  K <- nFactors(model)
+  M_pi <- NCOL(X_pi)
+  M_mu <- NCOL(X_mu)
+  L_pi <- NCOL(V_pi)
+  L_mu <- NCOL(V_mu)
+  ndisp <- length(unique(getZeta(model)))
+  
+  total <- J * (M_mu + M_pi) + n * (L_mu + L_pi) + 2 * K * J + n * K + ndisp
+  return(total)
+}
+
+zinb.AIC <- function(model, x){
+  if ((nSamples(model) != nrow(x))|(nFeatures(model) != ncol(x))) {
+    stop("x and model should have the same dimensions!")
+  }
+  stopifnot()
+  k <- nParams(model)
+  ll <- loglik(model, x)
+  return(2*k - 2*ll)
+}
+
+zinb.BIC <- function(model, x){
+  n <- nSamples(model)
+  if ((n != nrow(x))|(nFeatures(model) != ncol(x))) {
+    stop("x and model should have the same dimensions!")
+  }
+  k <- nParams(model)
+  ll <- loglik(model, x)
+  return(log(n)*k - 2*ll)
+}
+
+```
+
+```{r test,eval=FALSE}
+set.seed(64839)
+m <- zinbModel(n=100, J=500, K=2)
+x <- zinbSim(m)
+counts = x$counts[rowSums(x$counts) != 0 , ]
+counts = counts[, colSums(counts) != 0]
+
+fit <- lapply(0:5, function(k){
+  print(k)
+  print(system.time(ff<-zinbFit(counts, K = k)))
+  ff
+})
+
+plot(sapply(fit, zinb.AIC, t(counts)))
+plot(sapply(fit, zinb.BIC, t(counts)))
+plot(sapply(fit, loglik, t(counts)))
+```
+
+```{r sims}
+load('simZeisel_nc1000_ratio1_offs2_fittedAll.rda')
+load('simZeisel_nc1000_ratio1_offs2.rda')
+
+res <- lapply(1:4, function(k){
+  tmp <- lapply(1:2, function(Vint){
+    tmp <- lapply(1:2, function(commondisp){
+      
+      aic <- sapply(seq_along(simData), function(i) {
+        zinb.AIC(fittedSim[[k]][[Vint]][[commondisp]][[i]], simData[[i]][['counts']])
+      })
+      
+      bic <- sapply(seq_along(simData), function(i) {
+        zinb.BIC(fittedSim[[k]][[Vint]][[commondisp]][[i]], simData[[i]][['counts']])
+      })
+      
+      ll <- sapply(seq_along(simData), function(i) {
+        loglik(fittedSim[[k]][[Vint]][[commondisp]][[i]], simData[[i]][['counts']])
+      })
+      
+      return(list(aic = aic, bic = bic, ll = ll))
+    })
+    names(tmp) <- c("Common Dispersion", "Genewise Dispersion")
+    return(tmp)
+  })
+  names(tmp) <- c("Sample-level Intercept", "No Sample-level Intercept")
+  return(tmp)
+})
+names(res) <- 1:4
+```
+
+```{r plotdf}
+plotres <- unlist(unlist(unlist(res, recursive=FALSE), recursive=FALSE), recursive=FALSE)
+criteria = lapply(seq_along(plotres), function(i){
+  nn = strsplit(names(plotres)[i], '\\.+')[[1]]
+  data.frame(criterium = plotres[[i]], K=nn[1], V=nn[2], disp=nn[3], param=nn[4])
+})
+criteria = data.frame(do.call(rbind, criteria), stringsAsFactors = F)
+```
+
+```{r plotaic}
+plot_aic = ggplot(criteria[criteria$param == 'aic', ], aes(x = K, y = criterium)) + 
+  geom_boxplot() + ggtitle('') + facet_grid(disp ~ V) + 
+  ylab('AIC') + background_grid(major = 'y', minor = "none") + 
+  panel_border()
+plot_aic
+```
+
+```{r plotbic}
+plot_bic = ggplot(criteria[criteria$param == 'bic', ], aes(x = K, y = criterium)) + 
+  geom_boxplot() + ggtitle('') + facet_grid(disp ~ V) + 
+  ylab('BIC') + background_grid(major = 'y', minor = "none") + 
+  panel_border()
+plot_bic
+```
+
+```{r plotll}
+plot_ll = ggplot(criteria[criteria$param == 'll', ], aes(x = K, y = criterium)) + 
+  geom_boxplot() + ggtitle('') + facet_grid(disp ~ V) + 
+  ylab('Log Likelihood') + background_grid(major = 'y', minor = "none") + 
+  panel_border()
+plot_ll
+
+```

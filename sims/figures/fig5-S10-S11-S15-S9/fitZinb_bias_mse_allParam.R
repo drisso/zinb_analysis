@@ -1,4 +1,10 @@
 library(zinbwave)
+library(doParallel)
+library(BiocParallel)
+
+NCORES = 2
+registerDoParallel(NCORES)
+register(DoparParam())
 
 makeZinbFit <- function(Xintercept = T, Vintercept = T, K = 2,
                         commondispersion = T, ngenes = 1000, ncells = 100){
@@ -20,7 +26,6 @@ makeZinbFit <- function(Xintercept = T, Vintercept = T, K = 2,
 K = 1:4
 Vintercept = c(TRUE, FALSE)
 commondispersion = c(TRUE, FALSE)
-ncores = 10
 ds = 'Zeisel'
 nc = 1000
 b2 = 1
@@ -53,6 +58,6 @@ fittedSim = lapply(K, function(k){
     })
   })
 })
-out = paste0(pp, '_fittedAll.rda')
+out = paste0(pp, '_fittedAll_bis.rda')
 save(fittedSim, file = out)
 
