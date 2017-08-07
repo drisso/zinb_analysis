@@ -1,7 +1,6 @@
 library(zinbwave)
 library(doParallel)
 library(BiocParallel)
-
 NCORES = 2
 registerDoParallel(NCORES)
 register(DoparParam())
@@ -23,7 +22,52 @@ makeZinbFit <- function(Xintercept = T, Vintercept = T, K = 2,
   return(buildZinb)
 }
 
-K = 1:4
+# Fig.5 Bias, MSE
+if (FALSE){
+  K = 1:4
+  Vintercept = c(TRUE, FALSE)
+  commondispersion = c(TRUE, FALSE)
+  ds = 'Zeisel'
+  nc = 1000
+  b2 = 1
+  offs = 2
+  
+  pp = sprintf('fig5-S10-S11-S15-S9/sim%s_nc%s_ratio%s_offs%s', ds, nc, b2, offs)
+  load(paste0(pp,".rda"))
+  fittedSim = lapply(K, function(k){
+    lapply(Vintercept, function(Vint){
+      lapply(commondispersion, function(commondisp){
+        mclapply(1:length(simData), function(i){
+          counts = t(simData[[i]]$counts)
+          counts = counts[rowSums(counts) !=0, ]
+          #zeros = (rowSums(counts) == 0)
+          #if (sum(zeros) > 0){
+          #  mm =  matrix(0, ncol = ncol(counts), nrow = sum(zeros)) 
+          #  mm = sapply(1:nrow(mm), function(i){
+          #    zz = rep(0, ncol(mm))
+          #    zz[sample(length(zz), 1)] = 1
+          #    zz
+          #  })
+          #  counts[zeros, ] = t(mm)
+          #}
+          myZinbFit = makeZinbFit(Xintercept = TRUE, Vintercept = Vint,
+                                  K = k, commondispersion = commondisp,
+                                  ngenes = nrow(counts), 
+                                  ncells = ncol(counts))
+          myZinbFit(counts)
+        },mc.cores =  2)
+      })
+    })
+  })
+  out = paste0(pp, '_fittedAll_bis.rda')
+  save(fittedSim, file = out)
+  
+}
+
+
+
+# AIC, BIC, ll -> greater K
+K = 5:8
 Vintercept = c(TRUE, FALSE)
 commondispersion = c(TRUE, FALSE)
 ds = 'Zeisel'
@@ -36,7 +80,7 @@ load(paste0(pp,".rda"))
 fittedSim = lapply(K, function(k){
   lapply(Vintercept, function(Vint){
     lapply(commondispersion, function(commondisp){
-      mclapply(1:length(simData), function(i){
+      lapply(1:length(simData), function(i){
         counts = t(simData[[i]]$counts)
         counts = counts[rowSums(counts) !=0, ]
         #zeros = (rowSums(counts) == 0)
@@ -53,11 +97,11 @@ fittedSim = lapply(K, function(k){
                                 K = k, commondispersion = commondisp,
                                 ngenes = nrow(counts), 
                                 ncells = ncol(counts))
-        myZinbFit(counts, ncores = ncores)
-      },mc.cores =  ncores)
+        myZinbFit(counts)
+      })
     })
   })
 })
-out = paste0(pp, '_fittedAll_bis.rda')
+out = paste0(pp, '_fittedAll_bigK.rda')
 save(fittedSim, file = out)
 

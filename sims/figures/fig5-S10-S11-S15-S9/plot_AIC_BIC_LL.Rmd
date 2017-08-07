@@ -82,34 +82,42 @@ plot(sapply(fit, loglik, t(counts)))
 ```
 
 ```{r sims}
-load('simZeisel_nc1000_ratio1_offs2_fittedAll.rda')
-load('simZeisel_nc1000_ratio1_offs2.rda')
-
-res <- lapply(1:4, function(k){
-  tmp <- lapply(1:2, function(Vint){
-    tmp <- lapply(1:2, function(commondisp){
-      
-      aic <- sapply(seq_along(simData), function(i) {
-        zinb.AIC(fittedSim[[k]][[Vint]][[commondisp]][[i]], simData[[i]][['counts']])
+prepBoxplot <- function(fittedSim){
+  res <- lapply(1:4, function(k){
+    tmp <- lapply(1:2, function(Vint){
+      tmp <- lapply(1:2, function(commondisp){
+        
+        aic <- sapply(seq_along(simData), function(i) {
+          zinb.AIC(fittedSim[[k]][[Vint]][[commondisp]][[i]], simData[[i]][['counts']])
+        })
+        
+        bic <- sapply(seq_along(simData), function(i) {
+          zinb.BIC(fittedSim[[k]][[Vint]][[commondisp]][[i]], simData[[i]][['counts']])
+        })
+        
+        ll <- sapply(seq_along(simData), function(i) {
+          loglik(fittedSim[[k]][[Vint]][[commondisp]][[i]], simData[[i]][['counts']])
+        })
+        
+        return(list(aic = aic, bic = bic, ll = ll))
       })
-      
-      bic <- sapply(seq_along(simData), function(i) {
-        zinb.BIC(fittedSim[[k]][[Vint]][[commondisp]][[i]], simData[[i]][['counts']])
-      })
-      
-      ll <- sapply(seq_along(simData), function(i) {
-        loglik(fittedSim[[k]][[Vint]][[commondisp]][[i]], simData[[i]][['counts']])
-      })
-      
-      return(list(aic = aic, bic = bic, ll = ll))
+      names(tmp) <- c("Common Dispersion", "Genewise Dispersion")
+      return(tmp)
     })
-    names(tmp) <- c("Common Dispersion", "Genewise Dispersion")
+    names(tmp) <- c("Sample-level Intercept", "No Sample-level Intercept")
     return(tmp)
   })
-  names(tmp) <- c("Sample-level Intercept", "No Sample-level Intercept")
-  return(tmp)
-})
-names(res) <- 1:4
+  res
+}
+
+load('simZeisel_nc1000_ratio1_offs2.rda') #simulated data
+
+load('simZeisel_nc1000_ratio1_offs2_fittedAll.rda') #K=1:4
+res1 <- prepBoxplot(fittedSim)
+load('simZeisel_nc1000_ratio1_offs2_fittedAll_bigK.rda') #K=5:8
+res2 <- prepBoxplot(fittedSim)
+res <- c(res1, res2)
+names(res) <- 1:8
 ```
 
 ```{r plotdf}
@@ -127,6 +135,7 @@ plot_aic = ggplot(criteria[criteria$param == 'aic', ], aes(x = K, y = criterium)
   ylab('AIC') + background_grid(major = 'y', minor = "none") + 
   panel_border()
 plot_aic
+ggsave('aic.pdf', plot_aic)
 ```
 
 ```{r plotbic}
@@ -135,6 +144,7 @@ plot_bic = ggplot(criteria[criteria$param == 'bic', ], aes(x = K, y = criterium)
   ylab('BIC') + background_grid(major = 'y', minor = "none") + 
   panel_border()
 plot_bic
+ggsave('bic.pdf', plot_bic)
 ```
 
 ```{r plotll}
@@ -143,5 +153,13 @@ plot_ll = ggplot(criteria[criteria$param == 'll', ], aes(x = K, y = criterium)) 
   ylab('Log Likelihood') + background_grid(major = 'y', minor = "none") + 
   panel_border()
 plot_ll
+ggsave('ll.pdf', plot_ll)
+```
 
+```{r}
+p1 = plot_grid(plot_bic, plot_aic, plot_ll,
+               labels = c("a", "b", "c"), ncol = 2, nrow = 2, align = "h")
+p1
+save_plot("../../../paper/6680489mtyrjx/aic_bic_ll.pdf",
+          p1, ncol = 2, nrow = 2, base_aspect_ratio = 1.3)
 ```
