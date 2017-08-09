@@ -1,0 +1,167 @@
+---
+title: 'Allen: how many dimensions?'
+author: "Jean-Philippe Vert"
+date: "7/9/2017"
+output: 
+  html_document: 
+    fig_height: 7
+    fig_width: 7
+    toc: yes
+    code_folding: hide
+    toc_float: yes
+---
+
+```{r options, echo=FALSE, results="hide",mesasge=FALSE, error=FALSE, include=FALSE, autodep=TRUE}
+knitr::opts_chunk$set(fig.align="center", cache=TRUE, error=FALSE, message=FALSE, warning=TRUE)
+library(scRNAseq)
+library(zinbwave)
+library(RColorBrewer)
+library(cluster)
+set.seed(8283)
+ncores <- detectCores() - 1
+library(doParallel)
+library(BiocParallel)
+registerDoParallel(ncores)
+register(DoparParam())
+library(Rtsne)
+```
+
+Here the goal is to check how many dimensions we need to keep in order to get a good silhouette, and to what extent t-SNE helps to move back from "high dimension" to 2D. This is based on the observation that often people first run a PCA, keep a few dozens components before running t-SNE to finally get a nice 2D plot. Maybe ZinbWave is able to directly get a good 2D plot?
+
+Let's get some data (here the V1 dataset)
+```{r datain}
+data("allen")
+allen_core <- allen[grep("^ERCC-", rownames(allen), invert = TRUE),
+                    which(colData(allen)$Core.Type=="Core" &
+                            !(colData(allen)$Primary.Type %in% c("Pvalb Tacr3", "Sst Myh8")))]
+
+filter <- rowSums(assay(allen_core)>10)>=10
+raw <- assay(allen_core)[filter,]
+n=ncol(raw)
+
+totalcount = function (ei)
+{
+  sums = colSums(ei)
+  eo = t(t(ei)*mean(sums)/sums)
+  return(eo)
+}
+
+tc <- totalcount(raw)
+
+vars <- rowVars(log1p(tc))
+names(vars) <- rownames(tc)
+vars <- sort(vars, decreasing = TRUE)
+vargenes <- names(vars)[1:1000]
+
+col1 <- brewer.pal(9, "Set1")
+col2 <- c(brewer.pal(8, "Set2"), brewer.pal(8, "Set3"), brewer.pal(8, "Set1"))
+
+layer <- as.factor(colData(allen_core)$driver_1_s)
+cluster <- as.factor(colData(allen_core)$Primary.Type)
+cluster2 <- as.character(cluster)
+cluster2[grep("^L4", cluster2)] <- "L4"
+cluster2[grep("^L6", cluster2)] <- "L6a"
+cluster2[grep("^L5a", cluster2)] <- "L5a"
+cluster2[cluster2 == "L5 Ucma"] <- "L5"
+cluster2[grep("^L5b", cluster2)] <- "L5b"
+cluster2 <- as.factor(cluster2)
+
+
+collayer <- col1[layer]
+colCl <- col2[cluster2]
+```
+
+Do different flavours of PCA
+```{r pca}
+praw <- prcomp(t(log1p(raw)))
+plot(praw,main="log1p(raw)")
+plot(praw$x,main="log1p(raw)",col=collayer, pch=20)
+legend("bottomright", levels(layer), fill=col1)
+plot(praw$x,main="log1p(raw)",col=colCl, pch=20)
+legend("bottomright", levels(cluster2), fill=col2)
+
+praw1000 <- prcomp(t(log1p(raw[vargenes,])))
+plot(praw1000,main="log1p(raw)")
+plot(praw1000$x,main="log1p(raw)",col=collayer, pch=20)
+legend("bottomright", levels(layer), fill=col1)
+plot(praw1000$x,main="log1p(raw)",col=colCl, pch=20)
+legend("bottomright", levels(cluster2), fill=col2)
+
+ptc <- prcomp(t(log1p(tc)))
+plot(ptc,main="log1p(TC)")
+plot(ptc$x,main="log1p(TC)",col=collayer, pch=20)
+legend("bottomright", levels(layer), fill=col1)
+plot(ptc$x,main="log1p(TC)",col=colCl, pch=20)
+legend("bottomright", levels(cluster2), fill=col2)
+
+ptc1000 <- prcomp(t(log1p(tc[vargenes,])))
+plot(ptc1000,main="log1p(TC)")
+plot(ptc1000$x,main="log1p(TC)",col=collayer, pch=20)
+legend("bottomright", levels(layer), fill=col1)
+plot(ptc1000$x,main="log1p(TC)",col=colCl, pch=20)
+legend("bottomright", levels(cluster2), fill=col2)
+
+```
+
+Do Zinbwave for different values of K
+```{r zinbwave}
+Kmax=10
+zinbW <- sapply(seq(Kmax), function(k) {getW(zinbFit(raw[vargenes,], K = k))})
+```
+
+Compute silhouette as a function of how many components we keep; note that, as Davide mentioned during the hangout, the silhouette score is probably not normalized for dimension so it may not be a good idea to compare it between different dimensions; but it can be used to compare different methods for each given dimension.
+```{r silhouette}
+ylim=c(0,0.63) # to have all plots on the same scale
+
+methods = list(praw$x, praw1000$x, ptc$x, ptc1000$x)
+names(methods) = paste0("PCA ",c("RAW", "RAW 1000", "TC", "TC 1000"))
+nmethods=length(methods)
+
+meansilhouette <- function(x,cl) {
+    d=dist(x)
+    ss = silhouette(as.numeric(cl),d)
+    mean(ss[,3])
+}
+
+silcurve <- function(x) {
+    sapply(seq(ncol(x)), function(i){meansilhouette(x[,1:i],cluster2)})
+}
+
+
+sil = lapply(methods, silcurve)
+zinbSil = lapply(zinbW,function(x){meansilhouette(x,cluster2)})
+
+matplot(do.call(cbind,sil),type='l',lwd=2,lty=1,main="Mean silhouette",xlab="Number of dimensions",ylab="Mean silhouette",ylim=ylim)
+lines(seq(Kmax),unlist(zinbSil),lty=1,lwd=2,col=nmethods+1)
+legend("topright",c(names(methods),"ZinbWave"),lty=1,lwd=2,col=seq(nmethods+1))
+
+matplot(do.call(cbind,sil),type='l',lwd=2,lty=1,main="Mean silhouette",xlab="Number of dimensions",ylab="Mean silhouette",xlim=c(0,15),ylim=ylim)
+lines(seq(Kmax),unlist(zinbSil),lty=1,lwd=2,col=nmethods+1)
+legend("bottomright",c(names(methods),"ZinbWave"),lty=1,lwd=2,col=seq(nmethods+1))
+
+```
+
+Run tSNE on top of PCA or ZinbWave and check how it improves the silhouette. Here we always compute the silhouette in 2D (after t-SNE), so we can compare the values for different values of K
+```{r tsne}
+maxT=50
+tsnesilhouette = function(x) {
+    sapply(seq(2,maxT),
+    function(i) {
+        ts = Rtsne(x[,1:i])
+        meansilhouette(ts$Y,cluster2)
+    })
+}
+
+silT = lapply(methods, tsnesilhouette)
+
+tsnezinb = lapply(zinbW[-1],function(x) {
+    ts=Rtsne(x)
+    meansilhouette(ts$Y,cluster2)
+})
+
+matplot(seq(2,maxT),do.call(cbind,silT),type='l',lwd=2,lty=1,main="Mean silhouette after t-SNE",xlab="Number of dimensions",ylab="Mean silhouette",ylim=ylim)
+lines(seq(2,Kmax),unlist(tsnezinb),lty=1,lwd=2,col=nmethods+1)
+legend("bottomright",c(names(methods),"ZinbWave"),lty=1,lwd=2,col=seq(nmethods+1))
+
+```
+
