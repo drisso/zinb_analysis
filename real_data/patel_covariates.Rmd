@@ -30,15 +30,17 @@ library(edgeR)
 library(DESeq2)
 
 set.seed(8283)
-options(getClass.msg=FALSE) #get rid of annoying messages about cache until fixed internally in R
 
-ncores <- 2
+library(BiocParallel)
+library(doParallel)
+registerDoParallel(6)
+register(DoparParam())
 ```
 
 Here, I will explore the relation between the expression values and some covariates provided with the data.
 
 ```{r datain}
-counts <- read.table("../data/patel/glioblastoma_raw_rnaseq_SCandbulk_counts_withannots.txt", header=TRUE, stringsAsFactors = FALSE)
+counts <- read.table("patel/glioblastoma_raw_rnaseq_SCandbulk_counts_withannots.txt", header=TRUE, stringsAsFactors = FALSE)
 
 info <- as.matrix(counts)[1,-(1:3)]
 counts <- counts[-1,-1]
@@ -50,7 +52,7 @@ sample_names <- colnames(counts)[-(1:2)]
 all.counts <- counts[,-(1:2)]
 rownames(all.counts) <- ensembl_ids
 
-metadata <- read.table("../data/patel/SraRunTable.txt", sep='\t', stringsAsFactors = FALSE, header=TRUE, row.names=5, na.strings = "<not provided>")
+metadata <- read.table("patel/SraRunTable.txt", sep='\t', stringsAsFactors = FALSE, header=TRUE, row.names=5, na.strings = "<not provided>")
 metadata <- metadata[sample_names,]
 
 batch <- stringr::str_split_fixed(info, "_", 2)[,2]
@@ -122,7 +124,15 @@ pc_tmm <- fastpca(log1p(tmm[vargenes,]))
 
 colMerged <- col1[level1]
 plot(pc_raw, col=colMerged, pch=20, main="PCA RAW")
-legend("bottomleft", levels(level1), fill=col1)
+legend("topright", levels(level1), fill=col1)
+
+plot(pc_tc, col=colMerged, pch=20, main="PCA TC")
+plot(pc_tmm, col=colMerged, pch=20, main="PCA TMM")
+plot(pc_fq, col=colMerged, pch=20, main="PCA FQ")
+
+colMerged <- col1[batch]
+plot(pc_raw, col=colMerged, pch=20, main="PCA RAW")
+legend("topright", levels(batch), fill=col1)
 
 plot(pc_tc, col=colMerged, pch=20, main="PCA TC")
 plot(pc_tmm, col=colMerged, pch=20, main="PCA TMM")
@@ -180,12 +190,22 @@ names(vars) <- rownames(tc)
 vars <- sort(vars, decreasing = TRUE)
 vargenes2 <- names(vars)[1:1000]
 
-zinb_batch <- zinbFit(raw[vargenes2, subset], K = 2, X=model.matrix(~batch[subset]), epsilon=1e3)
-plot(zinb_batch@W, pch=19, col=colMerged[subset], main="ZINB")
-plot(zinb_batch@W, pch=19, col=col2[droplevels(level2[subset])], main="ZINB")
+zinb_sub <- zinbFit(raw[vargenes2, subset], K = 2)
+plot(getW(zinb_sub), pch=19, col=colMerged[subset], main="ZINB; color-coded by patient")
+plot(getW(zinb_sub), pch=19, col=col2[droplevels(level2[subset])], main="ZINB; color-coded by inferred cell type")
+
+zinb_batch <- zinbFit(raw[vargenes2, subset], K = 2, X=model.matrix(~batch[subset]))
+plot(getW(zinb_batch), pch=19, col=colMerged[subset], main="ZINB w/ batch; color-coded by patient")
+plot(getW(zinb_batch), pch=19, col=col2[droplevels(level2[subset])], main="ZINB w/ batch; color-coded by inferred cell type")
+
+pc_fq_sub <- fastpca(log1p(fq[vargenes2, subset]))
+plot(pc_fq_sub, pch=19, col=colMerged[subset], main="PCA (FQ); color-coded by patient")
+plot(pc_fq_sub, pch=19, col=col2[droplevels(level2[subset])], main="PCA (FQ); color-coded by inferred cell type")
 ```
 
-```{r zinb_subset,eval=FALSE}
+## Considering only data for MGH26
+
+```{r zinb_subset}
 subset <- which(level1=="MGH26")
 
 vars <- rowVars(log1p(tc[,subset]))
@@ -193,13 +213,13 @@ names(vars) <- rownames(tc)
 vars <- sort(vars, decreasing = TRUE)
 vargenes2 <- names(vars)[1:1000]
 
-zinb_sub1 <- zinbFit(raw[vargenes2, subset], K = 2, epsilon=1e3)
-plot(zinb_sub1@W, pch=19, col=col1[droplevels(batch[subset])], main="ZINB")
-plot(zinb_sub1@W, pch=19, col=col2[droplevels(level2[subset])], main="ZINB")
+zinb_sub1 <- zinbFit(raw[vargenes2, subset], K=2)
+plot(getW(zinb_sub1), pch=19, col=col1[droplevels(batch[subset])], main="ZINB; color-coded by batch")
+plot(getW(zinb_sub1), pch=19, col=col2[droplevels(level2[subset])], main="ZINB; color-coded by inferred cell type")
 
-zinb_sub2 <- zinbFit(raw[vargenes2, subset], K = 2, X=model.matrix(~batch[subset]), epsilon=1e3)
-plot(zinb_sub2@W, pch=19, col=col1[droplevels(batch[subset])], main="ZINB")
-plot(zinb_sub2@W, pch=19, col=col2[droplevels(level2[subset])], main="ZINB")
+zinb_sub2 <- zinbFit(raw[vargenes2, subset], K = 2, X=model.matrix(~batch[subset]))
+plot(getW(zinb_sub2), pch=19, col=col1[droplevels(batch[subset])], main="ZINB w/batch correction")
+plot(getW(zinb_sub2), pch=19, col=col2[droplevels(level2[subset])], main="ZINB w/batch correction")
 ```
 
 # Gene-level covariates
