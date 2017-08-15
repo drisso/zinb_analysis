@@ -149,9 +149,22 @@ write.table(zinb_df, file="tenx_t4k/zinb_coords.txt", sep='\t', quote=FALSE,
 ## Look at data quality
 
 ```{r}
-tmp <- read.table("tenx_t4k/t_4k_qc2.txt")
-rownames(tmp) <- paste0(rownames(tmp), "-1")
-qc <- tmp[colnames(dense),]
+# tmp <- read.table("tenx_t4k/t_4k_qc2.txt")
+# rownames(tmp) <- paste0(rownames(tmp), "-1")
+# qc <- tmp[colnames(dense),]
+library(scater)
+library(magrittr)
+sceset <- newSCESet(countData = exprs(t4k[use_genes, keep]))
+
+sceset <- calculateQCMetrics(sceset)
+qc <- pData(sceset)[,c(2, 5, 7, 12:15)]
+
+ribo_idx <- grep("^RPL", fData(t4k)[,2])
+mito_idx <- grep("^MT-", fData(t4k)[,2])
+ribo_pct <- colSums(as.matrix(exprs(t4k[ribo_idx,])))/colSums(as.matrix(exprs(t4k))) * 100
+mito_pct <- colSums(as.matrix(exprs(t4k[mito_idx,])))/colSums(as.matrix(exprs(t4k))) * 100
+
+qc <- cbind(qc, pct_ribo = ribo_pct[keep], pct_mito = mito_pct[keep])
 
 cors <- lapply(1:3, function(i) abs(cor(W[,i], qc)))
 cors <- unlist(cors)

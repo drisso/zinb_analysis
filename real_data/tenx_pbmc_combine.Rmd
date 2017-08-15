@@ -14,12 +14,7 @@ output:
 ```{r options, echo=FALSE, results="hide",mesasge=FALSE, error=FALSE, include=FALSE, autodep=TRUE}
 knitr::opts_chunk$set(fig.align="center", cache=TRUE, error=FALSE, message=FALSE, warning=FALSE)
 library(zinbwave)
-library(ggplot2)
-library(magrittr)
-library(matrixStats)
 library(Rtsne)
-library(RColorBrewer)
-library(cowplot)
 
 set.seed(8283)
 ncores <- 6
@@ -63,6 +58,7 @@ pal <- clusterExperiment::bigPalette
 filter <- rowSums(combined>0)>=100
 table(filter)
 filtered <- combined[filter,]
+colnames(filtered) <- paste0(batch, colnames(filtered))
 ```
 
 # PCA
@@ -86,9 +82,10 @@ norm10x = function (ei)
 tc <- norm10x(filtered)
 
 dense <- as.matrix(filtered)
-library(pryr)
-object_size(dense)
-object_size(filtered)
+
+# library(pryr)
+# object_size(dense)
+# object_size(filtered)
 
 vars <- rowVars(log(dense+.1))
 names(vars) <- rownames(dense)
@@ -121,12 +118,18 @@ pretty obvious.
 # ZINB-WaVE
 
 ```{r zinb}
-library(BiocParallel)
-library(doParallel)
-registerDoParallel(ncores)
-register(DoparParam())
-Xmod <- model.matrix(~batch)
-system.time(zinb_res <- zinbFit(dense, K=10, X = Xmod))
+run_zinb <- FALSE
+if(run_zinb) {
+  library(BiocParallel)
+  library(doParallel)
+  registerDoParallel(ncores)
+  register(DoparParam())
+  Xmod <- model.matrix(~batch)
+  system.time(zinb_res <- zinbFit(dense, K=10, X = Xmod))
+  save(zinb_res, file="zinb_tenx_combined.rda")
+} else {
+  load("zinb_tenx_combined.rda")  
+}
 ```
 
 ```{r plot_zinb}
@@ -151,10 +154,10 @@ library(Matrix)
 pbmc.data <- Read10X("tenx_frozen1/outs/filtered_gene_bc_matrices/hg19/")
 pbmc.data2 <- Read10X("tenx_frozen2/outs/filtered_gene_bc_matrices/hg19/")
 pbmc.comb <- cbind(pbmc.data, pbmc.data2)
-pbmc <- new("seurat", raw.data = pbmc.comb)
+colnames(pbmc.comb) <- colnames(dense)
 
-pbmc <- Setup(pbmc, min.cells = 1, min.genes = 1, do.logNormalize = FALSE, do.scale=FALSE,
-              do.center = FALSE, project = "10X_PBMC")
+pbmc <- CreateSeuratObject(raw.data = pbmc.comb, min.cells = 1, min.genes = 1, 
+    project = "10X_PBMC")
 
 ## Build SNN
 k.param = 10
@@ -165,18 +168,23 @@ my.knn <- FNN::get.knn(as.matrix(data.use), k = min(k.scale * k.param, n.cells -
 nn.ranked <- cbind(1:n.cells, my.knn$nn.index[, 1:(k.param-1)])
 nn.large <- my.knn$nn.index
 
-w <- Seurat:::CalcSNNDense(pbmc, n.cells, nn.large, nn.ranked, prune.SNN = 1/15, print.output = FALSE)
-pbmc@snn.k <- k.param
-pbmc@snn.dense <- w
-pbmc@snn.sparse <- sparseMatrix(1, 1, x = 1)
+w <- Seurat:::CalcSNNSparse(cell.names = colnames(dense),
+                            k.param = k.param,
+                            nn.large = nn.large,
+                            nn.ranked = nn.ranked,
+                            prune.SNN = 1/15,
+                            print.output = FALSE)
+
+pbmc@snn <- w
 
 ## Run modularity clustering
-SNN.use <- pbmc@snn.dense
 resolution <- 0.4
-pbmc <- Seurat:::RunModularityClustering(pbmc, SNN.use, modularity = 1, r = resolution,
-                               algorithm = 1, n.start = 100, n.iter = 10, random.seed = 0,
-                               print.output = FALSE, temp.file.location = NULL)
-pbmc <- Seurat:::GroupSingletons(pbmc, SNN.use)
+pbmc <- Seurat:::RunModularityClustering(object = pbmc, SNN = w, 
+                                         modularity = 1, resolution = resolution,
+                                         algorithm = 1, n.start = 100, 
+                                         n.iter = 10, random.seed = 0,
+                                         print.output = FALSE, temp.file.location = NULL)
+pbmc <- Seurat:::GroupSingletons(pbmc, pbmc@snn)
 name <- paste("res.", resolution, sep = "")
 pbmc <- StashIdent(pbmc, name)
 
@@ -192,13 +200,198 @@ write.table(data.frame(data.use, paste0("Cluster", z_cl)), sep="\t", quote=FALSE
             file = "zinb_tenx_combined_clusters.txt")
 ```
 
-```{r}
-data.use <- read.table("zinb_tenx_combined_clusters.txt")
-z_cl <- data.use[,11]
-plot(tsne_zinb$Y, pch=19, col=pal[z_cl], xlab="TSNE 1", ylab="TSNE 2", main="t-SNE (ZINB-WaVE)")
-plot(tsne_data$Y, pch=19, col=pal[z_cl], xlab="TSNE 1", ylab="TSNE 2", main="t-SNE (PCA)")
+```{r seurat3, eval=FALSE}
+pbmc <- CreateSeuratObject(raw.data = pbmc.comb, min.cells = 1, min.genes = 1, 
+    project = "10X_PBMC")
+
+## Build SNN
+k.param = 10
+k.scale = 10
+n.cells = 17302
+data.use <- pc_tc[,1:50]
+my.knn <- FNN::get.knn(as.matrix(data.use), k = min(k.scale * k.param, n.cells - 1))
+nn.ranked <- cbind(1:n.cells, my.knn$nn.index[, 1:(k.param-1)])
+nn.large <- my.knn$nn.index
+
+w <- Seurat:::CalcSNNSparse(cell.names = colnames(dense),
+                            k.param = k.param,
+                            nn.large = nn.large,
+                            nn.ranked = nn.ranked,
+                            prune.SNN = 1/15,
+                            print.output = FALSE)
+
+pbmc@snn <- w
+
+## Run modularity clustering
+resolution <- 0.4
+pbmc <- Seurat:::RunModularityClustering(object = pbmc, SNN = w, 
+                                         modularity = 1, resolution = resolution,
+                                         algorithm = 1, n.start = 100, 
+                                         n.iter = 10, random.seed = 0,
+                                         print.output = FALSE, temp.file.location = NULL)
+pbmc <- Seurat:::GroupSingletons(pbmc, pbmc@snn)
+name <- paste("res.", resolution, sep = "")
+pbmc <- StashIdent(pbmc, name)
+
+pca_cl <- pbmc@ident
+names(pca_cl) <- paste0(names(pbmc@ident), "-1")
+
+table(pca_cl)
+table(pca_cl, z_cl)
+
+plot(data.use, pch=19, col=pal[pca_cl])
+colnames(data.use) <- paste0("PCA", 1:NCOL(pc_tc))
+rownames(data.use) <- names(pca_cl)
+write.table(data.frame(data.use, paste0("PCA", pca_cl)), sep="\t", quote=FALSE,
+            file = "pca_tenx_combined_clusters.txt")
 ```
 
+```{r}
+data.zinb <- read.table("zinb_tenx_combined_clusters.txt")
+z_cl <- data.zinb[,11]
+data.pca <- read.table("pca_tenx_combined_clusters.txt")
+pca_cl <- data.pca[,51]
+
+plot(tsne_zinb$Y, pch=19, col=pal[z_cl], xlab="TSNE 1", ylab="TSNE 2", main="t-SNE (ZINB-WaVE), culstered by zinbwave")
+plot(tsne_data$Y, pch=19, col=pal[z_cl], xlab="TSNE 1", ylab="TSNE 2", main="t-SNE (PCA), clustered by zinbwave")
+
+plot(tsne_zinb$Y, pch=19, col=pal[pca_cl], xlab="TSNE 1", ylab="TSNE 2", main="t-SNE (ZINB-WaVE), culstered by PCA")
+plot(tsne_data$Y, pch=19, col=pal[pca_cl], xlab="TSNE 1", ylab="TSNE 2", main="t-SNE (PCA), clustered by PCA")
+```
+
+## Interpretation of the clusters
+
+```{r clusterX, fig.height=14}
+library(clusterExperiment)
+
+se <- SummarizedExperiment(dense, colData = data.frame(Batch = batch))
+zinbwave_res <- zinbwave(se, fitted_model=zinb_res)
+assay(se) <- assay(zinbwave_res, "normalizedValues")
+
+ce <- clusterExperiment(se, clusters=cbind(as.character(z_cl),
+                                           as.character(pca_cl)),
+                        transformation = identity)
+rownames(ce) <- fData(pbmc_b)[rownames(ce), 2]
+ce <- makeDendrogram(ce, dimReduce="PCA", ndims=10)
+
+plotClusters(ce)
+plotDendrogram(ce)
+
+## find DE genes
+top50 <- getBestFeatures(ce, contrastType = "Dendro", number=50)
+top10 <- getBestFeatures(ce, contrastType = "Dendro", number=10)
+head(top10)
+
+plotHeatmap(ce, clusterSamplesData = "dendrogramValue", 
+            clusterFeaturesData = unique(top10$IndexInOriginal),
+            whichClusters = "all",
+            main = "Top 10 genes per cluster (zinbwave)")
+
+plotHeatmap(ce, clusterSamplesData = "dendrogramValue", 
+            clusterFeaturesData = unique(top50$IndexInOriginal),
+            whichClusters = "all",
+            main = "Top 50 genes per cluster (zinbwave)")
+
+## find DE genes
+# primaryClusterIndex(ce) <- 2
+# 
+# top50_pca <- getBestFeatures(ce, contrastType = "OneAgainstAll", number=50)
+# top10_pca <- getBestFeatures(ce, contrastType = "OneAgainstAll", number=10)
+# head(top10_pca)
+# 
+# plotHeatmap(ce, clusterSamplesData = "primaryCluster", 
+#             clusterFeaturesData = unique(top10_pca$IndexInOriginal),
+#             whichClusters = "all",
+#             main = "Top 10 genes per cluster (PCA)")
+# 
+# plotHeatmap(ce, clusterSamplesData = "primaryCluster", 
+#             clusterFeaturesData = unique(top50_pca$IndexInOriginal),
+#             whichClusters = "all",
+#             main = "Top 50 genes per cluster (PCA)")
+```
+
+## Marker genes
+
+```{r markers}
+primaryClusterIndex(ce) <- 1
+
+markers <- c("CD3D", "CD8A", "CD4", "NKG7", "FCER1A", "CD16", "S100A8",
+             "CD79A", "S100A9", "CCR10", "TNFRSF18", "ID3", "PF4")
+
+plotHeatmap(ce, clusterSamplesData = "primaryCluster", 
+            clusterFeaturesData = which(rownames(ce) %in% markers),
+            whichClusters = "all",
+            main = "Top 50 genes per cluster (zinbwave)")
+
+plot(tsne_zinb$Y, pch=19, col=pal[z_cl], xlab="TSNE 1", ylab="TSNE 2", main="t-SNE (ZINB-WaVE), culstered by zinbwave")
+legend("topleft", levels(z_cl), fill=pal, cex=.5)
+
+boxplot(transform(ce)[markers[1],]~z_cl, main=markers[1], las=2)
+boxplot(transform(ce)[markers[4],]~z_cl, main=markers[4], las=2)
+boxplot(transform(ce)[markers[7],]~z_cl, main=markers[7], las=2)
+boxplot(transform(ce)[markers[8],]~z_cl, main=markers[8], las=2)
+
+plot(tsne_data$Y, pch=19, col=pal[pca_cl], xlab="TSNE 1", ylab="TSNE 2", main="t-SNE, culstered by PCA")
+legend("topleft", levels(pca_cl), fill=pal, cex=.5)
+
+boxplot(transform(ce)[markers[1],]~pca_cl, main=markers[1], las=2)
+boxplot(transform(ce)[markers[4],]~pca_cl, main=markers[4], las=2)
+boxplot(transform(ce)[markers[7],]~pca_cl, main=markers[7], las=2)
+boxplot(transform(ce)[markers[8],]~pca_cl, main=markers[8], las=2)
+```
+
+```{r ggplot}
+library(ggplot2)
+theme_set(theme_classic())
+fig_data <- data.frame(t(transform(ce)[unique(top50$Feature),]),
+                         TSNE1 = tsne_zinb$Y[,1], TSNE2 = tsne_zinb$Y[,2],
+                         Cluster = z_cl)
+
+ggplot(aes(TSNE1, TSNE2, colour=Cluster), data = fig_data) + 
+ geom_point() + scale_colour_manual(values = pal)
+
+ggplot(aes(TSNE1, TSNE2, colour=CD3D), data = fig_data) + 
+ geom_point() + scale_colour_gradient(low="blue", high="yellow")
+
+ggplot(aes(TSNE1, TSNE2, colour=S100A8), data = fig_data) + 
+ geom_point() + scale_colour_gradient(low="blue", high="yellow")
+
+ggplot(aes(TSNE1, TSNE2, colour=NKG7), data = fig_data) + 
+ geom_point() + scale_colour_gradient(low="blue", high="yellow")
+
+ggplot(aes(TSNE1, TSNE2, colour=CD79A), data = fig_data) + 
+ geom_point() + scale_colour_gradient(low="blue", high="yellow")
+
+ggplot(aes(TSNE1, TSNE2, colour=LST1), data = fig_data) + 
+ geom_point() + scale_colour_gradient(low="blue", high="yellow")
+
+ggplot(aes(TSNE1, TSNE2, colour=HLA.DRA), data = fig_data) + 
+ geom_point() + scale_colour_gradient(low="blue", high="yellow")
+
+ggplot(aes(TSNE1, TSNE2, colour=IL32), data = fig_data) + 
+ geom_point() + scale_colour_gradient(low="blue", high="yellow")
+
+ggplot(aes(TSNE1, TSNE2, colour=GZMB), data = fig_data) + 
+ geom_point() + scale_colour_gradient(low="blue", high="yellow")
+
+ggplot(aes(TSNE1, TSNE2, colour=PPIB), data = fig_data) + 
+ geom_point() + scale_colour_gradient(low="blue", high="yellow")
+```
+
+From our analysis we find:
+
+- Cluster 0 (~25%): T-cells (CD3D)
+- Cluster 1 (~21%): T-cells (CD3D, CD52, CD99)
+- Cluster 2 (~15%): myeloid cells (S100A8, S100A9, LYZ)
+- Cluster 3 (~14%): T-cells (cytotoxic?) (CD3D, NKG7)
+- Cluster 4 (~9%): Mature B-cells (CD79A, CD79B)
+- Cluster 5 (~7%): NK-cells (NKG7, CD3D-)
+- Cluster 6 (~4%): T-cells (lower quality?) (CD3D)
+- Cluster 7 (~2%): monocytes (FCGR3A, LST1, SERPINA1)
+- Cluster 8 (~0.8%): dendritic cells (FCER1A, HLA-*)
+- Cluster 9 (~0.7%): T-cells (?) (CD3D, S100A4, IL32)
+- Cluster 10 (~0.5%): NK / Dend (doublets?) (CD74, GZMB)
+- Cluster 11 (~0.2%): B-cell related? (CD79A, PPIB, HSP90B1)
 
 # Session Info
 

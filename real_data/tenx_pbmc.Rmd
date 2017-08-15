@@ -251,6 +251,9 @@ ggplot(aes(W1, W2, colour=PPBP), data = zinb_df) +
 How does PCA compare?
 
 ```{r, eval=FALSE}
+pca_coords <- read.csv("tenx_pbmc/outs/analysis/pca/projection.csv", row.names = 1)
+plot(pca_coords[,1:2], pch=19, col=pal[cl])
+
 library(rARPACK)
 fastpca <- function(expr, scale=FALSE) {
   svd_raw <- svds(scale(t(expr), center=TRUE, scale=scale), k=3, nu=3, nv=0)
@@ -273,7 +276,38 @@ plot(pc_tc, pch=19, col=pal[clus])
 pca_df <- data.frame(PC1 = pc_tc[,1], PC2 = pc_tc[,2], Cluster=as.factor(clus))
 
 ggplot(aes(PC1, PC2, colour=Cluster), data = pca_df) + geom_point()
+save(pc_tc, file="tenx_pbmc/pca.rda")
+```
 
+```{r, eval=FALSE}
+library(scater)
+library(magrittr)
+sceset <- newSCESet(countData = exprs(gbm[use_genes,]))
+
+sceset <- calculateQCMetrics(sceset)
+qc <- pData(sceset)[,c(2, 5, 7, 12:15)]
+
+cors <- lapply(1:2, function(i) abs(cor(pc_tc[,i], qc)))
+cors <- unlist(cors)
+bars <- data.frame(AbsoluteCorrelation=cors,
+                   QC=rep(stringr::str_to_lower(colnames(qc)), 2),
+                   Dimension=as.factor(rep(1:2, each=ncol(qc))))
+
+bars %>%
+  ggplot(aes(Dimension, AbsoluteCorrelation, group=QC, fill=QC)) +
+  geom_bar(stat="identity", position='dodge') +
+  scale_fill_manual(values=pal) + ylim(0, 1)
+
+cors <- lapply(1:2, function(i) abs(cor(W[,i], qc)))
+cors <- unlist(cors)
+bars <- data.frame(AbsoluteCorrelation=cors,
+                   QC=rep(stringr::str_to_lower(colnames(qc)), 2),
+                   Dimension=as.factor(rep(1:2, each=ncol(qc))))
+
+bars %>%
+  ggplot(aes(Dimension, AbsoluteCorrelation, group=QC, fill=QC)) +
+  geom_bar(stat="identity", position='dodge') +
+  scale_fill_manual(values=pal) + ylim(0, 1)
 ```
 
 Let's look at some known markers.

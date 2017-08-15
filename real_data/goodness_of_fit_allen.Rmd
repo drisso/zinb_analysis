@@ -65,7 +65,7 @@ core <- as.matrix(raw[vargenes, ])
 ```
 
 ```{r zinb}
-zinb <- zinbFit(core, K = 2, epsilon = 1e3, commondispersion = FALSE)
+zinb <- zinbFit(core, K = 0, epsilon = 1e3, commondispersion = FALSE)
 ```
 
 ```{r functions}
