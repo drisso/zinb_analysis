@@ -1,0 +1,109 @@
+---
+title: "More on gc-content"
+author: "Davide Risso"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output: 
+  html_document: 
+    fig_height: 7
+    fig_width: 7
+    toc: yes
+    code_folding: hide
+    toc_float: yes
+---
+
+```{r options, include=FALSE}
+knitr::opts_chunk$set(cache=TRUE, error=FALSE, message=FALSE, warning=FALSE)
+```
+
+```{r load}
+library(zinbwave)
+load("tenx_pbmc4k/zinb_gcc.rda")
+load("tenx_pbmc4k/zinb_res.rda")
+
+clusters <- read.csv("tenx_pbmc4k/clusters.csv")
+cl <- clusters[,2]
+names(cl) <- clusters[,1]
+
+pal <- clusterExperiment::bigPalette
+
+plot(getW(zinb_gcc), pch=19, col=pal[cl], main="GC-content and length")
+plot(getW(zinb_res), pch=19, col=pal[cl], main="No gene covariates")
+```
+
+```{r datain}
+library(cellrangerRkit)
+pipestance_path <- "tenx_pbmc4k"
+pbmc <- load_cellranger_matrix(pipestance_path)
+use_genes <- get_nonzero_genes(pbmc)
+dense <- as.matrix(exprs(pbmc[use_genes, ]))
+
+vars <- rowVars(log1p(dense))
+names(vars) <- rownames(dense)
+vars <- sort(vars, decreasing = TRUE)
+vargenes <- names(vars)[1:1000]
+
+dense <- dense[vargenes,]
+```
+
+Now, we want to refit the zinbwave model with no gene covariates, but starting
+from the gcc solution. This will tell us if we have problems with local maxima.
+
+```{r setup}
+library(BiocParallel)
+library(doParallel)
+registerDoParallel(6)
+register(DoparParam())
+```
+
+```{r optimize}
+init <- zinb_gcc
+init@V <- init@V[,-(2:3), drop = FALSE]
+init@gamma_mu <- init@gamma_mu[-(2:3), , drop = FALSE]
+init@gamma_pi <- init@gamma_pi[-(2:3), , drop = FALSE]
+init@which_V_mu <- 1L
+init@which_V_pi <- 1L
+
+opt <- zinbOptimize(init, t(dense))
+```
+
+```{r plots}
+plot(getW(opt), pch=19, col=pal[cl], main="No gene covariates; new initialization")
+pairs(getW(opt), pch=19, col=pal[cl], main="No gene covariates; new initialization")
+```
+
+Let's also explore the role of the penalty. Here, we fit zinbwave with a larger and a smaller
+value of the penalty and see how things change.
+
+```{r penalty}
+system.time(zinb_res0 <- zinbFit(dense, K=3))
+system.time(zinb_res1 <- zinbFit(dense, K=3, epsilon=1e3))
+system.time(zinb_res2 <- zinbFit(dense, K=3, epsilon=1e4))
+system.time(zinb_res3 <- zinbFit(dense, K=3, epsilon=1e2))
+save(zinb_res2, zinb_res3, file="tenx_pbmc4k/zinb_eps.rda")
+```
+
+```{r plots2}
+plot(getW(zinb_res0), pch=19, col=pal[cl], main="No gene covariates; default epsilon")
+plot(getW(zinb_res1), pch=19, col=pal[cl], main="No gene covariates; epsilon=1e3")
+plot(getW(zinb_res2), pch=19, col=pal[cl], main="No gene covariates; epsilon=1e4")
+plot(getW(zinb_res3), pch=19, col=pal[cl], main="No gene covariates; epsilon=1e2")
+
+pairs(getW(zinb_res3), pch=19, col=pal[cl], main="No gene covariates; epsilon=1e2")
+```
+
+It seems that the key is the penalty parameter. This is good: we now have good
+results with epsilon=1e2. We should probably highlight in the paper that sometimes
+the right epsilon may not be the default.
+
+```{r plots3}
+clus <- read.table("tenx_pbmc4k/zinb_gcc_clusters.txt")
+cl2 <- clus[,4]
+pairs(getW(zinb_res3), pch=19, col=pal[cl2], main="No gene covariates; epsilon=1e2")
+pairs(getW(zinb_res0), pch=19, col=pal[cl2], main="No gene covariates; default epsilon")
+```
+
+# Session Info
+
+```{r}
+sessionInfo()
+```
