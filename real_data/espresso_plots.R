@@ -30,7 +30,7 @@ coverage <- colSums(all.counts)
 
 library(scater)
 rownames(targets) <- colnames(all.counts)
-sceset <- newSCESet(countData = all.counts, phenoData = AnnotatedDataFrame(targets))
+sceset <- SingleCellExperiment(countData = all.counts, phenoData = AnnotatedDataFrame(targets))
 
 keep_feature <- rowSums(exprs(sceset) > 0) > 0
 sceset <- sceset[keep_feature,]

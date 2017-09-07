@@ -120,3 +120,11 @@ cl <- lapply(1:length(res), function(i){
 names(cl) = names(res)
 lapply(cl, table, labels)
 ```
+
+
+```{r}
+install.packages('clusterCrit')
+library(clusterCrit)
+extCriteria(part1, part2, crit)
+
+```
