@@ -76,6 +76,7 @@ legend2 <- get_legend(panel2_pca)
 lower <- plot_grid(p2, legend2, rel_widths = c(3, 1))
 
 fig1 <- plot_grid(upper, lower, ncol=1, nrow=2)
+fig1
 
 save_plot("allen_fig1.pdf", fig1,
           ncol = 3,
@@ -85,9 +86,9 @@ save_plot("allen_fig1.pdf", fig1,
 
 ## Alternatively
 
-data.frame(Dim1=pc_fq[,1], Dim2=pc_fq[,2]) %>%
+data.frame(Dim1=pc_tc[,1], Dim2=pc_tc[,2]) %>%
   ggplot(aes(Dim1, Dim2, shape=layer, color=cluster2)) + geom_point() + scale_color_manual(values=col2) -> panel1_pca
-data.frame(Dim1=zifa_fq[,1], Dim2=zifa_fq[,2]) %>%
+data.frame(Dim1=zifa_tc[,1], Dim2=zifa_tc[,2]) %>%
   ggplot(aes(Dim1, Dim2, shape=layer, color=cluster2)) + geom_point() + scale_color_manual(values=col2) -> panel1_zifa
 data.frame(Dim1=zinb@W[,1], Dim2=zinb@W[,2]) %>%
   ggplot(aes(Dim1, Dim2, shape=layer, color=cluster2)) + geom_point() + scale_color_manual(values=col2) -> panel1_zinb
@@ -101,6 +102,7 @@ legend <- get_legend(panel1_pca)
 upper <- plot_grid(p1, legend, rel_widths = c(3, 1))
 
 fig1_bis <- plot_grid(upper, lower, ncol=1, nrow=2)
+fig1_bis
 
 save_plot("allen_fig1bis.pdf", fig1_bis,
           ncol = 3,
