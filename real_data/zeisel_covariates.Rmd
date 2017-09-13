@@ -32,13 +32,13 @@ library(DESeq2)
 set.seed(8283)
 options(getClass.msg=FALSE) #get rid of annoying messages about cache until fixed internally in R
 
-ncores <- 2
+ncores <- 6
 ```
 
 ```{r}
 library(doParallel)
 library(BiocParallel)
-NCORES = 2
+NCORES = 6
 registerDoParallel(NCORES)
 register(DoparParam())
 ```

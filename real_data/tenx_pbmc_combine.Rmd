@@ -109,7 +109,7 @@ library(Rtsne)
 tsne_data <- Rtsne(pc_tc[,1:50], pca=FALSE)
 
 plot(tsne_data$Y, pch=19, col=pal[batch], xlab="TSNE 1", ylab="TSNE 2", main="t-SNE (PCA)")
-legend("topleft", levels(batch), fill=pal)
+legend("topleft", c("Donor1", "Donor2"), fill=pal)
 ```
 
 When displaying the data with t-SNE based on the top 50 PCs, batch effects are
@@ -332,7 +332,7 @@ boxplot(transform(ce)[markers[7],]~z_cl, main=markers[7], las=2)
 boxplot(transform(ce)[markers[8],]~z_cl, main=markers[8], las=2)
 
 plot(tsne_data$Y, pch=19, col=pal[pca_cl], xlab="TSNE 1", ylab="TSNE 2", main="t-SNE, culstered by PCA")
-legend("topleft", levels(pca_cl), fill=pal, cex=.5)
+legend("topleft", "Zheng et al. (2017)")
 
 boxplot(transform(ce)[markers[1],]~pca_cl, main=markers[1], las=2)
 boxplot(transform(ce)[markers[4],]~pca_cl, main=markers[4], las=2)

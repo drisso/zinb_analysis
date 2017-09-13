@@ -5,7 +5,7 @@ library(ggplot2)
 
 load("patel_covariates.rda")
 
-counts <- read.table("../data/patel/glioblastoma_raw_rnaseq_SCandbulk_counts.txt", header=TRUE, stringsAsFactors = FALSE, row.names=NULL)
+counts <- read.table("patel/glioblastoma_raw_rnaseq_SCandbulk_counts.txt", header=TRUE, stringsAsFactors = FALSE, row.names=NULL)
 
 gene_symbols <- counts[,1]
 ensembl_ids <- counts[,2]
@@ -14,7 +14,7 @@ sample_names <- colnames(counts)[-(1:2)]
 all.counts <- counts[,-(1:2)]
 rownames(all.counts) <- ensembl_ids
 
-metadata <- read.table("../data/patel/SraRunTable.txt", sep='\t', stringsAsFactors = FALSE, header=TRUE, row.names=5, na.strings = "<not provided>")
+metadata <- read.table("patel/SraRunTable.txt", sep='\t', stringsAsFactors = FALSE, header=TRUE, row.names=5, na.strings = "<not provided>")
 metadata <- metadata[sample_names,]
 
 # select only single-cell samples from patients
@@ -118,9 +118,15 @@ bars <- data.frame(AbsoluteCorrelation=cors,
 bars %>%
   ggplot(aes(Dimension, AbsoluteCorrelation, group=QC, fill=QC)) +
   geom_bar(stat="identity", position='dodge') +
-  scale_fill_manual(values=col2) + ylim(0, 1) -> panel2_zifa
+  scale_fill_manual(values=col2) + ylim(0, .75) -> panel2_zifa
 
-cors <- lapply(1:2, function(i) abs(cor(zinb@W[,i], qc)))
+cors <- lapply(1:2, function(i) {
+  yy <- tapply(getW(zinb)[,i], level1, identity)
+  apply(qc, 2, function(x) {
+    xx <- tapply(x, level1, identity)
+    mean(sapply(seq_along(xx), function(i) abs(cor(xx[[i]], yy[[i]]))))
+  })
+})
 cors <- unlist(cors)
 bars <- data.frame(AbsoluteCorrelation=cors,
                    QC=rep(stringr::str_to_lower(colnames(qc)), 2),
@@ -129,7 +135,7 @@ bars <- data.frame(AbsoluteCorrelation=cors,
 bars %>%
   ggplot(aes(Dimension, AbsoluteCorrelation, group=QC, fill=QC)) +
   geom_bar(stat="identity", position='dodge') +
-  scale_fill_manual(values=col2) + ylim(0, 1) -> panel2_zinb
+  scale_fill_manual(values=col2) + ylim(0, .75) -> panel2_zinb
 
 p2 <- plot_grid(panel2_pca + theme(legend.position = "none"),
                 panel2_zifa + theme(legend.position = "none"),

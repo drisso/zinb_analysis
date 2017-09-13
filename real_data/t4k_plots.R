@@ -127,6 +127,8 @@ bars %>%
 #           base_aspect_ratio = 1.3
 # )
 
+ggsave("10x_t4k_cor2.png", panel2_pca)
+
 if(run_zinb) {
 
   library(BiocParallel)
@@ -140,7 +142,7 @@ if(run_zinb) {
 } else {
   load("tenx_t4k/zinb_ribomito.rda")
 }
-W <- getW(zinb_res4)
+W <- getW(zinb_res)
 
 data.frame(Dim1=W[,1], Dim2=W[,2], OriginalCluster=as.factor(cl)) %>%
   ggplot(aes(Dim1, Dim2, colour=OriginalCluster)) + geom_point()  +
@@ -155,4 +157,7 @@ bars <- data.frame(AbsoluteCorrelation=cors,
 bars %>%
   ggplot(aes(Dimension, AbsoluteCorrelation, group=QC, fill=QC)) +
   geom_bar(stat="identity", position='dodge') +
-  scale_fill_manual(values=pal2) + ylim(0, 1)
+  scale_fill_manual(values=pal2) + ylim(0, 1) -> panel3_zinb
+
+ggsave("10x_t4k_cor3.png", panel2_zinb)
+ggsave("10x_t4k_cor4.png", panel3_zinb)

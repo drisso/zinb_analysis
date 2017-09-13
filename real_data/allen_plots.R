@@ -36,7 +36,7 @@ data.frame(Dim1=pc_tc[,1], Dim2=pc_tc[,2]) %>%
 data.frame(Dim1=zifa_tc[,1], Dim2=zifa_tc[,2]) %>%
   ggplot(aes(Dim1, Dim2, colour=layer)) + geom_point() -> panel1_zifa
 data.frame(Dim1=zinb@W[,1], Dim2=zinb@W[,2]) %>%
-  ggplot(aes(Dim1, Dim2, colour=layer)) + geom_point() -> panel1_zinb
+  ggplot(aes(Dim1, Dim2, shape=layer, color=cluster2)) + geom_point() + scale_color_manual(values=col2) -> panel1_zinb
 
 p1 <- plot_grid(panel1_pca + theme(legend.position = "none"),
                 panel1_zifa + theme(legend.position = "none"),
@@ -44,28 +44,49 @@ p1 <- plot_grid(panel1_pca + theme(legend.position = "none"),
                 labels=c("a", "c", "e"), align = "h", ncol=3)
 p1
 legend <- get_legend(panel1_pca)
-upper <- plot_grid(p1, legend, rel_widths = c(3, .6))
+upper <- plot_grid(p1, legend, rel_widths = c(3, 1))
+
+cors <- lapply(1:2, function(i) {
+  yy <- tapply(pc_fq[,i], cluster2, identity)
+  apply(qc, 2, function(x) {
+    xx <- tapply(x, cluster2, identity)
+    mean(sapply(seq_along(xx), function(i) abs(cor(xx[[i]], yy[[i]]))))
+  })
+})
 
 cors <- lapply(1:2, function(i) abs(cor(pc_tc[,i], qc)))
 cors <- unlist(cors)
-bars <- data.frame(AbsoluteCorrelation=cors, QC=rep(stringr::str_to_lower(colnames(qc)), 2), Dimension=as.factor(rep(1:2, each=ncol(qc))))
+bars <- data.frame(AbsoluteCorrelation=cors, QC=rep(stringr::str_to_lower(colnames(qc)), 2),
+                   Dimension=as.factor(rep(1:2, each=ncol(qc))))
 
 bars %>%
   ggplot(aes(Dimension, AbsoluteCorrelation, group=QC, fill=QC)) + geom_bar(stat="identity", position='dodge') + scale_fill_manual(values=col2) + ylim(0, .6) -> panel2_pca
 
 cors <- lapply(1:2, function(i) abs(cor(zifa_tc[,i], qc)))
 cors <- unlist(cors)
-bars <- data.frame(AbsoluteCorrelation=cors, QC=rep(stringr::str_to_lower(colnames(qc)), 2), Dimension=as.factor(rep(1:2, each=ncol(qc))))
+bars <- data.frame(AbsoluteCorrelation=cors, QC=rep(stringr::str_to_lower(colnames(qc)), 2),
+                   Dimension=as.factor(rep(1:2, each=ncol(qc))))
 
 bars %>%
-  ggplot(aes(Dimension, AbsoluteCorrelation, group=QC, fill=QC)) + geom_bar(stat="identity", position='dodge') + scale_fill_manual(values=col2) + ylim(0, .6) -> panel2_zifa
+  ggplot(aes(Dimension, AbsoluteCorrelation, group=QC, fill=QC)) +
+  geom_bar(stat="identity", position='dodge') +
+  scale_fill_manual(values=col2) + ylim(0, .75) -> panel2_zifa
 
-cors <- lapply(1:2, function(i) abs(cor(zinb@W[,i], qc)))
+cors <- lapply(1:2, function(i) {
+  yy <- tapply(zinb@W[,i], cluster2, identity)
+  apply(qc, 2, function(x) {
+    xx <- tapply(x, cluster2, identity)
+    mean(sapply(seq_along(xx), function(i) abs(cor(xx[[i]], yy[[i]]))))
+  })
+})
 cors <- unlist(cors)
-bars <- data.frame(AbsoluteCorrelation=cors, QC=rep(stringr::str_to_lower(colnames(qc)), 2), Dimension=as.factor(rep(1:2, each=ncol(qc))))
+bars <- data.frame(AbsoluteCorrelation=cors, QC=rep(stringr::str_to_lower(colnames(qc)), 2),
+                   Dimension=as.factor(rep(1:2, each=ncol(qc))))
 
 bars %>%
-  ggplot(aes(Dimension, AbsoluteCorrelation, group=QC, fill=QC)) + geom_bar(stat="identity", position='dodge') + scale_fill_manual(values=col2) + ylim(0, .6) -> panel2_zinb
+  ggplot(aes(Dimension, AbsoluteCorrelation, group=QC, fill=QC)) +
+  geom_bar(stat="identity", position='dodge') +
+  scale_fill_manual(values=col2) + ylim(0, .75) -> panel2_zinb
 
 p2 <- plot_grid(panel2_pca + theme(legend.position = "none"),
                 panel2_zifa + theme(legend.position = "none"),

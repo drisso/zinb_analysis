@@ -378,3 +378,14 @@ ggplot(aes(PC1, PC2, colour=CST3), data = pca_df) +
 ggplot(aes(PC1, PC2, colour=PPBP), data = pca_df) + 
   geom_point() + scale_colour_gradient(low="blue", high="yellow") + ggtitle("Megakaryocytes")
 ```
+
+# ZINB-Wave with K=10
+
+```{r}
+register(SerialParam())
+system.time(zinb_10 <- zinbFit(dense, K=10))
+```
+
+```{r}
+save(zinb_10, file="tenx_pbmc/zinb_10.rda")
+```

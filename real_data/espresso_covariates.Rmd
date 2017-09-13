@@ -33,13 +33,13 @@ library(sva)
 set.seed(8283)
 options(getClass.msg=FALSE) #get rid of annoying messages about cache until fixed internally in R
 
-ncores <- 2
+ncores <- 6
 ```
 
 ```{r}
 library(doParallel)
 library(BiocParallel)
-NCORES = 2
+NCORES = 6
 registerDoParallel(NCORES)
 register(DoparParam())
 ```
@@ -47,7 +47,7 @@ register(DoparParam())
 Here, I will explore the relation between the expression values and some covariates provided with the data.
 
 ```{r datain}
-all.counts <- read.table("../data/espresso/counttable_es.csv", header=TRUE, row.names=1, colClasses=c("character", rep("integer", 704)))
+all.counts <- read.table("espresso/counttable_es.csv", header=TRUE, row.names=1, colClasses=c("character", rep("integer", 704)))
 serum <- sub("ola_mES_([^_]+)_.*", "\\1", colnames(all.counts))
 batch <- sub("ola_mES_[^_]+_([^_]+)_.*", "\\1", colnames(all.counts))
 targets <- data.frame(Serum=serum, Batch=batch)

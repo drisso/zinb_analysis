@@ -111,7 +111,13 @@ bars %>%
   geom_bar(stat="identity", position='dodge') +
   scale_fill_manual(values=col2) + ylim(0, 1) -> panel2_zifa
 
-cors <- lapply(1:3, function(i) abs(cor(zinb@W[,i], qc)))
+cors <- lapply(1:3, function(i) {
+  yy <- tapply(getW(zinb)[,i], level1, identity)
+  apply(qc, 2, function(x) {
+    xx <- tapply(x, level1, identity)
+    mean(sapply(seq_along(xx), function(i) abs(cor(xx[[i]], yy[[i]]))))
+  })
+})
 cors <- unlist(cors)
 bars <- data.frame(AbsoluteCorrelation=cors,
                    QC=rep(stringr::str_to_lower(colnames(qc)), 3),
