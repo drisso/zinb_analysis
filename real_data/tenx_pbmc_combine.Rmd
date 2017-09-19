@@ -396,5 +396,6 @@ From our analysis we find:
 # Session Info
 
 ```{r}
+save(pc_tc, tsne_data, batch, tsne_zinb, tc, dense, fastpca, file="pbmc_combined.rda")
 sessionInfo()
 ```
