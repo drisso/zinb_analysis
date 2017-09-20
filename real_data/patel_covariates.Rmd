@@ -203,6 +203,18 @@ plot(pc_fq_sub, pch=19, col=colMerged[subset], main="PCA (FQ); color-coded by pa
 plot(pc_fq_sub, pch=19, col=col2[droplevels(level2[subset])], main="PCA (FQ); color-coded by inferred cell type")
 ```
 
+# Censoring model
+
+```{r zinb_cdr}
+Xmod <- model.matrix(~detection_rate)
+zinb_cdr <- zinbFit(raw[vargenes,], K = 2, X = Xmod, which_X_mu = 1L, which_X_pi = 1:2, epsilon=1e3)
+
+plot(zinb@W, pch=19, col=colMerged, main="ZINB")
+plot(zinb_cdr@W, pch=19, col=colMerged, main="ZINB")
+
+boxplot(detection_rate~batch)
+```
+
 ## Considering only data for MGH26
 
 ```{r zinb_subset}
@@ -215,11 +227,13 @@ vargenes2 <- names(vars)[1:1000]
 
 zinb_sub1 <- zinbFit(raw[vargenes2, subset], K=2)
 plot(getW(zinb_sub1), pch=19, col=col1[droplevels(batch[subset])], main="ZINB; color-coded by batch")
-plot(getW(zinb_sub1), pch=19, col=col2[droplevels(level2[subset])], main="ZINB; color-coded by inferred cell type")
 
 zinb_sub2 <- zinbFit(raw[vargenes2, subset], K = 2, X=model.matrix(~batch[subset]))
 plot(getW(zinb_sub2), pch=19, col=col1[droplevels(batch[subset])], main="ZINB w/batch correction")
-plot(getW(zinb_sub2), pch=19, col=col2[droplevels(level2[subset])], main="ZINB w/batch correction")
+
+zinb_sub3 <- zinbFit(raw[vargenes2, subset], K = 2, X=model.matrix(~detection_rate[subset]),
+                     which_X_mu = 1L, which_X_pi = 1:2)
+plot(getW(zinb_sub3), pch=19, col=col1[droplevels(batch[subset])], main="ZINB w/cdr covariate")
 ```
 
 # Gene-level covariates
