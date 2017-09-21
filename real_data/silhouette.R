@@ -28,7 +28,7 @@ cluster2 <- as.factor(cluster2)
 
 methods <- list(pc_raw[,1:2], pc_tc[,1:2], pc_tmm[,1:2], pc_fq[,1:2],
                 zifa_raw, zifa_tc, zifa_tmm, zifa_fq,
-                zinb_fq@W)
+                zinb@W)
 names(methods) <- c(paste0("PCA_", c("RAW", "TC", "TMM", "FQ")),
                     paste0("ZIFA_", c("RAW", "TC", "TMM", "FQ")),
                     "ZINB-WaVE")

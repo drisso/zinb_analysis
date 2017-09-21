@@ -215,6 +215,15 @@ plot(zinb_cdr@W, pch=19, col=colMerged, main="ZINB")
 boxplot(detection_rate~batch)
 ```
 
+# Combat
+
+```{r combat}
+library(sva)
+combat_fq  <- ComBat(log1p(fq), batch)
+pc_combat_fq  <- fastpca(combat_fq[vargenes,])
+plot(pc_combat_fq, col=colMerged, pch=20, main="PCA FQ COMBAT")
+```
+
 ## Considering only data for MGH26
 
 ```{r zinb_subset}
@@ -246,5 +255,7 @@ gene_info = na.omit(gene_info)
 ```
 
 ```{r write_out, dependson=c("zinb", "zifa", "pca", "zinb_batch")}
-save(zinb, zinb_batch, zifa_fq, zifa_tmm, zifa_tc, zifa_raw, pc_tmm, pc_fq, pc_tc, pc_raw, file="patel_covariates.rda")
+save(zinb, zinb_batch, zifa_fq, zifa_tmm, zifa_tc, zifa_raw, pc_tmm, pc_fq, pc_tc, pc_raw,
+     zinb_cdr, pc_combat_fq, batch, 
+     zinb_sub1, zinb_sub2, zinb_sub3, file="patel_covariates.rda")
 ```

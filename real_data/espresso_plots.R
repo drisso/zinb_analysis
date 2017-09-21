@@ -5,7 +5,7 @@ library(ggplot2)
 
 load("espresso_covariates.rda")
 
-all.counts <- read.table("../data/espresso/counttable_es.csv", header=TRUE, row.names=1, colClasses=c("character", rep("integer", 704)))
+all.counts <- read.table("ESpresso/counttable_es.csv", header=TRUE, row.names=1, colClasses=c("character", rep("integer", 704)))
 serum <- sub("ola_mES_([^_]+)_.*", "\\1", colnames(all.counts))
 batch <- sub("ola_mES_[^_]+_([^_]+)_.*", "\\1", colnames(all.counts))
 targets <- data.frame(Serum=serum, Batch=batch)
@@ -229,7 +229,7 @@ save_plot("espresso_supp_sil.pdf", sil)
 condition <- level1
 batch <- level2
 
-data.frame(Dim1=zinb@W[,1], Dim2=zinb@W[,2]) %>%
+data.frame(Dim1=zinb@W[,1], Dim2=zinb@W[,2], batch = batch) %>%
   ggplot(aes(Dim1, Dim2, colour=batch, shape=condition)) + geom_point()  +
   scale_color_brewer(palette="Set2")  -> panel1_zinb
 
@@ -475,3 +475,44 @@ save_plot("espresso_supp_zifa.pdf", fig_zifa,
           ncol = 2,
           nrow = 2,
           base_aspect_ratio = 1.3)
+
+## new figure batch
+methods_sub <- list("ZINB-WaVE"=zinb@W, "ZINB-Batch"=zinb_batch@W)
+sil_cond <- lapply(seq_along(methods_sub), function(i) {
+  d <- dist(methods_sub[[i]])
+  s_cond <- silhouette(as.numeric(condition), d)
+  ss_cond <-  summary(s_cond)
+  return(ss_cond$clus.avg.widths)
+})
+
+bars <- data.frame(AverageSilhouette=unlist(sil_cond),
+                   Method=rep(names(methods_sub), each=nlevels(condition)),
+                   Cluster=factor(rep(levels(condition), length(methods_sub)),
+                                  levels=levels(condition)))
+
+bars %>%
+  dplyr::mutate(ClusterByMethod = paste0(Cluster, " ", Method)) %>%
+  ggplot(aes(ClusterByMethod, AverageSilhouette, fill=Cluster)) +
+  geom_bar(stat="identity", position='dodge') +
+  scale_fill_manual(values=col1) + coord_flip() +
+  theme(legend.position = "none", axis.text = element_text(size=8)) -> sil
+
+sil_batch <- lapply(seq_along(methods_sub), function(i) {
+  d <- dist(methods_sub[[i]])
+  s_cond <- silhouette(as.numeric(batch), d)
+  ss_cond <-  summary(s_cond)
+  return(ss_cond$clus.avg.widths)
+})
+
+bars <- data.frame(AverageSilhouette=unlist(sil_batch),
+                   Method=rep(names(methods_sub), each=nlevels(batch)),
+                   Cluster=factor(rep(paste0("Batch", levels(batch)), length(methods_sub)),
+                                  levels=paste0("Batch", levels(batch))))
+
+bars %>%
+  dplyr::mutate(ClusterByMethod = paste0(Cluster, " ", Method)) %>%
+  ggplot(aes(ClusterByMethod, AverageSilhouette, fill=Cluster)) +
+  geom_bar(stat="identity", position='dodge') +
+  scale_fill_manual(values=col2) + coord_flip() +
+  theme(legend.position = "none", axis.text = element_text(size=8)) -> sil2
+
