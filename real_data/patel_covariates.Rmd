@@ -208,6 +208,7 @@ plot(pc_fq_sub, pch=19, col=col2[droplevels(level2[subset])], main="PCA (FQ); co
 ```{r zinb_cdr}
 Xmod <- model.matrix(~detection_rate)
 zinb_cdr <- zinbFit(raw[vargenes,], K = 2, X = Xmod, which_X_mu = 1L, which_X_pi = 1:2, epsilon=1e3)
+zinb_batch <- zinbFit(raw[vargenes,], K = 2, X=model.matrix(~batch))
 
 plot(zinb@W, pch=19, col=colMerged, main="ZINB")
 plot(zinb_cdr@W, pch=19, col=colMerged, main="ZINB")

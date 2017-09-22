@@ -1,6 +1,7 @@
 library(clusterExperiment)
 library(slingshot)
 library(zinbwave)
+library(RColorBrewer)
 
 data_dir <- "/Users/dar2062/git/bioc2017singlecell/data/"
 load(sprintf('%sse_after_zinbwave.rda', data_dir))
@@ -15,6 +16,8 @@ pal["-1"] = "transparent"
 our_cl <- primaryClusterNamed(ceObj)
 cl <- our_cl[!our_cl %in% c("-1", "c4")]
 pal <- pal[!names(pal) %in% c("-1", "c4")]
+pal <- brewer.pal(6, "Set2")
+names(pal) <- paste0("c", c(1:3, 5:7))
 
 ## ZINB-Wave
 W <- colData(se)[, grepl("^W", colnames(colData(se)))]
@@ -32,13 +35,9 @@ pairs(lineages, type="lineages", col = pal[cl], show.constraints = TRUE, pch=19)
 dev.off()
 
 pdf("oe_slingshot_zinbwave_2d.pdf")
-plot(X[,c(1, 2)], pch=19, col=pal[cl], xlab="Dim1", ylab="Dim2")
+plot(X[,c(1, 2)], pch=19, col=pal[cl], xlab="Dim1", ylab="Dim2", cex.lab=1.5, cex.axis=1.5)
 lines(lineages, type="lineages", show.constraints = TRUE, pch=19, dims = 1:2)
 dev.off()
-
-plot(X[,c(1, 2)], pch=19, col=pal[cl], xlab="Dim1", ylab="Dim2")
-lines(lineages, type="lineages", show.constraints = TRUE, pch=19, dims = 1:2)
-panel1 <- recordPlot()
 
 ## PCA
 load("oeHBCdiff_finalClusterObject.Rda")
@@ -57,13 +56,9 @@ dev.off()
 lineages2
 
 pdf("oe_slingshot_pca_2d.pdf")
-plot(X2[,c(1, 2)], pch=19, col=pal2[cl2], xlab="Dim1", ylab="Dim2")
+plot(X2[,c(1, 2)], pch=19, col=pal2[cl2], xlab="Dim1", ylab="Dim2", cex.lab=1.5, cex.axis=1.5)
 lines(lineages2, type="lineages", show.constraints = TRUE, pch=19, dims = 1:2)
 dev.off()
-
-plot(X2[,c(1, 2)], pch=19, col=pal2[cl2], xlab="Dim1", ylab="Dim2")
-lines(lineages2, type="lineages", show.constraints = TRUE, pch=19, dims = 1:2)
-panel3 <- recordPlot()
 
 ## no constraints
 lineages3 <- getLineages(X2, clusterLabels = cl2, start.clus = "m1")
@@ -74,13 +69,9 @@ dev.off()
 lineages3
 
 pdf("oe_slingshot_pca_2d_noc.pdf")
-plot(X2[,c(1, 2)], pch=19, col=pal2[cl2], xlab="Dim1", ylab="Dim2")
+plot(X2[,c(1, 2)], pch=19, col=pal2[cl2], xlab="Dim1", ylab="Dim2", cex.lab=1.5, cex.axis=1.5)
 lines(lineages3, type="lineages", show.constraints = TRUE, pch=19, dims = 1:2)
 dev.off()
-
-plot(X2[,c(1, 2)], pch=19, col=pal2[cl2], xlab="Dim1", ylab="Dim2")
-lines(lineages3, type="lineages", show.constraints = TRUE, pch=19, dims = 1:2)
-panel2 <- recordPlot()
 
 ## no constraints -- zinbwave clusters
 names(cl) <- rownames(X)
