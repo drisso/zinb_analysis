@@ -834,21 +834,20 @@ sil = lapply(c(100, 1000, 10000), function(nc){
     })
     ss = unlist(ss)
     zfrac = gsub('_ziadd', '', zf)
-    ss['zfrac'] = ifelse(zfrac == '', 40, ifelse(zfrac == '0.33', 60, 80))
+    ss['zfrac'] = ifelse(zfrac == '', 40,
+                         ifelse(zfrac == '0.33', 60, 80))
     ss['nc'] = nc
     ss
   })
 })
 silDF = do.call(rbind, do.call(rbind, sil))
 silDF = data.frame(silDF, stringsAsFactors = F)
-colnames(silDF) <- c("ZINB-WaVE", "PCA_RAW",
-                           "PCA_TC", "PCA_TMM", "PCA_FQ", "ZIFA_RAW", "ZIFA_TC",
-                          "ZIFA_TMM", "ZIFA_FQ", 'zfrac', 'nc')
+colnames(silDF) <- c("ZINB-WaVE", "PCA_RAW","PCA_TC", "PCA_TMM", "PCA_FQ", "ZIFA_RAW", "ZIFA_TC", "ZIFA_TMM", "ZIFA_FQ", 'zfrac', 'nc')
 silDF$zfrac = factor(silDF$zfrac)
 silDF$nc = paste0('ncells = ', silDF$nc)
 silMolt = melt(silDF, id.vars = c('zfrac', 'nc'))
 silLun = ggplot(silMolt,
-                 aes(x = zfrac, y =value, col = variable, group = variable)) +
+  aes(x = zfrac, y =value, col = variable, group = variable)) +
   geom_point() + geom_line() + labs(col='') + 
   theme_bw() + xlab('Zero fraction') + facet_grid( ~ nc, switch = 'x') +
   ylab('Silhouette width') +
@@ -859,6 +858,165 @@ ggsave(filename="../../paper/6680489mtyrjx/silhouetteLun.pdf", plot = silLun,
        width = 8, height = 5)
 ```
 
+## Recall and Precision Lun2
+```{r}
+library(clusterCrit)
+library(edgeR)
+library(EDASeq)
+library(rARPACK)
+library(ggplot2)
+
+eval_pr <- function(labels, dm, metrics = c('precision', 'recall')) {
+  labels = as.integer(labels)
+  km = kmeans(dm, centers = 3, iter.max = 1000, nstart = 1000)
+  estClust = km$cluster
+  pr = extCriteria(labels, estClust, metrics)  
+  return(unlist(pr))
+}
+
+fastpca <- function(expr, scale=FALSE) {
+  svd_raw <- svds(scale(expr, center=TRUE, scale=scale), k=2, nu=2, nv=0)
+  pc_raw <- svd_raw$u %*% diag(svd_raw$d[1:2])
+  return(pc_raw)
+}
+
+eval_data <- function(pp, counts, labels, fittedSim, k = 1:4, sim = 1) {
+  counts = counts[rowSums(counts) != 0, ]
+  pr = list()
+  
+  ## ZINB
+  pr = lapply(k, function(i){
+    fit = fittedSim[[i]][[sim]]
+    eval_pr(labels, fit@W)
+  })
+
+  ## PCA
+  m = length(pr) + 1
+  pca <- fastpca(log1p(t(counts)))
+  pr[[m]] <- eval_pr(labels, pca)
+  
+  ## PCA TC
+  m = m + 1
+  mult = sum(counts) / (ncol(counts) * nrow(counts))
+  fact = colSums(counts)
+  tc = mult * (t(counts) / fact)
+  pcatc <- fastpca(log1p(tc))
+  pr[[m]] <- eval_pr(labels, pcatc)
+  
+  ## PCA tmm normalized counts (edgeR)
+  m = m + 1
+  y = DGEList(counts)
+  y = calcNormFactors(y, method="TMM")
+  tmm <- t(counts) / (y$samples$lib.size * y$samples$norm.factors)
+  pcatmm <- fastpca(log1p(tmm))
+  pr[[m]] <- eval_pr(labels, pcatmm)
+  
+  ## PCA FQ
+  m = m + 1
+  fq <- betweenLaneNormalization(counts, which="full")
+  pcafq <- fastpca(t(log1p(fq)))
+  pr[[m]] <- eval_pr(labels, pcafq)
+  
+  ZIFA = T
+  if (ZIFA){
+    
+    load(paste0(pp, '_zifa.rda'))
+    load(paste0(pp, '_zifaTC.rda'))
+    load(paste0(pp, '_zifaTMM.rda'))
+    load(paste0(pp, '_zifaFQ.rda'))
+    
+    ## ZIFA
+    m = m + 1
+    pr[[m]] <- eval_pr(labels, zifa[[sim]])
+    
+    ## ZIFA TC
+    m = m + 1
+    pr[[m]] <- eval_pr(labels, zifaTC[[sim]])
+    
+    ## ZIFA TMM
+    m = m + 1
+    pr[[m]] <- eval_pr(labels, zifaTMM[[sim]])
+    
+    ## ZIFA FQ
+    m = m + 1
+    pr[[m]] <- eval_pr(labels, zifaFQ[[sim]])
+  }
+  pr = do.call(rbind, pr)
+  return(pr)
+}
+
+pr = lapply(c(100, 1000, 10000), function(nc){
+  print(nc)
+  lapply(c('', '_ziadd0.33', '_ziadd0.67'), function(zf){
+    print(zf)
+    pp = sprintf('fig6e-g/simLun_%s%s', nc, zf)
+    load(paste0(pp, '.rda'))
+    load(paste0(pp, '_fitted.rda'))
+    res <- lapply(1:10, function(j){
+      print(j)
+      if (grepl('ziadd', pp)){
+        counts = simData[[j]]$counts
+      }else{
+        counts = simData[[j]]
+      }
+      if (nc == 10000){
+        eval_data(pp, counts, labels, fittedSim, sim = j, k = 1)
+      }else{
+        eval_data(pp, counts, labels, fittedSim, sim = j, k = 2) 
+      }
+    })
+    ss = Reduce("+", res) / length(res)
+    rownames(ss) = c("ZINB-WaVE", "PCA_RAW","PCA_TC", "PCA_TMM",
+                     "PCA_FQ", "ZIFA_RAW", "ZIFA_TC", "ZIFA_TMM",
+                     "ZIFA_FQ")
+    ss = melt(ss)
+    zfrac = gsub('_ziadd', '', zf)
+    ss[,'zfrac'] = ifelse(zfrac == '', 40,
+                         ifelse(zfrac == '0.33', 60, 80))
+    ss[,'nc'] = nc
+    ss
+  })
+})
+prDF = do.call(rbind, do.call(rbind, pr))
+prDF = data.frame(prDF, stringsAsFactors = F)
+prDF$zfrac = factor(prDF$zfrac)
+prDF$nc = paste0('ncells = ', prDF$nc)
+#prMolt = melt(prDF, id.vars = c('zfrac', 'nc'))
+write.csv(prDF, file = '../figures/fig6e-g/prDF.csv')
+prDF = read.csv('../figures/fig6e-g/prDF.csv', stringsAsFactors = FALSE)
+prDF$zfrac = factor(prDF$zfrac)
+prDF$X1[prDF$X1 == 'ZINB-WaVE'] = "ZINB-WaVE_K=2"
+prDF$X1 = factor(prDF$X1, levels = c("ZINB-WaVE_K=2", "PCA_RAW",
+                 "PCA_TC", "PCA_TMM", "PCA_FQ", "ZIFA_RAW", "ZIFA_TC", 
+                 "ZIFA_TMM", "ZIFA_FQ"))
+pLun = ggplot(prDF[prDF$X2 == 'precision', ],
+  aes(x = zfrac, y =value, col = X1, group = X1)) +
+  geom_point() + geom_line() + labs(col='') + 
+  theme_bw() + xlab('Zero fraction') + facet_grid( ~ nc) +
+  ylab('Precision') +
+  scale_color_manual(values=mycol[c(2,5:length(mycol))])
+pLun
+
+rLun = ggplot(prDF[prDF$X2 == 'recall', ],
+  aes(x = zfrac, y =value, col = X1, group = X1)) +
+  geom_point() + geom_line() + labs(col='') + 
+  theme_bw() + xlab('Zero fraction') + facet_grid( ~ nc) +
+  ylab('Recall') +
+  scale_color_manual(values=mycol[c(2,5:length(mycol))])
+rLun
+
+prLun = plot_grid(pLun + theme(legend.position="none"),
+                  rLun + theme(legend.position="none"),
+                  align = "h", labels = c("a", "b"), nrow = 2, ncol = 1)
+
+legend <- get_legend(pLun)
+prLun <- plot_grid(prLun, legend, rel_widths = c(3, .6))
+
+# save figure suppl of figure 6 panels e-g
+ggsave(filename="../../paper/6680489mtyrjx/precisionRecallLun.pdf",
+       plot = prLun,
+       width = 8, height = 5)
+```
 
 Figure 6
 ```{r mergeLunAndZINB}
