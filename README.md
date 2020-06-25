@@ -51,14 +51,14 @@ To exactly reproduce the analyses of the paper, version `0.1.1` of the `zinbwave
 
 ```{r}
 library(devtools)
-install_github("drisso/zinbwave@v0.1.1")
+install_github("drisso/archive-zinbwave@v0.1.1")
 ```
 
-The `zinbwave` packages is under active development and we are constantly fixing bugs, adding new features, and improving the documentation, hence we recommend to download the latest stable release (currently `0.1.4`) for all purposes other than exactly reproducing the analyses of our paper. To do so, use the following code.
+The `zinbwave` package is under active development and we are constantly fixing bugs, adding new features, and improving the documentation, hence we recommend to download the latest stable release from Bioconductor for all purposes other than exactly reproducing the analyses of our paper. To do so, use the following code.
 
 ```{r}
-library(devtools)
-install_github("drisso/zinbwave@v0.1.4")
+install.packages("BiocManager")
+BiocManager::install("zinbwave")
 ```
 
 ## Getting started
