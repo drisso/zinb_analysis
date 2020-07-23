@@ -78,6 +78,8 @@ file.
 
 To generate the plots related to the goodness-of-fit, run the `.Rmd` files in the `real_data` folder starting with `goodness_of_fit`, e.g., for the Patel data, the file is [goodness_of_fit_patel.Rmd](https://github.com/drisso/zinb_analysis/blob/master/real_data/goodness_of_fit_patel.Rmd).
 
+The Patel data are stored in `real_data/Patel.zip`. Please unzip this file prior to run the Patel analysis.
+
 ### Simulations
 
 To create the simulated datasets from the real datasets used in the paper, first run the code in [simFunction.R](https://github.com/drisso/zinb_analysis/blob/master/sims/figures/simFunction.R). Then, run the `.R` files in the folders in `sims/figures`. Finally, run [figuresPaper.Rmd](https://github.com/drisso/zinb_analysis/blob/master/sims/figures/figuresPaper.Rmd).
